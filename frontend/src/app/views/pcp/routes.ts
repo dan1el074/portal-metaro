@@ -14,13 +14,13 @@ export const routes: Routes = [
         pathMatch: 'full'
       },
       {
-        path: 'kanbam-exclusion',
-        loadComponent: () => import('./kanbam-exclusion/kanbam-exclusion.component')
-          .then(component => component.KanbamExclusionComponent),
+        path: 'kanban-exclusion',
+        loadComponent: () => import('./kanban-exclusion/kanban-exclusion.component')
+          .then(component => component.KanbanExclusionComponent),
         canActivate: [AuthGuard],
         data: {
-          roles: ['ROLE_ADMIN', 'ROLE_KANBAM_EXCLUSION'],
-          title: 'Exclusão de Kanbam'
+          roles: ['ROLE_ADMIN', 'ROLE_KANBAN_EXCLUSION'],
+          title: 'Exclusão de Kanban'
         }
       }
     ]

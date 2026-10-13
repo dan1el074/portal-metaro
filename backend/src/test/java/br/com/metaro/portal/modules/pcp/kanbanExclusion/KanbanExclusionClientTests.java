@@ -1,4 +1,4 @@
-package br.com.metaro.portal.modules.pcp.kanbamExclusion;
+package br.com.metaro.portal.modules.pcp.kanbanExclusion;
 
 import br.com.metaro.portal.integration.focco.FoccoConfigService;
 import br.com.metaro.portal.integration.focco.FoccoIntegrationException;
@@ -22,13 +22,13 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-class KanbamExclusionClientTests {
+class KanbanExclusionClientTests {
     @Test
     void findsItemsByLotAndMapsErpFields() {
-        KanbamExclusionClient client = createClient();
+        KanbanExclusionClient client = createClient();
         MockRestServiceServer server = bindServer(client);
 
-        server.expect(requestTo("https://focco.example/kanbam?chave=test-key&num_lote=123&orderAsc=cod_item"))
+        server.expect(requestTo("https://focco.example/kanban?chave=test-key&num_lote=123&orderAsc=cod_item"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
                 .andRespond(withSuccess("""
@@ -69,22 +69,55 @@ class KanbamExclusionClientTests {
 
     @Test
     void deletesManufacturingOrderUsingBearerToken() {
-        KanbamExclusionClient client = createClient();
+        KanbanExclusionClient client = createClient();
         MockRestServiceServer server = bindServer(client);
 
         server.expect(requestTo("https://focco.example/orders/401614"))
                 .andExpect(method(HttpMethod.DELETE))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
-                .andRespond(withSuccess());
+                .andRespond(withSuccess("""
+                        {
+                          "value": "Ordem de fabricação de ID 401614 excluída com sucesso.",
+                          "succeeded": true,
+                          "failed": false,
+                          "allFailed": false
+                        }
+                        """, MediaType.APPLICATION_JSON));
 
-        client.deleteManufacturingOrder(401614);
+        var result = client.deleteManufacturingOrder(401614);
 
+        assertThat(result.deleted()).isTrue();
+        assertThat(result.message()).isEqualTo("Ordem de fabricação de ID 401614 excluída com sucesso.");
+        server.verify();
+    }
+
+    @Test
+    void returnsErpValueWhenOrderIsNotDeleted() {
+        KanbanExclusionClient client = createClient();
+        MockRestServiceServer server = bindServer(client);
+
+        server.expect(requestTo("https://focco.example/orders/1"))
+                .andRespond(withSuccess("""
+                        {
+                          "value": "O id informado 1, não está vinculado a nenhuma ordem de fabricação",
+                          "succeeded": true,
+                          "failed": false,
+                          "allFailed": false
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        var result = client.deleteManufacturingOrder(1);
+
+        assertThat(result.deleted()).isFalse();
+        assertThat(result.message()).isEqualTo(
+                "O id informado 1, não está vinculado a nenhuma ordem de fabricação"
+        );
         server.verify();
     }
 
     @Test
     void exposesErpProblemDetailWhenDeletionFails() {
-        KanbamExclusionClient client = createClient();
+        KanbanExclusionClient client = createClient();
         MockRestServiceServer server = bindServer(client);
 
         server.expect(requestTo("https://focco.example/orders/401614"))
@@ -104,22 +137,45 @@ class KanbamExclusionClientTests {
         server.verify();
     }
 
-    private KanbamExclusionClient createClient() {
+    @Test
+    void exposesExactErpValueWhenDeletionReturnsUnprocessableEntity() {
+        KanbanExclusionClient client = createClient();
+        MockRestServiceServer server = bindServer(client);
+
+        server.expect(requestTo("https://focco.example/orders/402765"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "value": "O id informado 68694, não está vinculado a nenhuma ordem de fabricação",
+                                  "succeeded": true,
+                                  "failed": false,
+                                  "allFailed": false
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.deleteManufacturingOrder(402765))
+                .isInstanceOf(FoccoIntegrationException.class)
+                .hasMessage("O id informado 68694, não está vinculado a nenhuma ordem de fabricação");
+        server.verify();
+    }
+
+    private KanbanExclusionClient createClient() {
         FoccoConfigService configService = new FoccoConfigService(null) {
             @Override
             public FoccoCredentialsDto getCredentials() {
                 return new FoccoCredentialsDto("https://focco.example", "test-key", "test-token");
             }
         };
-        return new KanbamExclusionClient(
+        return new KanbanExclusionClient(
                 configService,
                 new ObjectMapper(),
-                "/kanbam",
+                "/kanban",
                 "/orders"
         );
     }
 
-    private MockRestServiceServer bindServer(KanbamExclusionClient client) {
+    private MockRestServiceServer bindServer(KanbanExclusionClient client) {
         RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
         Assertions.assertNotNull(restTemplate);
         return MockRestServiceServer.bindTo(restTemplate).build();

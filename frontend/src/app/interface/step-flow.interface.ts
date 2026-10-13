@@ -88,6 +88,11 @@ export interface StepFlowOrder {
   discount: number;
   shipment: number;
   carrier: string;
+  volumes: number | null;
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  weight: number | null;
   total: number;
   pictures: Array<StepFlowImage>;
   videos: Array<StepFlowVideo>;

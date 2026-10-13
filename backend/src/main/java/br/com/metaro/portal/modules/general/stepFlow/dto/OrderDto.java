@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +33,11 @@ public class OrderDto {
     private Double discount;
     private Double shipment;
     private String carrier;
+    private Integer volumes;
+    private BigDecimal length;
+    private BigDecimal width;
+    private BigDecimal height;
+    private BigDecimal weight;
     private Double total;
     private List<ImageDto> pictures;
     private List<StepFlowVideoDto> videos;
@@ -53,6 +59,11 @@ public class OrderDto {
         discount = entity.getDiscount();
         shipment = entity.getShipment();
         carrier = entity.getCarrier();
+        volumes = entity.getVolumes();
+        length = entity.getLength();
+        width = entity.getWidth();
+        height = entity.getHeight();
+        weight = entity.getWeight();
         total = entity.getTotal();
         currentStep = entity.getCurrentStep().toString();
         steps = new ArrayList<>();

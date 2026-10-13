@@ -1,12 +1,12 @@
-<c-container breakpoint="lg" class="h-auto px-4 kanbam-page" fluid>
-  <header class="kanbam-header">
+<c-container breakpoint="lg" class="h-auto px-4 kanban-page" fluid>
+  <header class="kanban-header">
     <p class="ops-header">
-      <span class="ops-welcome">Exclusão de Kanbam</span>
+      <span class="ops-welcome">Exclusão de Kanban</span>
       <span class="ops-access-level">Consulte um lote no ERP e gerencie seus itens</span>
     </p>
   </header>
 
-  <div class="kanbam-content">
+  <div class="kanban-content">
     <c-card class="portal-card search-card border">
     <c-card-body>
       <form (ngSubmit)="search()">
@@ -159,7 +159,7 @@
   (visibleChange)="onConfirmationVisibleChange($event)"
 >
   <c-modal-header>
-    <h5 cModalTitle>Excluir itens do Kanbam</h5>
+    <h5 cModalTitle>Excluir itens do Kanban</h5>
     <button cButtonClose [disabled]="deleting" (click)="closeConfirmation()"></button>
   </c-modal-header>
   <c-modal-body>

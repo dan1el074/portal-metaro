@@ -1,4 +1,4 @@
-export interface KanbamItem {
+export interface KanbanItem {
   lotNumber: number;
   orderId: number;
   orderNumber: number;
@@ -7,7 +7,12 @@ export interface KanbamItem {
   quantidade: number;
 }
 
-export interface KanbamDeleteResult {
+export interface KanbanDeleteResponse {
+  deleted: boolean;
+  message: string;
+}
+
+export interface KanbanDeleteResult {
   orderId: number;
   success: boolean;
   message?: string;

@@ -2,17 +2,17 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { KanbamItem } from '../interface/kanbam-exclusion.interface';
+import { KanbanDeleteResponse, KanbanItem } from '../interface/kanban-exclusion.interface';
 
 @Injectable({ providedIn: 'root' })
-export class KanbamExclusionService {
-  private readonly api = environment.apiUrl + '/api/pcp/kanbam-exclusion';
+export class KanbanExclusionService {
+  private readonly api = environment.apiUrl + '/api/pcp/kanban-exclusion';
 
   constructor(private http: HttpClient) {}
 
-  findByLotNumber(lotNumber: string): Observable<KanbamItem[]> {
+  findByLotNumber(lotNumber: string): Observable<KanbanItem[]> {
     const params = new HttpParams().set('lotNumber', lotNumber);
-    return this.http.get<KanbamItemResponse[]>(this.api, { params }).pipe(
+    return this.http.get<KanbanItemResponse[]>(this.api, { params }).pipe(
       map(items => items.map(item => ({
         lotNumber: item.lotNumber ?? item.num_lote ?? 0,
         orderId: item.orderId ?? item.id_ordem ?? 0,
@@ -24,12 +24,12 @@ export class KanbamExclusionService {
     );
   }
 
-  deleteManufacturingOrder(orderId: number): Observable<void> {
-    return this.http.delete<void>(`${this.api}/${orderId}`);
+  deleteManufacturingOrder(orderId: number): Observable<KanbanDeleteResponse> {
+    return this.http.delete<KanbanDeleteResponse>(`${this.api}/${orderId}`);
   }
 }
 
-interface KanbamItemResponse extends Partial<KanbamItem> {
+interface KanbanItemResponse extends Partial<KanbanItem> {
   num_lote?: number;
   id_ordem?: number;
   num_ordem?: number;
