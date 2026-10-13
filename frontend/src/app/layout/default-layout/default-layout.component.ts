@@ -95,7 +95,13 @@ export class DefaultLayoutComponent implements OnInit {
       const toolList: INavData = {
         name: tool.parent,
         url: tool.parentUrl,
-        iconComponent: { name: tool.parent == 'Administração' ? 'cilCursor' : 'cilFork' },
+        iconComponent: {
+          name: tool.parent === 'Administração'
+            ? 'cilCursor'
+            : tool.parent === 'Sistema'
+              ? 'cilEqualizer'
+              : 'cilFork'
+        },
         children: []
       };
 
