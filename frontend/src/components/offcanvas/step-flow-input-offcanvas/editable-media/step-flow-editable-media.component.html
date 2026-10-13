@@ -30,7 +30,7 @@
             </div>
 
             @if (mediaFilter !== 'image') {
-              @for (uploading of filteredUploadingVideos; track uploading.tempId) {
+              @for (uploading of visibleUploadingVideos; track uploading.tempId) {
                 <div class="sof-file-item uploading">
                   <div class="sof-file-item-box">
                     <div class="step-icon">
@@ -54,7 +54,7 @@
               }
             }
 
-            @for (media of filteredMedia; track media.type + '-' + media.id) {
+            @for (media of visibleMedia; track media.type + '-' + media.id) {
               <div class="sof-file-item">
                 @if (media.type === 'image') {
                   <a class="sof-file-item-box media-preview-card" [href]="apiUrl + '/images/' + media.id" target="_blank">
@@ -82,6 +82,16 @@
               @if (mediaFilter === 'image' || !filteredUploadingVideos.length) {
                 <i class="custom-error image media-empty">{{ mediaSearch ? 'Nenhum arquivo encontrado para esta busca.' : 'Nenhum arquivo encontrado para este filtro.' }}</i>
               }
+            }
+
+            @if (hasMoreThanFourMedia) {
+              <button
+                type="button"
+                class="sof-file-expand-btn"
+                (click)="showAllMedia ? showLessMedia() : showMoreMedia()"
+              >
+                {{ showAllMedia ? 'Ver menos' : 'Ver mais' }}
+              </button>
             }
 
           </div>

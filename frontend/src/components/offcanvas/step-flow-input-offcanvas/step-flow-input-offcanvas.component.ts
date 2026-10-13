@@ -101,6 +101,11 @@ export class StepFlowInputOffcanvasComponent {
     this.form = this.formBuilder.group({
       carrier: [''],
       shippment: [null],
+      volumes: [null],
+      length: [null],
+      width: [null],
+      height: [null],
+      weight: [null],
       comment: [''],
     });
 
@@ -139,6 +144,11 @@ export class StepFlowInputOffcanvasComponent {
     this.form.reset({
       carrier: '',
       shippment: null,
+      volumes: null,
+      length: null,
+      width: null,
+      height: null,
+      weight: null,
       comment: '',
     });
     this.files.set([]);
@@ -154,6 +164,7 @@ export class StepFlowInputOffcanvasComponent {
     this.stepFlowService.findById(this.orderId).subscribe({
       next: (data: StepFlowOrder) => {
         this.order = data;
+        this.populateStepFields(data);
         this.buildItemsForm(data.items);
         this.loading = false;
         this.cdf.detectChanges();
@@ -169,6 +180,37 @@ export class StepFlowInputOffcanvasComponent {
         this.cdf.detectChanges();
       },
     });
+  }
+
+  private populateStepFields(order: StepFlowOrder): void {
+    const measurementControls = ['volumes', 'length', 'width', 'height', 'weight'];
+
+    measurementControls.forEach(name => {
+      const control = this.form.get(name);
+      if (order.currentStep === 'Montagem Final') {
+        control?.setValidators([
+          Validators.required,
+          Validators.min(0),
+          Validators.pattern(name === 'volumes' ? /^\d+$/ : /^\d+(\.\d{1,2})?$/),
+        ]);
+      } else {
+        control?.clearValidators();
+      }
+      control?.updateValueAndValidity({ emitEvent: false });
+    });
+
+    this.form.patchValue({
+      carrier: order.currentStep === 'Frete' ? order.carrier ?? '' : '',
+      shippment: order.currentStep === 'Frete' ? order.shipment ?? null : null,
+      volumes: order.currentStep === 'Montagem Final' ? order.volumes : null,
+      length: order.currentStep === 'Montagem Final' ? order.length : null,
+      width: order.currentStep === 'Montagem Final' ? order.width : null,
+      height: order.currentStep === 'Montagem Final' ? order.height : null,
+      weight: order.currentStep === 'Montagem Final' ? order.weight : null,
+      comment: '',
+    });
+    this.form.markAsPristine();
+    this.captureFormInitialValue();
   }
 
   private buildItemsForm(items: Array<StepFlowOrderItem>): void {
@@ -263,6 +305,7 @@ export class StepFlowInputOffcanvasComponent {
           this.order = data;
           this.buildItemsForm(data.items);
           this.resetForm();
+          this.populateStepFields(data);
 
           if (this.isAdmin) {
             const current = this.steps.find(s => s.title === data.currentStep);
@@ -286,7 +329,7 @@ export class StepFlowInputOffcanvasComponent {
 
   private buildFormData(): FormData {
     const formData = new FormData();
-    const { carrier, shippment, comment } = this.form.value;
+    const { carrier, shippment, volumes, length, width, height, weight, comment } = this.form.value;
 
     if (this.isAdmin && this.adminStepControl.dirty) {
       const stepId = this.adminStepControl.value;
@@ -303,6 +346,11 @@ export class StepFlowInputOffcanvasComponent {
       }));
 
       formData.append('itemsJson', JSON.stringify(itemsPayload));
+      formData.append('volumes', String(volumes));
+      formData.append('length', String(length));
+      formData.append('width', String(width));
+      formData.append('height', String(height));
+      formData.append('weight', String(weight));
     }
 
     if (this.order?.currentStep === 'Montagem Final' || this.order?.currentStep === 'Expedição') {
@@ -358,11 +406,16 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   private getComparableFormValue(): string {
-    const { carrier, shippment, comment } = this.form.getRawValue();
+    const { carrier, shippment, volumes, length, width, height, weight, comment } = this.form.getRawValue();
 
     return JSON.stringify({
       carrier: this.normalizeComparableValue(carrier),
       shippment: this.normalizeComparableValue(shippment),
+      volumes: this.normalizeComparableValue(volumes),
+      length: this.normalizeComparableValue(length),
+      width: this.normalizeComparableValue(width),
+      height: this.normalizeComparableValue(height),
+      weight: this.normalizeComparableValue(weight),
       comment: this.normalizeComparableValue(comment),
     });
   }
