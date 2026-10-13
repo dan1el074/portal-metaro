@@ -38,3 +38,7 @@
   [roles]="user.roles"
   (closeModal)="toggleSearchModal(false)"
 ></app-layout-search-modal>
+
+@if (showBirthdayConfetti) {
+  <div #birthdayConfettiHost class="birthday-confetti" aria-hidden="true"></div>
+}

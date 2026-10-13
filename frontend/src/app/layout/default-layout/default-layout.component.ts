@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { NgScrollbar } from 'ngx-scrollbar';
 import { INavData, ShadowOnScrollDirective, SidebarBrandComponent, SidebarComponent, SidebarFooterComponent, SidebarHeaderComponent, SidebarNavComponent, SidebarService, SidebarToggleDirective, SidebarTogglerDirective} from '@coreui/angular';
@@ -12,6 +12,15 @@ import { LayoutSearchModalComponent } from '../../../components/modal/layout/lay
 import { navItems } from './_nav';
 import { getNavigationTools } from '../../shared/navigation-tool';
 import { ChecklistService } from '../../services/checklist.service';
+import { Container, tsParticles } from '@tsparticles/engine';
+import { loadConfettiCannonPreset } from '@tsparticles/preset-confetti-cannon';
+
+let birthdayConfettiPresetLoader: Promise<void> | undefined;
+
+interface BirthdayConfettiStorage {
+  user: string;
+  shown: 'true' | 'false';
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -35,10 +44,17 @@ import { ChecklistService } from '../../services/checklist.service';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class DefaultLayoutComponent implements OnInit {
+export class DefaultLayoutComponent implements OnInit, OnDestroy {
+  @ViewChild('birthdayConfettiHost') private birthdayConfettiHost?: ElementRef<HTMLDivElement>;
   protected showSearchModal = false;
   protected showAlertModal = false;
+  protected showBirthdayConfetti = false;
   public navItems!: Array<INavData>;
+  private birthdayConfettiCleanupTimer?: ReturnType<typeof setTimeout>;
+  private birthdayConfettiContainer?: Container;
+  private birthdayConfettiLaunchTimers: Array<ReturnType<typeof setTimeout>> = [];
+  private birthdayConfettiTimer?: ReturnType<typeof setTimeout>;
+  private readonly birthdayConfettiStorageKey = 'birthday-confetti';
 
   protected user: Me = {
     id: 0,
@@ -77,6 +93,13 @@ export class DefaultLayoutComponent implements OnInit {
     if (!this.userService.getCurrentUser()) {
       this.userService.refreshUser().subscribe();
     }
+  }
+
+  public ngOnDestroy(): void {
+    if (this.birthdayConfettiTimer) clearTimeout(this.birthdayConfettiTimer);
+    if (this.birthdayConfettiCleanupTimer) clearTimeout(this.birthdayConfettiCleanupTimer);
+    this.clearBirthdayConfettiLaunchTimers();
+    this.birthdayConfettiContainer?.destroy();
   }
 
   private loadChecklistAlerts(): void {
@@ -161,6 +184,7 @@ export class DefaultLayoutComponent implements OnInit {
     if (sessionStorage.getItem('first-access') == 'true') {
       if (!this.user.pendingIssues || this.user.pendingIssues.length == 0) {
         sessionStorage.removeItem('first-access')
+        this.scheduleBirthdayConfetti();
         return;
       }
 
@@ -170,13 +194,164 @@ export class DefaultLayoutComponent implements OnInit {
   }
 
   protected toggleAlertModal(status: boolean): void {
+    const alertWasVisible = this.showAlertModal;
     this.showAlertModal = status;
 
     if (!status) {
       sessionStorage.removeItem('first-access');
+      if (alertWasVisible) this.scheduleBirthdayConfetti(250);
     }
 
     this.cdr.detectChanges();
+  }
+
+  private scheduleBirthdayConfetti(delay = 0): void {
+    if (!this.shouldShowBirthdayConfetti()) return;
+
+    this.saveBirthdayConfettiStorage('true');
+
+    this.birthdayConfettiTimer = setTimeout(() => {
+      this.showBirthdayConfetti = true;
+      this.cdr.detectChanges();
+      void this.startBirthdayConfettiAnimation();
+    }, delay);
+  }
+
+  private shouldShowBirthdayConfetti(): boolean {
+    if (!this.router.url.startsWith('/home')) return false;
+
+    const birthDate = this.user.birthDate?.match(/^\d{4}-(\d{2})-(\d{2})/);
+    if (!birthDate) return false;
+
+    const today = new Date();
+    const isBirthday = Number(birthDate[1]) === today.getMonth() + 1
+      && Number(birthDate[2]) === today.getDate();
+    if (!isBirthday) {
+      this.saveBirthdayConfettiStorage('false');
+      return false;
+    }
+
+    const stored = this.getBirthdayConfettiStorage();
+    return stored?.user !== this.user.username || stored.shown !== 'true';
+  }
+
+  private getBirthdayConfettiStorage(): BirthdayConfettiStorage | null {
+    const stored = localStorage.getItem(this.birthdayConfettiStorageKey);
+    if (!stored) return null;
+
+    try {
+      return JSON.parse(stored) as BirthdayConfettiStorage;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveBirthdayConfettiStorage(shown: 'true' | 'false'): void {
+    const value: BirthdayConfettiStorage = { user: this.user.username, shown };
+    localStorage.setItem(this.birthdayConfettiStorageKey, JSON.stringify(value));
+  }
+
+  private async startBirthdayConfettiAnimation(): Promise<void> {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.finishBirthdayConfettiAnimation();
+      return;
+    }
+
+    const host = this.birthdayConfettiHost?.nativeElement;
+    if (!host) {
+      this.finishBirthdayConfettiAnimation();
+      return;
+    }
+
+    let container: Container | undefined;
+    try {
+      birthdayConfettiPresetLoader ??= loadConfettiCannonPreset(tsParticles);
+      await birthdayConfettiPresetLoader;
+      container = await tsParticles.load({
+        id: 'birthday-confetti',
+        element: host,
+        options: {
+          preset: 'confettiCannon',
+          fullScreen: { enable: false },
+          interactivity: { events: { onClick: { enable: false } } },
+        },
+      });
+    } catch {
+      this.saveBirthdayConfettiStorage('false');
+      this.finishBirthdayConfettiAnimation();
+      return;
+    }
+
+    if (!container) {
+      this.saveBirthdayConfettiStorage('false');
+      this.finishBirthdayConfettiAnimation();
+      return;
+    }
+
+    this.birthdayConfettiContainer = container;
+    this.fireBirthdayConfettiCannon(container);
+    this.birthdayConfettiCleanupTimer = setTimeout(() => this.finishBirthdayConfettiAnimation(), 6000);
+  }
+
+  private finishBirthdayConfettiAnimation(): void {
+    if (this.birthdayConfettiCleanupTimer) clearTimeout(this.birthdayConfettiCleanupTimer);
+    this.clearBirthdayConfettiLaunchTimers();
+    this.birthdayConfettiContainer?.destroy();
+    this.birthdayConfettiCleanupTimer = undefined;
+    this.birthdayConfettiContainer = undefined;
+    this.showBirthdayConfetti = false;
+    this.cdr.detectChanges();
+  }
+
+  private fireBirthdayConfettiCannon(container: Container): void {
+    const pixelRatio = container.retina.pixelRatio;
+    const viewportWidth = container.canvas.size.width / pixelRatio;
+    const viewportHeight = container.canvas.size.height / pixelRatio;
+    const isDesktop = viewportWidth >= 992;
+    const launchSpeed = isDesktop
+      ? Math.min(64, Math.max(35, viewportHeight / 18))
+      : Math.min(48, Math.max(30, viewportHeight / 23));
+    const count = isDesktop ? 190 : Math.min(110, Math.max(80, Math.round(viewportHeight * .13)));
+    const maxAngleOffset = isDesktop ? 44 : 18;
+    const waveCount = isDesktop ? 7 : 5;
+    const origin = {
+      x: container.canvas.size.width / 2,
+      y: container.canvas.size.height - 6 * pixelRatio,
+    };
+
+    const launchWave = (wave: number): void => {
+      if (container.destroyed) return;
+
+      const particlesInWave = Math.floor(count / waveCount) + (wave < count % waveCount ? 1 : 0);
+      for (let index = 0; index < particlesInWave; index++) {
+        const angleOffset = -maxAngleOffset + Math.random() * maxAngleOffset * 2;
+        const direction = -90 + angleOffset;
+        const verticalCompensation = Math.max(.7, Math.cos(angleOffset * Math.PI / 180));
+        const speedVariation = isDesktop ? .86 + Math.random() * .28 : .9 + Math.random() * .2;
+        const speed = launchSpeed * speedVariation / verticalCompensation;
+        container.particles.addParticle(origin, {
+          move: {
+            enable: true,
+            decay: isDesktop ? .008 : .01,
+            direction,
+            gravity: { enable: true, acceleration: isDesktop ? 9.81 : 14 },
+            speed,
+            straight: true,
+          },
+          size: { value: isDesktop ? { min: 5, max: 9 } : { min: 3, max: 5 } },
+        });
+      }
+    };
+
+    launchWave(0);
+    for (let wave = 1; wave < waveCount; wave++) {
+      this.birthdayConfettiLaunchTimers.push(setTimeout(() => launchWave(wave), wave * 45));
+    }
+  }
+
+  private clearBirthdayConfettiLaunchTimers(): void {
+    this.birthdayConfettiLaunchTimers.forEach(timer => clearTimeout(timer));
+    this.birthdayConfettiLaunchTimers = [];
   }
 
   protected toggleSearchModal(status: boolean): void {
