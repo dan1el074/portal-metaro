@@ -5,12 +5,12 @@ import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, CardBodyComponent, CardComponent, ContainerComponent, FormControlDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, SpinnerComponent } from '@coreui/angular';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { ModalBackNavigationDirective } from '../../../directive/modal-back-navigation.directive';
-import { KanbamDeleteResult, KanbamItem } from '../../../interface/kanbam-exclusion.interface';
-import { KanbamExclusionService } from '../../../services/kanbam-exclusion.service';
+import { KanbanDeleteResult, KanbanItem } from '../../../interface/kanban-exclusion.interface';
+import { KanbanExclusionService } from '../../../services/kanban-exclusion.service';
 import { ToastrService } from '../../../services/toast.service';
 
 @Component({
-  selector: 'app-kanbam-exclusion',
+  selector: 'app-kanban-exclusion',
   imports: [
     CommonModule,
     FormsModule,
@@ -27,21 +27,21 @@ import { ToastrService } from '../../../services/toast.service';
     ModalFooterComponent,
     ButtonCloseDirective
   ],
-  templateUrl: './kanbam-exclusion.component.html',
-  styleUrl: './kanbam-exclusion.component.scss',
+  templateUrl: './kanban-exclusion.component.html',
+  styleUrl: './kanban-exclusion.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class KanbamExclusionComponent {
+export class KanbanExclusionComponent {
   protected lotNumber = '';
   protected searchedLot: string | null = null;
-  protected items: KanbamItem[] = [];
+  protected items: KanbanItem[] = [];
   protected selectedOrderIds = new Set<number>();
   protected searching = false;
   protected deleting = false;
   protected confirmVisible = false;
 
   constructor(
-    private kanbamService: KanbamExclusionService,
+    private kanbanService: KanbanExclusionService,
     private toasterService: ToastrService,
     private cdr: ChangeDetectorRef
   ) {}
@@ -70,7 +70,7 @@ export class KanbamExclusionComponent {
     this.searching = true;
     this.items = [];
     this.selectedOrderIds.clear();
-    this.kanbamService.findByLotNumber(lotNumber).subscribe({
+    this.kanbanService.findByLotNumber(lotNumber).subscribe({
       next: items => {
         this.items = items;
         this.searchedLot = lotNumber;
@@ -132,9 +132,13 @@ export class KanbamExclusionComponent {
     this.deleting = true;
 
     const requests = orderIds.map(orderId =>
-      this.kanbamService.deleteManufacturingOrder(orderId).pipe(
-        map((): KanbamDeleteResult => ({ orderId, success: true })),
-        catchError(error => of<KanbamDeleteResult>({
+      this.kanbanService.deleteManufacturingOrder(orderId).pipe(
+        map((response): KanbanDeleteResult => ({
+          orderId,
+          success: response.deleted,
+          message: response.message
+        })),
+        catchError(error => of<KanbanDeleteResult>({
           orderId,
           success: false,
           message: this.errorMessage(error, `Não foi possível excluir a ordem ${orderId}.`)
@@ -153,6 +157,13 @@ export class KanbamExclusionComponent {
       this.deleting = false;
       this.confirmVisible = false;
 
+      const failureMessages = [...new Set(
+        failures
+          .map(result => result.message?.trim())
+          .filter((message): message is string => !!message)
+      )];
+      failureMessages.forEach(message => this.toasterService.error(message));
+
       if (!failures.length) {
         const label = successfulIds.size === 1 ? 'item excluído' : 'itens excluídos';
         this.toasterService.success(`${successfulIds.size} ${label} com sucesso no ERP.`);
@@ -160,8 +171,8 @@ export class KanbamExclusionComponent {
         this.toasterService.warning(
           `${successfulIds.size} item(ns) excluído(s), mas ${failures.length} não puderam ser excluídos.`
         );
-      } else {
-        this.toasterService.error(failures[0].message ?? 'Não foi possível excluir os itens no ERP.');
+      } else if (!failureMessages.length) {
+        this.toasterService.error('Não foi possível excluir os itens no ERP.');
       }
 
       this.cdr.detectChanges();

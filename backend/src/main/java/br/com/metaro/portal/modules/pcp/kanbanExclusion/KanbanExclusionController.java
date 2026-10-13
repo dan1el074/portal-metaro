@@ -1,6 +1,7 @@
-package br.com.metaro.portal.modules.pcp.kanbamExclusion;
+package br.com.metaro.portal.modules.pcp.kanbanExclusion;
 
-import br.com.metaro.portal.modules.pcp.kanbamExclusion.dto.KanbamItemDto;
+import br.com.metaro.portal.modules.pcp.kanbanExclusion.dto.KanbanDeleteResultDto;
+import br.com.metaro.portal.modules.pcp.kanbanExclusion.dto.KanbanItemDto;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,28 +17,27 @@ import java.util.List;
 
 @Validated
 @RestController
-@RequestMapping("/api/pcp/kanbam-exclusion")
-public class KanbamExclusionController {
-    private final KanbamExclusionClient client;
+@RequestMapping("/api/pcp/kanban-exclusion")
+public class KanbanExclusionController {
+    private final KanbanExclusionClient client;
 
-    public KanbamExclusionController(KanbamExclusionClient client) {
+    public KanbanExclusionController(KanbanExclusionClient client) {
         this.client = client;
     }
 
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_KANBAM_EXCLUSION')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_KANBAN_EXCLUSION')")
     @GetMapping
-    public ResponseEntity<List<KanbamItemDto>> findByLotNumber(
+    public ResponseEntity<List<KanbanItemDto>> findByLotNumber(
             @RequestParam @Positive Long lotNumber
     ) {
         return ResponseEntity.ok(client.findByLotNumber(lotNumber));
     }
 
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_KANBAM_EXCLUSION')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_KANBAN_EXCLUSION')")
     @DeleteMapping("/{orderId}")
-    public ResponseEntity<Void> deleteManufacturingOrder(
+    public ResponseEntity<KanbanDeleteResultDto> deleteManufacturingOrder(
             @PathVariable @Positive Long orderId
     ) {
-        client.deleteManufacturingOrder(orderId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(client.deleteManufacturingOrder(orderId));
     }
 }

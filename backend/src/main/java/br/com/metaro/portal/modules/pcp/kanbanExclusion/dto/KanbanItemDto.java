@@ -1,4 +1,4 @@
-package br.com.metaro.portal.modules.pcp.kanbamExclusion.dto;
+package br.com.metaro.portal.modules.pcp.kanbanExclusion.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonAlias;
@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 @Getter
 @NoArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class KanbamItemDto {
+public class KanbanItemDto {
     @JsonAlias("num_lote")
     private Long lotNumber;
 

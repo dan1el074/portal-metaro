@@ -40,7 +40,7 @@ done
     exit 1
 }
 
-[[ "$DEPLOY_BRANCH" == "main" || "$DEPLOY_BRANCH" == "prod" ]] || {
+[[ "$DEPLOY_BRANCH" == "main" || "$DEPLOY_BRANCH" == "prod" || "$DEPLOY_BRANCH" == "test" ]] || {
     echo "Branch não permitida: $DEPLOY_BRANCH"
     exit 1
 }

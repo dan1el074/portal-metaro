@@ -2,18 +2,18 @@
   display: block;
 }
 
-.kanbam-page {
+.kanban-page {
   width: 100%;
   max-width: 1150px;
   padding-bottom: 32px;
 }
 
-.kanbam-header .ops-header {
+.kanban-header .ops-header {
   margin-bottom: 20px;
   padding: 0 40px;
 }
 
-.kanbam-content {
+.kanban-content {
   padding: 0 40px;
 }
 
@@ -302,18 +302,18 @@
 }
 
 @media (max-width: 600px) {
-  .kanbam-page {
+  .kanban-page {
     padding-right: 12px !important;
     padding-left: 12px !important;
   }
 
-  .kanbam-header .ops-header {
+  .kanban-header .ops-header {
     width: 100%;
     padding: 0;
     text-align: left;
   }
 
-  .kanbam-content {
+  .kanban-content {
     padding: 0;
   }
 
