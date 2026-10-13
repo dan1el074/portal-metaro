@@ -501,5 +501,9 @@
 @media (max-width: 621px) {
   .sof-custom-offcanvas {
     width: 100%;
+
+    .sof-custom-body .shipping-measurements {
+      grid-template-columns: 1fr;
+    }
   }
 }

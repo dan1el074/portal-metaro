@@ -199,3 +199,11 @@ app-step-flow-history { display: block; }
     }
   }
 }
+
+@media (max-width: 621px) {
+  .sof-custom-offcanvas .sof-custom-body .sofd-history .sofd-accordion .sofd-accordion-body {
+    .sofd-shipping-info {
+      grid-template-columns: 1fr;
+    }
+  }
+}
