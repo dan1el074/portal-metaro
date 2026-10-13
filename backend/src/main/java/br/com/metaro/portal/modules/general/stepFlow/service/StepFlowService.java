@@ -353,7 +353,6 @@ public class StepFlowService {
                 proccessImage(dto, currentStep);
                 checkQuantity(dto, order);
                 updateShippingMeasurements(dto, order);
-                checkShippingMeasurements(order);
             }
             case PCP -> checkCancelled(dto, order);
             case FREIGHT -> {
@@ -416,7 +415,7 @@ public class StepFlowService {
     }
 
     private void updateShippingMeasurements(OrderInputDto dto, Order order) {
-        if (dto.getVolumes() != null) {
+        if (dto.getVolumes() != null && !dto.getVolumes().isBlank()) {
             try {
                 int volumes = Integer.parseInt(dto.getVolumes());
                 if (volumes < 0) throw new NumberFormatException();
@@ -426,10 +425,10 @@ public class StepFlowService {
             }
         }
 
-        if (dto.getLength() != null) order.setLength(parseMeasurement(dto.getLength(), "Comprimento"));
-        if (dto.getWidth() != null) order.setWidth(parseMeasurement(dto.getWidth(), "Largura"));
-        if (dto.getHeight() != null) order.setHeight(parseMeasurement(dto.getHeight(), "Altura"));
-        if (dto.getWeight() != null) order.setWeight(parseMeasurement(dto.getWeight(), "Peso"));
+        if (dto.getLength() != null && !dto.getLength().isBlank()) order.setLength(parseMeasurement(dto.getLength(), "Comprimento"));
+        if (dto.getWidth() != null && !dto.getWidth().isBlank()) order.setWidth(parseMeasurement(dto.getWidth(), "Largura"));
+        if (dto.getHeight() != null && !dto.getHeight().isBlank()) order.setHeight(parseMeasurement(dto.getHeight(), "Altura"));
+        if (dto.getWeight() != null && !dto.getWeight().isBlank()) order.setWeight(parseMeasurement(dto.getWeight(), "Peso"));
     }
 
     private BigDecimal parseMeasurement(String value, String fieldName) {

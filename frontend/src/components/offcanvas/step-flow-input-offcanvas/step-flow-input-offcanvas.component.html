@@ -104,8 +104,10 @@
                 </div>
               </div>
             </div>
-            @if (form.get('volumes')?.touched && form.get('volumes')?.invalid || form.get('length')?.touched && form.get('length')?.invalid || form.get('width')?.touched && form.get('width')?.invalid || form.get('height')?.touched && form.get('height')?.invalid || form.get('weight')?.touched && form.get('weight')?.invalid) {
-              <small class="shipping-validation-error">Preencha todos os campos.</small>
+            @if (shippingValidationForNextStep && hasInvalidShippingMeasurements()) {
+              <small class="shipping-validation-error">Preencha todos os campos com valores válidos antes de avançar.</small>
+            } @else if (form.get('volumes')?.touched && form.get('volumes')?.invalid || form.get('length')?.touched && form.get('length')?.invalid || form.get('width')?.touched && form.get('width')?.invalid || form.get('height')?.touched && form.get('height')?.invalid || form.get('weight')?.touched && form.get('weight')?.invalid) {
+              <small class="shipping-validation-error">Informe valores válidos.</small>
             }
           </div>
 
