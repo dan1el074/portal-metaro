@@ -59,6 +59,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         WHERE o.currentStep = :step
             AND s.step = :step
             AND s.status = :status
+            AND s.checklistPending = false
             AND o.status <> :orderStatus
         ORDER BY o.id DESC
     """)

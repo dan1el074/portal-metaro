@@ -11,6 +11,7 @@ import { LayoutAlertModalComponent } from './../../../components/modal/layout/la
 import { LayoutSearchModalComponent } from '../../../components/modal/layout/layout-search-modal/layout-search-modal.component';
 import { navItems } from './_nav';
 import { getNavigationTools } from '../../shared/navigation-tool';
+import { ChecklistService } from '../../services/checklist.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -58,6 +59,7 @@ export class DefaultLayoutComponent implements OnInit {
     private notificationService: NotificationService,
     private wsService: NotificationWebSocketService,
     private sidebarService: SidebarService,
+    private checklistService: ChecklistService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -69,12 +71,21 @@ export class DefaultLayoutComponent implements OnInit {
       this.user = user;
       this.updateTools();
       this.connectWebsocket();
-      this.checkFirstAccess();
+      this.loadChecklistAlerts();
     });
 
     if (!this.userService.getCurrentUser()) {
       this.userService.refreshUser().subscribe();
     }
+  }
+
+  private loadChecklistAlerts(): void {
+    const hasChecklistRole = this.user.roles.some(role => ['ROLE_ADMIN', 'ROLE_CHECKLIST_OPERATOR'].includes(role.authority));
+    if (!hasChecklistRole) { this.checkFirstAccess(); return; }
+    this.checklistService.listStepFlowAlerts().subscribe({
+      next: issues => { this.user = { ...this.user, pendingIssues: [...(this.user.pendingIssues ?? []), ...issues] }; this.checkFirstAccess(); },
+      error: () => this.checkFirstAccess(),
+    });
   }
 
   private updateTools(): void {
@@ -84,7 +95,13 @@ export class DefaultLayoutComponent implements OnInit {
       const toolList: INavData = {
         name: tool.parent,
         url: tool.parentUrl,
-        iconComponent: { name: tool.parent == 'Administração' ? 'cilCursor' : 'cilFork' },
+        iconComponent: {
+          name: tool.parent === 'Administração'
+            ? 'cilCursor'
+            : tool.parent === 'Sistema'
+              ? 'cilEqualizer'
+              : 'cilFork'
+        },
         children: []
       };
 

@@ -29,6 +29,10 @@
     min-height: 100%;
   }
 
+  .sidebar-nav.sidebar-nav-tree .nav-group .nav-group-items::before {
+    border-inline-start-color: #4a566d !important;
+  }
+
   .sidebar-nav .nav-group > .nav-group-items {
     // CoreUI Angular animates the height itself. Its CSS also hides and
     // transitions the same element, which makes the submenu flash.

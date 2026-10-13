@@ -5,6 +5,7 @@ import br.com.metaro.portal.modules.general.stepFlow.dto.OrderMinDto;
 import br.com.metaro.portal.modules.general.stepFlow.entities.Order;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepository;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistStepFlowService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ class StepFlowServiceTests {
         OrderRepository orderRepository = mock(OrderRepository.class);
         StepFlowService service = new StepFlowService();
         ReflectionTestUtils.setField(service, "orderRepository", orderRepository);
+        ReflectionTestUtils.setField(service, "checklistStepFlowService", mock(ChecklistStepFlowService.class));
         when(orderRepository.countByNumber(14064)).thenReturn(1L);
 
         service.create(erpOrder(14064));
@@ -46,6 +48,7 @@ class StepFlowServiceTests {
         OrderRepository orderRepository = mock(OrderRepository.class);
         StepFlowService service = new StepFlowService();
         ReflectionTestUtils.setField(service, "orderRepository", orderRepository);
+        ReflectionTestUtils.setField(service, "checklistStepFlowService", mock(ChecklistStepFlowService.class));
         when(orderRepository.countByNumber(14064)).thenReturn(0L);
 
         service.create(erpOrder(14064));

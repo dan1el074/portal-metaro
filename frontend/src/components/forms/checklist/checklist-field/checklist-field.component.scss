@@ -1,0 +1,4 @@
+:host { display: block; }
+.form-label { color: var(--cui-medium-emphasis); font-size: 13px; font-weight: 600; }
+.form-control, .form-select { min-height: 46px; border-radius: 4px; font-size: 14px; font-weight: 400; }
+.form-control:is(textarea) { min-height: 92px; }

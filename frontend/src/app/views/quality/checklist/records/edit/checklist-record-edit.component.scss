@@ -1,0 +1,14 @@
+:host { display: block; }
+.record-editor-page { padding-bottom: 32px; }
+.detail-navigation { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -1.5rem -1.5rem 24px; padding: 13px 24px; border-bottom: 1px solid var(--cui-border-color); background: var(--cui-body-bg); }
+.detail-breadcrumb, .back-link { display: flex; align-items: center; }
+.detail-breadcrumb { min-width: 0; gap: 10px; color: var(--cui-secondary-color); font-size: 13px; }
+.detail-breadcrumb strong { overflow: hidden; color: var(--cui-body-color); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.back-link { gap: 6px; padding: 0; border: 0; background: transparent; color: var(--cui-secondary-color); font: inherit; white-space: nowrap; }
+.back-link:hover { color: var(--cui-body-color); }
+.breadcrumb-separator { color: var(--cui-border-color); }
+.editor-content { max-width: 1100px; margin: 0 auto; }
+.editor-heading { margin: 0 0 20px; }
+.editor-heading h1 { margin: 0; color: var(--cui-body-color); font-size: 24px; font-weight: 600; }
+.editor-heading p { margin: 4px 0 0; color: var(--cui-secondary-color); font-size: 13px; }
+@media (max-width: 700px) { .detail-navigation { margin-right: -1.5rem; margin-left: -1.5rem; padding-right: 12px; padding-left: 12px; } }

@@ -1,0 +1,126 @@
+<div class="form-stack">
+  <c-card>
+    <div class="card-heading"><div><h2>Identificação</h2><p>Defina onde o modelo será usado e como seus registros serão apresentados.</p></div></div>
+    <c-card-body class="p-0">
+      <div class="model-card-content form-grid">
+        <label>Categoria
+          <select cSelect [(ngModel)]="model.categoryId" (ngModelChange)="categoryChanged()">
+            <option value="">Selecione</option>
+            @for (item of store.state().categories; track item.id) { <option [value]="item.id">{{ item.name }}</option> }
+          </select>
+        </label>
+        @if (category?.integration === 'production') {
+          <label>Equipamento
+            <select cSelect [(ngModel)]="model.equipmentId" (ngModelChange)="equipmentChanged()">
+              <option value="">Selecione</option>
+              @for (item of store.state().equipment; track item.id) { <option [value]="item.id">{{ item.abbreviation }} — {{ item.name }}</option> }
+            </select>
+          </label>
+        } @else {
+          <label>Nome do modelo<input cFormControl [(ngModel)]="model.name" (ngModelChange)="changed()" /></label>
+        }
+        <label class="wide">Composição do título
+          <input cFormControl [(ngModel)]="model.title" (ngModelChange)="changed()" placeholder="Data e respostas selecionadas" />
+          <small>O título é usado somente para identificar o registro na listagem.</small>
+        </label>
+        <details class="title-formula-help wide">
+          <summary><strong>Campos disponíveis</strong><app-checklist-icon name="chevron-down" /></summary>
+          <div class="title-formula-content">
+            @for (variable of titleVariables; track variable.key) {
+              <div>
+                <code>{{ variable.key }}</code>
+                <span>{{ variable.label }}</span>
+              </div>
+            }
+            <small>Use as variáveis iniciadas por % no campo acima. Textos fixos podem ser combinados livremente com as variáveis.</small>
+          </div>
+        </details>
+      </div>
+    </c-card-body>
+  </c-card>
+
+  <c-card>
+    <div class="card-heading"><div><h2>Fluxo e requisitos</h2><p>Um modelo predecessor só pode ser utilizado uma vez.</p></div></div>
+    <c-card-body class="p-0">
+      <div class="model-card-content form-grid">
+        <div class="requirement-field">
+          <label>Requisito
+            <select cSelect [(ngModel)]="model.predecessorId" (ngModelChange)="changed()">
+              <option value="">Sem requisito</option>
+              @for (item of predecessors; track item.id) { <option [value]="item.id">{{ predecessorLabel(item) }}</option> }
+            </select>
+          </label>
+          <label class="check-line automatic-option"><input cFormCheckInput type="checkbox" [(ngModel)]="model.automatic" [disabled]="!model.predecessorId" (ngModelChange)="changed()" /> Gerar automaticamente após concluir o requisito</label>
+        </div>
+      </div>
+    </c-card-body>
+  </c-card>
+
+  <c-card>
+    <div class="card-heading"><div><h2>Cabeçalho</h2><p>Os dados fixos e campos adicionais são definidos pela categoria selecionada.</p></div></div>
+    <c-card-body class="p-0">
+      <div class="model-card-content">
+        @if (category) {
+          <dl class="category-summary">
+            <div><dt>Integração</dt><dd>{{ integrationLabel(category.integration) }}</dd></div>
+            <div><dt>RE</dt><dd>{{ category.re || 'Não informado' }}</dd></div>
+            <div><dt>Ref. PR</dt><dd>{{ category.ref || 'Não informado' }}</dd></div>
+            <div><dt>ERP</dt><dd>{{ category.erp ? 'Sim' : 'Não' }}</dd></div>
+          </dl>
+        }
+      </div>
+    </c-card-body>
+  </c-card>
+
+  <div class="sections-heading"><div><h2>Seções e itens</h2><p>Organize as perguntas na ordem em que serão preenchidas.</p></div></div>
+  @for (section of model.sections; track section.id; let sectionIndex = $index) {
+    <c-card class="section-card">
+      <div class="section-toolbar">
+        <span class="number">{{ sectionIndex + 1 }}</span>
+        <input cFormControl [(ngModel)]="section.name" (ngModelChange)="changed()" placeholder="Nome da seção" />
+        <div>
+          <button cButton class="icon-action-button section-order-button" color="light" size="sm" (click)="move(model.sections, sectionIndex, -1)" cTooltip="Mover seção para cima" cTooltipPlacement="top" aria-label="Mover seção para cima"><app-checklist-icon name="chevron-up" /></button>
+          <button cButton class="icon-action-button section-order-button" color="light" size="sm" (click)="move(model.sections, sectionIndex, 1)" cTooltip="Mover seção para baixo" cTooltipPlacement="top" aria-label="Mover seção para baixo"><app-checklist-icon name="chevron-down" /></button>
+          <button cButton class="icon-action-button delete-action-button" color="danger" variant="ghost" size="sm" (click)="removeSection(sectionIndex)" cTooltip="Excluir seção" cTooltipPlacement="top" aria-label="Excluir seção"><app-checklist-icon name="trash" /></button>
+        </div>
+      </div>
+      <c-card-body class="p-0">
+        <div class="model-card-content">
+          <label class="options">Opções de marcação<input cFormControl [ngModel]="section.options.join(', ')" (ngModelChange)="options(sectionIndex, $event)" /></label>
+          <div class="question-list">
+          @for (question of section.questions; track question.id; let questionIndex = $index) {
+            <div class="question-row">
+              <span>{{ sectionIndex + 1 }}.{{ questionIndex + 1 }}</span>
+              <div>
+                <input cFormControl [(ngModel)]="question.label" (ngModelChange)="changed()" placeholder="Descrição do item" />
+                <div class="question-fields">
+                  @for (field of question.fields; track field.id; let fieldIndex = $index) {
+                    <div class="question-field">
+                      <input cFormControl [(ngModel)]="field.label" (ngModelChange)="changed()" placeholder="Nome do campo adicional" />
+                      <select cSelect [(ngModel)]="field.type" (ngModelChange)="changed()">
+                        @for (type of fieldTypes; track type.value) { <option [value]="type.value">{{ type.label }}</option> }
+                      </select>
+                      @if (field.type === 'select') { <input cFormControl [ngModel]="field.options.join('; ')" (ngModelChange)="setFieldOptions(field, $event)" placeholder="Opções separadas por ;" /> }
+                      <button cButton class="icon-action-button delete-action-button" color="danger" variant="ghost" size="sm" (click)="removeQuestionField(sectionIndex, questionIndex, fieldIndex)" cTooltip="Excluir campo" cTooltipPlacement="top" aria-label="Excluir campo"><app-checklist-icon name="trash" /></button>
+                    </div>
+                  }
+                  <button cButton color="secondary" variant="ghost" size="sm" (click)="addQuestionField(sectionIndex, questionIndex)"><app-checklist-icon name="plus" /> Campo adicional</button>
+                </div>
+              </div>
+              <div class="row-actions">
+                <button cButton class="icon-action-button" color="light" size="sm" (click)="move(section.questions, questionIndex, -1)" cTooltip="Mover item para cima" cTooltipPlacement="top" aria-label="Mover item para cima"><app-checklist-icon name="chevron-up" /></button>
+                <button cButton class="icon-action-button" color="light" size="sm" (click)="move(section.questions, questionIndex, 1)" cTooltip="Mover item para baixo" cTooltipPlacement="top" aria-label="Mover item para baixo"><app-checklist-icon name="chevron-down" /></button>
+                <button cButton class="icon-action-button delete-action-button" color="danger" variant="ghost" size="sm" (click)="removeQuestion(sectionIndex, questionIndex)" cTooltip="Excluir item" cTooltipPlacement="top" aria-label="Excluir item"><app-checklist-icon name="trash" /></button>
+              </div>
+            </div>
+          }
+            <button cButton color="secondary" variant="ghost" (click)="addQuestion(sectionIndex)"><app-checklist-icon name="plus" /> Adicionar item</button>
+          </div>
+        </div>
+      </c-card-body>
+    </c-card>
+  }
+  <div class="add-section-action"><button cButton color="secondary" variant="outline" (click)="addSection()"><app-checklist-icon name="plus" /> Adicionar seção</button></div>
+  <c-card><div class="card-heading"><div><h2>Rodapé</h2><p>Defina os recursos exibidos no encerramento.</p></div></div><c-card-body class="p-0"><div class="model-card-content"><label class="check-line"><input cFormCheckInput type="checkbox" [(ngModel)]="model.signature" [disabled]="category?.integration === 'production'" (ngModelChange)="changed()" /> {{ category?.integration === 'production' ? 'Assinatura obrigatória para Integração Produção' : 'Solicitar assinatura de quem finalizar' }}</label></div></c-card-body></c-card>
+</div>
+<div class="page-actions"><button cButton color="secondary" variant="outline" (click)="cancel.emit()">Cancelar</button><button cButton color="primary" (click)="saveModel.emit()"><app-checklist-icon name="save" /> Salvar modelo</button></div>

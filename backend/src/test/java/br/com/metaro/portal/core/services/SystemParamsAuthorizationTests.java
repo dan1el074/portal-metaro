@@ -2,6 +2,8 @@ package br.com.metaro.portal.core.services;
 
 import br.com.metaro.portal.core.controller.AuthController;
 import br.com.metaro.portal.core.controller.InfoController;
+import br.com.metaro.portal.core.controller.RequestMailConfigController;
+import br.com.metaro.portal.core.dto.request.RequestMailConfigUpdateDto;
 import br.com.metaro.portal.integration.bunny.BunnyConfigController;
 import br.com.metaro.portal.integration.bunny.dto.BunnyConfigUpdateDto;
 import br.com.metaro.portal.integration.focco.FoccoConfigController;
@@ -32,6 +34,8 @@ class SystemParamsAuthorizationTests {
                 FoccoConfigController.class.getMethod("updateConfig", FoccoConfigUpdateDto.class),
                 BunnyConfigController.class.getMethod("getConfig"),
                 BunnyConfigController.class.getMethod("updateConfig", BunnyConfigUpdateDto.class),
+                RequestMailConfigController.class.getMethod("getConfig"),
+                RequestMailConfigController.class.getMethod("updateConfig", RequestMailConfigUpdateDto.class),
                 RawMaterialsController.class.getMethod("retention"),
                 RawMaterialsController.class.getMethod("retention", RawMaterialHistoryRetentionDto.class)
         );

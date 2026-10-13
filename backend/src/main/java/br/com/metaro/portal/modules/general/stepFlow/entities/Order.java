@@ -34,6 +34,8 @@ public class Order {
     private OrderStatus status; // LATE -> apenas quando a dueDate passar (apenas DTO)
     private Double shipment;
     private String carrier;
+    @Column(nullable = false)
+    private boolean checklistIntegration = true;
     private Integer volumes;
     @Column(precision = 12, scale = 2)
     private BigDecimal length;

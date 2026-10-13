@@ -25,7 +25,7 @@ public class PositionController {
         return ResponseEntity.ok(dtos);
     }
 
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_ADM_PANEL','ROLE_MEMORANDO')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_ADM_PANEL','ROLE_MEMORANDO','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
     @GetMapping(value = "/min")
     public ResponseEntity<List<PositionMinDto>> listActivePositions() {
         List<PositionMinDto> dtos = positionService.listActivePositions();

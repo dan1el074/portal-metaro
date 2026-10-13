@@ -1,6 +1,6 @@
 {
   "name": "portal-metaro",
-  "version": "2.6.3",
+  "version": "2.7.6",
   "config": {
     "theme": "default"
   },
@@ -45,6 +45,7 @@
     "ngx-image-cropper": "^9.1.6",
     "ngx-scrollbar": "^19.1.5",
     "ngx-spinner": "^21.1.0",
+    "qrcode": "^1.5.4",
     "rxjs": "~7.8.2",
     "tslib": "^2.8.1",
     "tus-js-client": "^4.3.1",
@@ -57,6 +58,7 @@
     "@types/jasmine": "^6.0.0",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.13.3",
+    "@types/qrcode": "^1.5.5",
     "istanbul-lib-instrument": "^6.0.3",
     "jasmine-core": "^6.3.0",
     "karma": "^6.4.4",

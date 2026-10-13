@@ -1,0 +1,25 @@
+<section class="inspection-flow" aria-label="Fluxo da inspeção">
+  <div class="flow-list">
+    @for (step of flow.plan; track step.template.id; let last = $last) {
+      <button
+        type="button"
+        [class]="'flow-step ' + state(step.template.id)"
+        [disabled]="!record(step.template.id)"
+        (click)="record(step.template.id) && openRecord.emit(record(step.template.id)!.id)"
+      >
+        <span class="paper"><app-checklist-icon name="file-text" /></span>
+        <strong>{{ step.category.name }}</strong>
+        <small>{{ record(step.template.id)?.status ?? (flow.skipped[step.template.id] ? "Etapa pulada" : "Ainda não gerado") }}</small>
+        @if (flow.skipped[step.template.id]) {
+          <span class="skip-reason" [title]="flow.skipped[step.template.id]">{{ flow.skipped[step.template.id] }}</span>
+        }
+      </button>
+
+      @if (!last) {
+        <span class="connector">
+          <app-checklist-icon name="chevron-right" />
+        </span>
+      }
+    }
+  </div>
+</section>

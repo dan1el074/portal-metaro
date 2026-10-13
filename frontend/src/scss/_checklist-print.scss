@@ -1,0 +1,165 @@
+// Only active during an explicit checklist PDF export; other portal printouts are unchanged.
+@media print {
+  @page checklist-document {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  body.printing-quality-checklist {
+    page: checklist-document;
+    background: white !important;
+    * {
+      visibility: hidden !important;
+    }
+    .checklist-print-area,
+    .checklist-print-area * {
+      visibility: visible !important;
+    }
+    c-sidebar,
+    c-header,
+    c-footer,
+    app-default-header,
+    app-default-footer,
+    .sidebar,
+    .header,
+    .footer,
+    c-breadcrumb-router,
+    .app-toast-container {
+      display: none !important;
+    }
+    .wrapper,
+    .body,
+    .container-fluid {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-height: 0 !important;
+    }
+    app-checklist {
+      display: block;
+    }
+    .no-print,
+    app-checklist-flow,
+    app-checklist-client-history,
+    app-checklist-action-modal {
+      display: none !important;
+    }
+    .inspection-page,
+    .inspection-page .detail-content,
+    .inspection-page .document-card,
+    .inspection-page .document-card c-card-body {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    .inspection-page .checklist-print-area {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      color: #252a36 !important;
+      background: #fff !important;
+    }
+    .inspection-page .document-header {
+      display: grid !important;
+      width: 100% !important;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.8fr) minmax(0, .9fr) !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .inspection-page .quality-brand {
+      border-right: 1px solid #d8dbe0 !important;
+      border-bottom: 0 !important;
+    }
+    .inspection-page .quality-reference {
+      border-bottom: 0 !important;
+      border-left: 1px solid #d8dbe0 !important;
+    }
+    .inspection-page .document-identification {
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+    }
+    .inspection-page .quality-brand,
+    .inspection-page .document-identification,
+    .inspection-page .quality-reference {
+      min-width: 0 !important;
+      padding: 12px 14px !important;
+    }
+    .inspection-page .metadata-grid {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      justify-content: space-between !important;
+      gap: 10px 18px !important;
+      padding: 14px 16px !important;
+    }
+    .inspection-page .metadata-grid > div {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      flex: 0 0 auto !important;
+    }
+    .inspection-page .metadata-grid > .metadata-client {
+      min-width: 25mm !important;
+      flex: 0 100 auto !important;
+    }
+    .inspection-page .metadata-grid > .metadata-item {
+      min-width: 25mm !important;
+      flex: 0 1 auto !important;
+    }
+    .inspection-page .metadata-grid strong {
+      font-size: 13px !important;
+    }
+    .inspection-page .metadata-grid .document-label {
+      font-size: 12px !important;
+    }
+    .inspection-page .metadata-client strong,
+    .inspection-page .metadata-item strong {
+      display: block !important;
+      overflow: hidden !important;
+      white-space: nowrap !important;
+      text-overflow: ellipsis !important;
+    }
+    .inspection-page .document-section {
+      padding: 14px 0 !important;
+    }
+    .inspection-page .detail-table-container {
+      overflow: visible !important;
+    }
+    .inspection-page .detail-table {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+    .inspection-page .detail-table tbody tr:nth-child(even) td:not(.mark) {
+      background: #f5f6f8 !important;
+    }
+    .inspection-page .detail-table tbody td.mark {
+      background: #e5e7eb !important;
+    }
+    .inspection-page .detail-table tbody td {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+    .inspection-page .print-history {
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 8mm 0 0 !important;
+    }
+    .inspection-page .print-history.print-page-start {
+      margin-top: 0 !important;
+      break-before: page !important;
+      page-break-before: always !important;
+    }
+    .inspection-page table {
+      page-break-inside: auto;
+    }
+    .inspection-page tr {
+      page-break-inside: avoid;
+    }
+  }
+}

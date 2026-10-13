@@ -1,0 +1,58 @@
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="visible = $event" alignment="center" backdrop="static" size="xl">
+  <c-modal-header><h5 cModalTitle class="modal-title-with-icon"><app-checklist-icon name="settings" />Integração de Produção</h5><button cButtonClose type="button" aria-label="Fechar" cTooltip="Fechar" cTooltipPlacement="bottom" (click)="close()"></button></c-modal-header>
+  <c-modal-body>
+    <nav class="category-tabs" aria-label="Configurações da Integração de Produção">
+      <button type="button" [class.active]="tab === 'items'" (click)="changeTab('items')">Tipos de item <span>{{ store.state().items.length }}</span></button>
+      <button type="button" [class.active]="tab === 'defects'" (click)="changeTab('defects')">Defeitos <span>{{ store.state().defects.length }}</span></button>
+      @if(store.admin){
+        <button type="button" [class.active]="tab === 'requirements'" (click)="changeTab('requirements')">Fluxo de etapas <span>{{ steps.length }}</span></button>
+        <button type="button" [class.active]="tab === 'history'" (click)="changeTab('history')">Histórico por categoria <span>{{ store.state().categories.length }}</span></button>
+      }
+    </nav>
+
+    @if(tab === 'items' || tab === 'defects'){
+      <section class="configuration-card">
+        <header><div><h6>{{ tab === 'items' ? 'Tipos de item' : 'Defeitos' }}</h6><p>Lista compartilhada por todas as categorias com Integração Produção.</p></div></header>
+        <div class="configuration-content">
+          <div class="new-option"><input cFormControl [(ngModel)]="value" (keyup.enter)="add()" [placeholder]="tab === 'items' ? 'Novo tipo de item' : 'Novo defeito'" [disabled]="tab === 'defects' && !store.admin" /><button cButton color="primary" type="button" [disabled]="!value.trim() || (tab === 'defects' && !store.admin)" (click)="add()"><app-checklist-icon name="plus" />Adicionar</button></div>
+          <div class="catalog-list">@for (item of tab === 'items' ? store.state().items : store.state().defects; track item) { <div><span>{{ item }}</span>@if (store.admin) { <span class="actions"><button type="button" (click)="edit(item)" cTooltip="Editar opção" cTooltipPlacement="top" aria-label="Editar opção"><app-checklist-icon name="pencil" /></button><button type="button" class="danger" (click)="remove(item)" cTooltip="Remover opção" cTooltipPlacement="top" aria-label="Remover opção"><app-checklist-icon name="trash" /></button></span> }</div> }</div>
+        </div>
+      </section>
+    }@else if(tab === 'form'){
+      <section class="configuration-card">
+        <header><div><h6>Formulário de não conformidade</h6><p>Defina os campos exibidos em cada problema. Alterações valem para novos preenchimentos; respostas anteriores são preservadas.</p></div></header>
+        <div class="configuration-content">
+          <div class="field-create"><input cFormControl [(ngModel)]="newFieldLabel" (keyup.enter)="addField()" placeholder="Nome do novo campo" /><select cSelect [(ngModel)]="newFieldType">@for(type of addableFieldTypes;track type.value){<option [value]="type.value">{{ type.label }}</option>}</select><button cButton color="primary" type="button" [disabled]="!newFieldLabel.trim()" (click)="addField()"><app-checklist-icon name="plus" />Adicionar campo</button></div>
+          <div class="form-field-list">@for(field of formFields;track field.id;let index=$index){<div class="form-field-row"><span class="drag-index">{{ index + 1 }}</span><input cFormControl [(ngModel)]="field.label" aria-label="Nome do campo" /><select cSelect [(ngModel)]="field.type" [disabled]="field.binding === 'media'" [attr.aria-label]="'Tipo do campo ' + field.label">@for(type of addableFieldTypes;track type.value){<option [value]="type.value">{{ type.label }}</option>}@if(field.type === 'files'){<option value="files">{{ fieldTypeLabel(field.type) }}</option>}</select><label class="required-option"><input cFormCheckInput type="checkbox" [(ngModel)]="field.required" />Obrigatório</label><span class="actions"><button type="button" [disabled]="index === 0" (click)="moveField(index,-1)" cTooltip="Mover para cima" cTooltipPlacement="top" aria-label="Mover para cima"><app-checklist-icon name="chevron-up" /></button><button type="button" [disabled]="index === formFields.length - 1" (click)="moveField(index,1)" cTooltip="Mover para baixo" cTooltipPlacement="top" aria-label="Mover para baixo"><app-checklist-icon name="chevron-down" /></button><button type="button" class="danger" (click)="removeField(index)" cTooltip="Remover campo" cTooltipPlacement="top" aria-label="Remover campo"><app-checklist-icon name="trash" /></button></span></div>}</div>
+        </div>
+      </section>
+    }@else if(tab === 'requirements'){
+      <section class="configuration-card">
+        <header><div><h6>Requisitos por etapa do Fluxo de etapas</h6><p>Defina a categoria de checklist que deve ser concluída em cada etapa.</p></div></header>
+        <div class="configuration-content">
+          <div class="requirements-list">
+            @for(step of steps; track step.id; let index = $index){
+              <div class="requirement-row">
+                <span class="drag-index">{{ index + 1 }}</span>
+                <div class="requirement-step"><strong>{{ step.label }}</strong><small>Categoria obrigatória</small></div>
+                <select cSelect [(ngModel)]="requirements[step.id]" [attr.aria-label]="'Categoria obrigatória para ' + step.label"><option value="">Sem requisito</option>@for(item of store.state().categories;track item.id){@if(item.active){<option [value]="item.id">{{ item.name }}</option>}}</select>
+                <span class="actions"><button type="button" (click)="saveRequirement(step.id)" cTooltip="Salvar requisito" cTooltipPlacement="top" [attr.aria-label]="'Salvar requisito de ' + step.label"><app-checklist-icon name="save" /></button></span>
+              </div>
+            }
+          </div>
+          <small class="note">Selecione “Sem requisito” para permitir o avanço da etapa sem depender da conclusão de um checklist.</small>
+        </div>
+      </section>
+    }@else{
+      <section class="configuration-card">
+        <header><div><h6>Histórico de NOKs por categoria</h6><p>Escolha em quais categorias o histórico do cliente poderá ser consultado durante o preenchimento e a visualização.</p></div></header>
+        <div class="configuration-content">
+          <div class="history-list">@for(category of store.state().categories;track category.id;let index=$index){<div><span class="drag-index">{{ index + 1 }}</span><div><strong>{{ category.name }}</strong><small>{{ integrationLabel(category.integration) }}</small></div><label class="history-option"><input cFormCheckInput type="checkbox" [checked]="historyEnabled(category.id)" [attr.aria-label]="'Exibir histórico em ' + category.name" (change)="toggleHistory(category.id)" />Exibir histórico</label></div>}@empty{<p class="empty">Nenhuma categoria cadastrada.</p>}</div>
+          <small class="note">A ação será exibida somente quando o checklist possuir um cliente identificado.</small>
+        </div>
+      </section>
+    }
+  </c-modal-body>
+  <c-modal-footer>@if(tab === 'form'){<button cButton type="button" color="primary" (click)="saveForm()">Salvar formulário</button>}@else if(tab === 'history'){<button cButton type="button" color="primary" (click)="saveHistory()">Salvar histórico</button>}<button cButton type="button" color="secondary" variant="outline" (click)="close()">Fechar</button></c-modal-footer>
+</c-modal>
+<app-checklist-action-modal />

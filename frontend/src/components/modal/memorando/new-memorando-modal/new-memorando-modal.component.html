@@ -6,19 +6,6 @@
       <button (click)="closeMemorandoModal()" cButtonClose></button>
     </c-modal-header>
     <c-modal-body>
-
-    <fieldset class="erp-selector">
-      <legend>Origem dos dados</legend>
-      <label class="erp-option" [class.selected]="newMemorandoForm.get('source')?.value === 'FOCCO'">
-        <input type="radio" formControlName="source" value="FOCCO">
-        <span><strong>FoccoERP</strong><small>Novo ERP</small></span>
-      </label>
-      <label class="erp-option" [class.selected]="newMemorandoForm.get('source')?.value === 'PROBUS'">
-        <input type="radio" formControlName="source" value="PROBUS">
-        <span><strong>Probus</strong><small>ERP antigo</small></span>
-      </label>
-    </fieldset>
-
     <label cLabel for="orderNumber">Número do pedido</label>
     <input cFormControl formControlName="orderNumber" [valid]="!showErrors ? undefined: newMemorandoForm.get('orderNumber')?.errors != null ? false : undefined" id="orderNumber" type="text" />
     @if (showErrors && newMemorandoForm.get('orderNumber')?.errors != null) {

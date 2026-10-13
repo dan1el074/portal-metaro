@@ -49,6 +49,31 @@
         </div>
       </div>
       <app-step-flow-history [order]="order" />
+      @if(linkedChecklistEquipment.length){
+        <div class="sofd-box linked-checklist-box">
+          <div class="sofd-box-info"><span class="sofd-box-info-label">Fluxos de checklist vinculados</span><span>{{ linkedChecklistEquipment.length }} fluxo(s)</span></div>
+          <div class="linked-checklist-list">
+            @for(equipment of linkedChecklistEquipment;track equipment.flowId){
+              @if (equipment.recordId) {
+                <a class="linked-checklist-item" [routerLink]="['/qualidade/checklist', equipment.recordId]"><strong>Fluxo #{{ equipment.flowId }} · {{ equipment.serial }}</strong><small>{{ equipment.item }}</small><em>Acessar checklist</em></a>
+              } @else {
+                <div class="linked-checklist-item"><strong>Fluxo #{{ equipment.flowId }} · {{ equipment.serial }}</strong><small>{{ equipment.item }}</small></div>
+              }
+            }
+          </div>
+        </div>
+      }
+      @if(!order.checklistIntegration && (checklistEquipment.length || checklistEquipmentLoading)){
+        <div class="sofd-box checklist-equipment-box">
+          <div class="sofd-box-info"><span class="sofd-box-info-label">Equipamentos do checklist</span><span>Selecione pelos números de série</span></div>
+          <div class="sof-file-container">
+            @for(equipment of checklistEquipment;track equipment.flowId){
+              <label class="sof-file-item"><input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId,$any($event.target).checked)" /><span><strong>{{ equipment.serial }}</strong> · {{ equipment.item }}</span></label>
+            }
+          </div>
+          <div class="buttons-container"><span>{{ selectedChecklistEquipmentCount }} equipamento(s) selecionado(s)</span><button cButton type="button" color="secondary" [disabled]="checklistEquipmentLoading" (click)="saveChecklistEquipment()">Salvar equipamentos</button></div>
+        </div>
+      }
       <app-step-flow-editable-media
         #filesSection
         [order]="order"
@@ -115,6 +140,18 @@
             <label class="custom-label">Itens a produzir</label>
 
             <div class="sof-file-container">
+              @if (order.checklistIntegration) {
+                @for (equipment of checklistEquipment; track equipment.flowId) {
+                  <label class="sof-file-item integrated-checklist-item">
+                    <span class="produced-item-box">
+                      <input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
+                      <span class="produced-item-description"><strong>{{ equipment.item }}</strong><small>Número de série: {{ equipment.serial }}</small></span>
+                    </span>
+                  </label>
+                } @empty {
+                  <i class="custom-error">Nenhum item com o primeiro checklist finalizado.</i>
+                }
+              } @else {
               @for (itemGroup of itemsFormControls; track itemGroup.get('id')?.value; let i = $index) {
                 <div class="sof-file-item" [formGroup]="itemGroup">
                   <div class="produced-item-box">
@@ -141,7 +178,11 @@
               } @empty {
                 <i class="custom-error">Nenhum item disponível para produção.</i>
               }
+              }
             </div>
+            @if (order.checklistIntegration) {
+              <div class="work-items-summary">{{ selectedChecklistEquipmentCount }} item(ns) selecionado(s)</div>
+            }
           </div>
         }
 

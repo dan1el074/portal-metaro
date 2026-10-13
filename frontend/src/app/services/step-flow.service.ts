@@ -1,8 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { AdminDashboard, PagedResult, StepFlowData, StepFlowOrder, StepFlowOrderInfo } from './../interface/step-flow.interface';
-import { ErpSource } from '../interface/erp.interface';
+import { AdminDashboard, PagedResult, StepFlowChecklistEquipment, StepFlowData, StepFlowOrder, StepFlowOrderInfo } from './../interface/step-flow.interface';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 @Injectable({
@@ -36,13 +35,14 @@ export class StepFlowService {
     return this.http.get<AdminDashboard>(this.api + '/admin');
   }
 
-  public findOrderInfoByNumber(orderNumber: number, source: ErpSource): Observable<StepFlowOrderInfo> {
-    const params = new HttpParams().set('source', source);
+  public findOrderInfoByNumber(orderNumber: number): Observable<StepFlowOrderInfo> {
+    const params = new HttpParams().set('source', 'FOCCO');
     return this.http.get<StepFlowOrderInfo>(this.api + '/erp/' + orderNumber, { params });
   }
 
-  public create(order: StepFlowOrderInfo): Observable<void> {
-    return this.http.post<void>(this.api, order);
+  public create(order: StepFlowOrderInfo, legacy = false): Observable<void> {
+    const params = legacy ? new HttpParams().set('legacy', true) : undefined;
+    return this.http.post<void>(this.api, order, { params });
   }
 
   public updateStep(orderId: number, formData: FormData): Observable<StepFlowOrder> {
@@ -55,5 +55,24 @@ export class StepFlowService {
 
   public deleteImageById(id: number): Observable<void> {
     return this.http.delete<void>(this.api + '/image/' + id);
+  }
+
+  public listChecklistEquipment(orderId: number): Observable<StepFlowChecklistEquipment[]> {
+    return this.http.get<StepFlowChecklistEquipment[]>(`${environment.apiUrl}/api/checklist/step-flow/orders/${orderId}/equipment`)
+      .pipe(map((equipment) => equipment.map((item) => ({
+        ...item,
+        flowId: String(item.flowId),
+        recordId: item.recordId == null ? null : String(item.recordId),
+      }))));
+  }
+
+  public listAvailableChecklistEquipment(orderNumber: number): Observable<StepFlowChecklistEquipment[]> {
+    const params = new HttpParams().set('orderNumber', orderNumber);
+    return this.http.get<StepFlowChecklistEquipment[]>(`${environment.apiUrl}/api/checklist/step-flow/orders/available-equipment`, { params })
+      .pipe(map((equipment) => equipment.map((item) => ({ ...item, flowId: String(item.flowId), selected: false }))));
+  }
+
+  public replaceChecklistEquipment(orderId: number, flowIds: string[]): Observable<void> {
+    return this.http.put<void>(`${environment.apiUrl}/api/checklist/step-flow/orders/${orderId}/equipment`, { flowIds });
   }
 }

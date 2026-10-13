@@ -15,6 +15,13 @@ br.com.metaro.portal
 |   |-- repositories
 |   `-- services
 |-- modules
+|   |-- quality
+|   |   `-- checklist
+|   |       |-- controller
+|   |       |-- dto
+|   |       |-- entity
+|   |       |-- repository
+|   |       `-- service
 |   `-- general
 |       `-- memorando
 |           |-- controller
@@ -45,6 +52,13 @@ br.com.metaro.portal
 O modulo `memorando` foi normalizado como referencia para a migracao gradual
 dos demais modulos. Essa abordagem evita uma alteracao massiva de pacotes sem
 ganho funcional imediato.
+
+O modulo `quality/checklist` usa o mesmo desenho por funcionalidade. As
+configuracoes editaveis ficam nas entidades atuais, enquanto cada fluxo guarda
+snapshots de categoria e modelo. Assim, alteracoes administrativas valem para
+novos fluxos sem reescrever inspecoes ja iniciadas. Transicoes de registro,
+geracao de sucessores, revisoes, tratamentos e auditoria pertencem aos services
+e sao executadas em transacoes.
 
 ## Integracoes e recursos compartilhados
 

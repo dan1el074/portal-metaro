@@ -1,0 +1,95 @@
+<c-modal
+  modalBackNavigation
+  [visible]="visible"
+  (visibleChange)="visible = $event"
+  alignment="center"
+  backdrop="static"
+  size="xl"
+>
+  <c-modal-header
+    ><h5 cModalTitle>Controle de acesso</h5>
+    <button
+      cButtonClose
+      type="button"
+      aria-label="Fechar"
+      cTooltip="Fechar"
+      cTooltipPlacement="bottom"
+      (click)="close()"
+    ></button
+  ></c-modal-header>
+  <c-modal-body
+    ><p class="description">
+      Defina as categorias em que cada usuário com perfil Operador poderá
+      iniciar e preencher checklists.
+    </p>
+    @if (loading) {
+      <p class="state">Carregando operadores...</p>
+    }
+    @if (error) {
+      <div class="warning">{{ error }}</div>
+    }
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Operador</th>
+            @for (category of store.state().categories; track category.id) {
+              <th>{{ category.name }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (operator of operators; track operator.id) {
+            <tr>
+              <td class="user-id">#{{ operator.id }}</td>
+              <td>
+                <strong>{{ operator.name }}</strong>
+                @if (!operator.activated) {
+                  <small>Desativado</small>
+                }
+              </td>
+              @for (category of store.state().categories; track category.id) {
+                <td class="permission">
+                  <input
+                    type="checkbox"
+                    [checked]="category.operators.includes(operator.id)"
+                    [disabled]="!operator.activated"
+                    [attr.aria-label]="operator.name + ' / ' + category.name"
+                    (change)="toggle(category.id, operator.id)"
+                  />
+                </td>
+              }
+            </tr>
+          } @empty {
+            @if (!loading) {
+              <tr>
+                <td
+                  [attr.colspan]="store.state().categories.length + 2"
+                  class="state"
+                >
+                  Nenhum operador disponível.
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    <small class="local-note"
+      >As associações são salvas no servidor; as roles continuam sendo
+      administradas pelo Portal.</small
+    ></c-modal-body
+  >
+  <c-modal-footer
+    ><button
+      cButton
+      type="button"
+      color="secondary"
+      variant="outline"
+      (click)="close()"
+    >
+      Fechar
+    </button></c-modal-footer
+  >
+</c-modal>

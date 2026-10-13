@@ -1,9 +1,10 @@
 import { ChangeDetectorRef, Component, computed, ElementRef, EventEmitter, Input, Output, signal, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormArray, FormBuilder, FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ToastrService } from '../../../app/services/toast.service';
-import { finalize } from 'rxjs';
+import { finalize, map, of, switchMap } from 'rxjs';
 import { Upload } from 'tus-js-client';
 import { ButtonCloseDirective, ButtonDirective, FormControlDirective, FormLabelDirective, FormSelectDirective, SpinnerComponent } from '@coreui/angular';
 import { CancelStepFlowModalComponent } from '../../modal/step-flow/cancel-step-flow-modal/cancel-step-flow-modal.component';
@@ -14,7 +15,7 @@ import { CurrencyMaskDirective } from './../../../app/directive/currency-mask.di
 import { StepFlowVideosService } from './../../../app/services/step-flow-videos.service';
 import { BackNavigationService } from '../../../app/services/back-navigation.service';
 import { StepFlowService } from '../../../app/services/step-flow.service';
-import { Step, StepFlowOrder, StepFlowOrderItem, StepFlowVideo, UploadingVideo, UploadedFile } from '../../../app/interface/step-flow.interface';
+import { Step, StepFlowChecklistEquipment, StepFlowOrder, StepFlowOrderItem, StepFlowVideo, UploadingVideo, UploadedFile } from '../../../app/interface/step-flow.interface';
 import { StepFlowImage } from '../../../app/interface/image.interface';
 import { EditableItem, QuantityStepFlowModalComponent } from '../../modal/step-flow/quantity-step-flow-modal/quantity-step-flow-modal.component';
 import { StepFlowHistoryComponent } from './history/step-flow-history.component';
@@ -25,6 +26,7 @@ import { StepFlowUploadComponent } from './upload/step-flow-upload.component';
   selector: 'app-step-flow-input-offcanvas',
   imports: [
     CommonModule,
+    RouterLink,
     ButtonDirective,
     ButtonCloseDirective,
     ReactiveFormsModule,
@@ -75,6 +77,7 @@ export class StepFlowInputOffcanvasComponent {
   protected editingFileExtension = '';
   private initialCurrentStepFormValue = '';
   private initialProducedQuantities = new Map<number, number>();
+  private initialChecklistFlowIds = new Set<string>();
 
   // file
   protected readonly isMobileDevice: boolean = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -89,6 +92,10 @@ export class StepFlowInputOffcanvasComponent {
   protected uploadingVideos = signal<Array<UploadingVideo>>([]);
   protected showVideoModal = false;
   protected selectedVideo: (StepFlowVideo & { safeUrl: SafeResourceUrl }) | null = null;
+  protected checklistEquipment: StepFlowChecklistEquipment[] = [];
+  protected checklistEquipmentLoading = false;
+  protected get selectedChecklistEquipmentCount(): number { return this.checklistEquipment.filter((item) => item.selected).length; }
+  protected get linkedChecklistEquipment(): StepFlowChecklistEquipment[] { return this.checklistEquipment.filter((item) => item.selected); }
 
   constructor(
     private formBuilder: FormBuilder,
@@ -170,6 +177,7 @@ export class StepFlowInputOffcanvasComponent {
         this.buildItemsForm(data.items);
         this.loading = false;
         this.cdf.detectChanges();
+        this.loadChecklistEquipment();
 
         if (this.isAdmin) {
           const current = this.steps.find(s => s.title === data.currentStep);
@@ -181,6 +189,37 @@ export class StepFlowInputOffcanvasComponent {
         this.loading = false;
         this.cdf.detectChanges();
       },
+    });
+  }
+
+  private loadChecklistEquipment(): void {
+    this.checklistEquipmentLoading = true;
+    this.stepFlowService.listChecklistEquipment(this.orderId).subscribe({
+      next: (equipment) => {
+        this.checklistEquipment = equipment;
+        this.captureChecklistSelection();
+        this.checklistEquipmentLoading = false;
+        this.cdf.detectChanges();
+      },
+      error: () => {
+        this.checklistEquipment = [];
+        this.initialChecklistFlowIds.clear();
+        this.checklistEquipmentLoading = false;
+        this.cdf.detectChanges();
+      },
+    });
+  }
+
+  protected toggleChecklistEquipment(flowId: string, selected: boolean): void {
+    this.checklistEquipment = this.checklistEquipment.map((item) => item.flowId === flowId ? { ...item, selected } : item);
+  }
+
+  protected saveChecklistEquipment(): void {
+    const flowIds = this.checklistEquipment.filter((item) => item.selected).map((item) => item.flowId);
+    this.checklistEquipmentLoading = true;
+    this.stepFlowService.replaceChecklistEquipment(this.orderId, flowIds).subscribe({
+      next: () => { this.checklistEquipmentLoading = false; this.toasterService.success('Equipamentos vinculados ao processo.'); this.loadChecklistEquipment(); },
+      error: () => { this.checklistEquipmentLoading = false; this.toasterService.error('Não foi possível vincular os equipamentos.'); this.loadChecklistEquipment(); },
     });
   }
 
@@ -249,7 +288,7 @@ export class StepFlowInputOffcanvasComponent {
 
     let hasQuantityChanges = false;
 
-    if (this.order?.currentStep === 'Montagem Final') {
+    if (this.order?.currentStep === 'Montagem Final' && !this.order.checklistIntegration) {
       if (this.itemsForm.invalid) {
         this.itemsForm.markAllAsTouched();
         return;
@@ -271,8 +310,9 @@ export class StepFlowInputOffcanvasComponent {
 
     const formData = this.buildFormData();
     const hasPendingVideos = this.files().some(f => f.kind === 'video');
+    const hasChecklistChanges = this.haveChecklistSelectionChanges();
 
-    if (this.isFormDataEmpty(formData) && !hasPendingVideos) {
+    if (this.isFormDataEmpty(formData) && !hasPendingVideos && !hasChecklistChanges) {
       this.toasterService.warning('Preencha ao menos um campo ou anexe um arquivo antes de salvar.');
       return;
     }
@@ -282,13 +322,19 @@ export class StepFlowInputOffcanvasComponent {
       this.scrollToFilesSection();
     }
 
-    if (this.isFormDataEmpty(formData)) {
+    if (this.isFormDataEmpty(formData) && !hasChecklistChanges) {
       return;
     }
 
     this.saveLoading = true;
+    const checklistRequest = hasChecklistChanges
+      ? this.stepFlowService.replaceChecklistEquipment(this.orderId, this.getSelectedChecklistFlowIds())
+      : of(undefined);
+    const saveRequest = this.isFormDataEmpty(formData)
+      ? checklistRequest.pipe(map(() => this.order as StepFlowOrder))
+      : checklistRequest.pipe(switchMap(() => this.stepFlowService.updateStep(this.orderId, formData)));
 
-    this.stepFlowService.updateStep(this.orderId, formData)
+    saveRequest
       .pipe(finalize(() => {
         this.saveLoading = false;
         this.cdf.detectChanges();
@@ -296,6 +342,7 @@ export class StepFlowInputOffcanvasComponent {
       .subscribe({
         next: (data: StepFlowOrder) => {
           this.toasterService.success('Informações atualizada com sucesso.');
+          this.captureChecklistSelection();
 
           if (hasQuantityChanges) {
             this.close();
@@ -340,7 +387,7 @@ export class StepFlowInputOffcanvasComponent {
       }
     }
 
-    if (this.order?.currentStep === 'Montagem Final') {
+    if (this.order?.currentStep === 'Montagem Final' && !this.order.checklistIntegration) {
       const itemsPayload = this.itemsForm.value.map((item: any) => ({
         id: item.id,
         producedQuantity: item.producedQuantity,
@@ -419,6 +466,7 @@ export class StepFlowInputOffcanvasComponent {
   private hasUnsavedCurrentStepChanges(): boolean {
     return this.getComparableFormValue() !== this.initialCurrentStepFormValue
       || this.haveProducedQuantitiesChanged()
+      || this.haveChecklistSelectionChanges()
       || this.files().length > 0;
   }
 
@@ -456,6 +504,26 @@ export class StepFlowInputOffcanvasComponent {
       const producedQuantity = itemGroup.get('producedQuantity')?.value as number;
       return producedQuantity !== this.initialProducedQuantities.get(id);
     });
+  }
+
+  private getSelectedChecklistFlowIds(): string[] {
+    return this.checklistEquipment
+      .filter(item => item.selected)
+      .map(item => item.flowId);
+  }
+
+  private captureChecklistSelection(): void {
+    this.initialChecklistFlowIds = new Set(this.getSelectedChecklistFlowIds());
+  }
+
+  private haveChecklistSelectionChanges(): boolean {
+    if (this.order?.currentStep !== 'Montagem Final' || !this.order.checklistIntegration) {
+      return false;
+    }
+
+    const currentFlowIds = this.getSelectedChecklistFlowIds();
+    return currentFlowIds.length !== this.initialChecklistFlowIds.size
+      || currentFlowIds.some(flowId => !this.initialChecklistFlowIds.has(flowId));
   }
 
   protected onCloseNextStepConfirmationModal(): void {

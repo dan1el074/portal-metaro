@@ -75,6 +75,7 @@ public interface MemorandoRepository extends JpaRepository<Memorando, Long> {
             m.number,
             m.request,
             m.client,
+            m.erp_source,
             m.items,
             m.title,
             m.description,

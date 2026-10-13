@@ -3,9 +3,10 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ToastrService } from '../../../app/services/toast.service';
 import { AccordionButtonDirective, AccordionComponent, AccordionItemComponent, ButtonCloseDirective, ButtonDirective, OffcanvasService, Tabs2Module, TemplateIdDirective } from '@coreui/angular';
 import { StepFlowService } from '../../../app/services/step-flow.service';
-import { StepFlowOrder, StepFlowVideo } from '../../../app/interface/step-flow.interface';
+import { StepFlowChecklistEquipment, StepFlowOrder, StepFlowVideo } from '../../../app/interface/step-flow.interface';
 import localePt from '@angular/common/locales/pt';
 import { CommonModule, registerLocaleData } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { BackNavigationService } from '../../../app/services/back-navigation.service';
 import { VideoModalComponent } from '../../modal/media/video-modal/video-modal.component';
 import { StepFlowTimelineComponent } from './timeline/step-flow-timeline.component';
@@ -18,6 +19,7 @@ registerLocaleData(localePt);
   selector: 'app-step-flow-offcanvas',
   imports: [
     CommonModule,
+    RouterLink,
     ButtonCloseDirective,
     Tabs2Module,
     ButtonDirective,
@@ -43,6 +45,9 @@ export class StepFlowOffcanvasComponent {
   protected visible = false;
   protected showVideoModal = false;
   protected selectedVideo: (StepFlowVideo & { safeUrl: SafeResourceUrl }) | null = null;
+  protected checklistEquipment: StepFlowChecklistEquipment[] = [];
+  protected checklistEquipmentLoading = false;
+  protected get linkedChecklistEquipment(): StepFlowChecklistEquipment[] { return this.checklistEquipment.filter((item) => item.selected); }
 
   constructor(
     private stepFlowService: StepFlowService,
@@ -66,11 +71,13 @@ export class StepFlowOffcanvasComponent {
 
   protected getData(): void {
     this.order = null;
+    this.checklistEquipment = [];
 
     if (this.orderId) {
       this.stepFlowService.findById(this.orderId).subscribe({
         next: data => {
           this.order = data;
+          this.loadChecklistEquipment();
           this.cdf.detectChanges();
         },
         error: () => {
@@ -82,6 +89,23 @@ export class StepFlowOffcanvasComponent {
     }
 
     this.toasterService.error('O número da ordem é nulo!')
+  }
+
+  private loadChecklistEquipment(): void {
+    if (!this.orderId) return;
+    this.checklistEquipmentLoading = true;
+    this.stepFlowService.listChecklistEquipment(this.orderId).subscribe({
+      next: (equipment) => {
+        this.checklistEquipment = equipment;
+        this.checklistEquipmentLoading = false;
+        this.cdf.detectChanges();
+      },
+      error: () => {
+        this.checklistEquipment = [];
+        this.checklistEquipmentLoading = false;
+        this.cdf.detectChanges();
+      },
+    });
   }
 
   protected onOpenVideoModal(video: StepFlowVideo): void {

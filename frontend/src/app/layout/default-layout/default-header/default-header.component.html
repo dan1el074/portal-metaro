@@ -70,7 +70,15 @@
 
   </c-container>
   <c-container [fluid]="true" class="px-4">
-    <c-breadcrumb-router />
+    @if (checklistBreadcrumbs(); as items) {
+      <c-breadcrumb class="m-0">
+        @for (item of items; track item.label; let last = $last) {
+          <c-breadcrumb-item [active]="last" [url]="item.url">{{ item.label }}</c-breadcrumb-item>
+        }
+      </c-breadcrumb>
+    } @else {
+      <c-breadcrumb-router />
+    }
   </c-container>
 </ng-container>
 

@@ -10,6 +10,7 @@ import br.com.metaro.portal.modules.general.stepFlow.entities.*;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepository;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.projections.StatusCountsProjection;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.projections.StepCountProjection;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistStepFlowService;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
 import br.com.metaro.portal.util.erp.dto.ErpOrderItemDto;
 import br.com.metaro.portal.util.others.StringUtils;
@@ -44,6 +45,8 @@ public class StepFlowService {
     private UserService userService;
     @Autowired
     private PictureService pictureService;
+    @Autowired
+    private ChecklistStepFlowService checklistStepFlowService;
 
     @Transactional(readOnly = true)
     public OrderDto findById(Long id) {
@@ -164,7 +167,21 @@ public class StepFlowService {
 
     @Transactional
     public void create(ErpOrderDto erpOrder) {
+        create(erpOrder, false);
+    }
+
+    @Transactional
+    public void create(ErpOrderDto erpOrder, boolean legacy) {
+        if (legacy) {
+            User user = userService.authenticate();
+            if (!user.hasRole("ROLE_ADMIN")) {
+                throw new ForbiddenException("Somente administradores podem criar um Fluxo de etapas sem checklist.");
+            }
+        } else {
+            checklistStepFlowService.assertOrderCanStart(erpOrder.getNumber().toString());
+        }
         Order entity = new Order();
+        entity.setChecklistIntegration(!legacy);
         snapshotErpInfo(entity, erpOrder);
         setOrderOccurrence(entity);
         addAllSteps(entity);
@@ -174,6 +191,9 @@ public class StepFlowService {
         entity.setShipment(0.0);
 
         this.orderRepository.save(entity);
+        if (!legacy) {
+            checklistStepFlowService.createBindings(entity, erpOrder.getChecklistFlowIds());
+        }
     }
 
     private void setOrderOccurrence(Order order) {
@@ -200,13 +220,21 @@ public class StepFlowService {
         OrderStep currentStep = order.getSteps().stream().filter(step -> step.getStep().equals(type))
                 .findFirst().orElseThrow(ResourceNotFoundException::new);
 
-        currentStep.setStatus(StepStatus.DONE);
-        currentStep.setFinishedAt(Instant.now());
-        currentStep.setFinishedBy(userService.authenticate());
-
         if (type.equals(StepType.FINAL_ASSEMBLY) || type.equals(StepType.SHIPPING)) {
             checkIfHavePictures(order);
         }
+
+        if (order.isChecklistIntegration() && !checklistStepFlowService.isStepRequirementSatisfied(order.getId(), type)) {
+            currentStep.setChecklistPending(true);
+            orderRepository.save(order);
+            return;
+        }
+
+        if (!order.isChecklistIntegration()) checklistStepFlowService.assertStepCanFinish(order.getId(), type);
+
+        currentStep.setStatus(StepStatus.DONE);
+        currentStep.setFinishedAt(Instant.now());
+        currentStep.setFinishedBy(userService.authenticate());
 
         if (type.equals(StepType.FINAL_ASSEMBLY)) {
             checkShippingMeasurements(order);
@@ -335,6 +363,7 @@ public class StepFlowService {
             order.setCurrentStep(StepType.values()[dto.getNewStepId()]);
 
             for (OrderStep step : order.getSteps()) {
+                step.setChecklistPending(false);
                 if (step.getStep().ordinal() < dto.getNewStepId()) {
                     step.setStatus(StepStatus.DONE);
                     continue;

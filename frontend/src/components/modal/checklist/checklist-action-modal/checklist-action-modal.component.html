@@ -1,0 +1,19 @@
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="onVisibleChange($event)" alignment="center" backdrop="static">
+  <c-modal-header>
+    <h5 cModalTitle>{{ options.title }}</h5>
+    <button cButtonClose type="button" aria-label="Fechar" cTooltip="Fechar" cTooltipPlacement="bottom" (click)="cancel()"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <p class="modal-message">{{ options.message }}</p>
+    @if (options.inputLabel) {
+      <label class="form-label" for="checklist-action-value">{{ options.inputLabel }} @if (options.required) { <span class="text-danger">*</span> }</label>
+      <textarea cFormControl id="checklist-action-value" rows="3" [(ngModel)]="value" [placeholder]="options.placeholder || ''"></textarea>
+    }
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton type="button" color="secondary" variant="outline" (click)="cancel()">Cancelar</button>
+    <button cButton type="button" [color]="options.danger ? 'danger' : 'primary'" [disabled]="options.required && !value.trim()" (click)="confirm()">
+      {{ options.confirmLabel || 'Confirmar' }}
+    </button>
+  </c-modal-footer>
+</c-modal>

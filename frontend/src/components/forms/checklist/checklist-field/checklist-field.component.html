@@ -1,0 +1,12 @@
+<label class="form-label w-100">{{ field().label }} <span class="text-danger">*</span>
+  @switch (field().type) {
+    @case ('select') {
+      <select class="form-select mt-1" [ngModel]="value()" (ngModelChange)="value.set($event)" [disabled]="disabled()">
+        <option value="">Selecione</option>
+        @for (option of field().options; track option) { <option [value]="option">{{ option }}</option> }
+      </select>
+    }
+    @case ('textarea') { <textarea class="form-control mt-1" [ngModel]="value()" (ngModelChange)="value.set($event)" [disabled]="disabled()" rows="3"></textarea> }
+    @default { <input class="form-control mt-1" [type]="field().type" [ngModel]="value()" (ngModelChange)="updateValue($event)" [disabled]="disabled()" /> }
+  }
+</label>

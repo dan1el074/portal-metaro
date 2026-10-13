@@ -1,0 +1,170 @@
+<c-container class="h-auto px-4 administration-page inspection-page memorando-detail-page" fluid>
+  @if (record) {
+    <nav class="detail-navigation no-print" aria-label="Navegação da inspeção">
+      <div class="detail-breadcrumb">
+        <a routerLink="/qualidade/checklist" class="back-link"><app-checklist-icon name="arrow-left" /> Voltar à lista</a>
+        <span class="breadcrumb-separator">/</span>
+        <strong>{{ store.title(record) }}</strong>
+        <div class="record-navigation" aria-label="Navegar entre inspeções">
+          <button type="button" [disabled]="!previousId" (click)="previousId && open(previousId)" cTooltip="Inspeção anterior" cTooltipPlacement="bottom" aria-label="Abrir inspeção anterior"><app-checklist-icon name="chevron-left" /></button>
+          <button type="button" [disabled]="!nextId" (click)="nextId && open(nextId)" cTooltip="Próxima inspeção" cTooltipPlacement="bottom" aria-label="Abrir próxima inspeção"><app-checklist-icon name="chevron-right" /></button>
+        </div>
+      </div>
+      <div class="navigation-actions">
+        <span [class]="'status-badge ' + statusClass"><i></i>{{ record.status }}</span>
+        <button type="button" class="print-button" (click)="print()"><app-checklist-icon name="printer" /> Exportar PDF</button>
+        @if (store.editable(record)) { <button type="button" class="action-button primary-action" (click)="edit()"><app-checklist-icon name="pencil" /> Editar</button> }
+      </div>
+    </nav>
+
+    <div class="checklist-print-area">
+    <main class="detail-content">
+      @if (flow.plan.length > 1) { <app-checklist-flow class="no-print" [flow]="flow" [records]="store.state().records" [currentId]="record.id" (openRecord)="open($event)" /> }
+
+      <div>
+        @if (linkedStepFlows.length) { <aside class="context-alert no-print"><app-checklist-icon name="history" /><div><strong>Fluxo de etapas vinculado</strong><div class="linked-step-flow-list">@for (stepFlow of linkedStepFlows; track stepFlow.id) { <p><span>Pedido #{{ stepFlow.order }} · {{ stepFlow.status }}@if (stepFlow.currentStep) { · Etapa {{ stepFlow.currentStep }} }</span><a [routerLink]="['/general/step-flow']" [queryParams]="{ orderId: stepFlow.id }">Acessar fluxo de etapas</a></p> }</div></div></aside> }
+        @if (flow.clientId && store.clientNokHistoryEnabled(snapshot.category.id)) { <div class="outside-actions no-print"><button class="catalog-style-button" type="button" (click)="history.open(flow.clientId)"><app-checklist-icon name="history" /> Ver histórico de NOKs do cliente</button></div> }
+
+        <section class="detail-card document-card">
+          <header class="document-header quality-document-header">
+            <div class="quality-brand">
+              <img class="brand-logo brand-logo-light" src="assets/images/brand/black-logo.svg" alt="Metaro" />
+              <img class="brand-logo brand-logo-dark" src="assets/images/brand/full-white-logo.svg" alt="Metaro" />
+              <span class="info">RE {{ snapshot.category.re || '—' }}</span>
+            </div>
+            <div class="document-identification">
+              <span>{{ snapshot.category.documentTitle }}</span>
+              <h1>{{ snapshot.category.name }} • {{ snapshot.template.name }}</h1>
+            </div>
+            <div class="quality-reference">
+              <span>Ref. PR {{ snapshot.category.ref || '—' }}</span>
+            </div>
+          </header>
+
+          @if (snapshot.category.erp || snapshot.category.serial) {
+            <div class="metadata-grid">
+              @if (snapshot.category.erp) {
+                <div class="metadata-order"><span class="document-label">Pedido</span><strong>{{ flow.order || '—' }}</strong></div>
+                <div class="metadata-client"><span class="document-label">Cliente</span><strong>{{ flow.client || '—' }}</strong></div>
+                <div class="metadata-item"><span class="document-label">Item</span><strong>{{ flow.item || '—' }}</strong></div>
+              }
+              @if (snapshot.category.serial) { <div class="metadata-serial"><span class="document-label">Nº Série</span><strong>{{ flow.serial || '—' }}</strong></div> }
+            </div>
+          }
+
+          @if (snapshot.category.fields.length) {
+            <div class="additional-metadata-grid">
+              @for (field of snapshot.category.fields; track field.id) {
+                <div><span class="document-label">{{ field.label }}</span><strong>{{ record.fields[field.id] || '—' }}</strong></div>
+              }
+            </div>
+          }
+
+          <section class="document-section">
+            @for (section of snapshot.template.sections; track section.id; let sectionIndex = $index) {
+              <div class="detail-table-container">
+                <table class="detail-table">
+                  <colgroup>
+                    <col class="number-column" />
+                    <col class="question-column" />
+                    @for (option of section.options; track option) { <col class="mark-column" /> }
+                    <col class="item-description-column" />
+                  </colgroup>
+                  <thead><tr><th colspan="2" class="section-name">{{ sectionIndex + 1 }}. {{ section.name }}</th>@for (option of section.options; track option) { <th class="mark">{{ option }}</th> }<th class="item-description">{{ snapshot.category.integration === 'production' ? 'Descrição de não conformidade' : 'Descrição' }}</th></tr></thead>
+                  <tbody>
+                    @for (question of section.questions; track question.id; let questionIndex = $index) {
+                      <tr>
+                        <td class="number">{{ sectionIndex + 1 }}.{{ questionIndex + 1 }}</td>
+                        <td class="question-description">
+                          <div class="question-label"><span class="mobile-question-number">{{ sectionIndex + 1 }}.{{ questionIndex + 1 }}</span>{{ question.label }}</div>
+                          @if (question.fields.length) {
+                            <div class="question-additional-fields">
+                              @for (field of question.fields; track field.id) {
+                                <div><span>{{ field.label }}:</span><strong>{{ record.answers[question.id].fields[field.id] || '—' }}</strong></div>
+                              }
+                            </div>
+                          }
+                        </td>
+                        @for (option of section.options; track option) {
+                          <td class="mark"><span class="answer-checkbox" [class.checked]="record.answers[question.id].value === option" [attr.aria-label]="option + (record.answers[question.id].value === option ? ' selecionado' : ' não selecionado')" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg></span></td>
+                        }
+                        <td class="item-description">
+                          @if (snapshot.category.integration === 'production') {
+                            @for (problem of record.answers[question.id].problems; track problem.id) {
+                              <div class="nok-description"><strong>#{{ problemNumber(problem.id) }} · {{ problem.item }} · {{ problem.code }}</strong><span>{{ problem.defect }} · {{ problem.description }} · {{ problem.department }}</span></div>
+                            } @empty {
+                              <span>—</span>
+                            }
+                          } @else {
+                            {{ record.answers[question.id].description || '—' }}
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
+
+          @if (snapshot.template.signature && record.signature) { <section class="signature"><span>{{ record.signature }}</span><small>Assinado em {{ record.signedAt | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></section> }
+        </section>
+      </div>
+
+      @if (problems.length) {
+        <section class="detail-card problems-card">
+          <header class="section-card-header"><div><h2><app-checklist-icon name="ban" />Não conformidades</h2><p>{{ problems.length }} ocorrência(s) registrada(s)</p></div></header>
+          <div class="card-content">
+            @for (problem of problems; track problem.id; let problemIndex = $index) {
+              <article [attr.id]="'nonconformity-' + problem.id" [class.has-media]="problem.media.length">
+                <div class="problem-details">
+                  <div class="problem-copy">
+                    <span class="problem-number">Não conformidade #{{ problemIndex + 1 }}</span>
+                    <strong>{{ problem.item }} · {{ problem.code }}</strong>
+                    <p>{{ problem.description }}</p>
+                    <small>{{ problem.defect }} · {{ problem.department }}</small>
+                  </div>
+                  <div class="problem-actions">
+                    <span class="problem-status" [class.treated]="problem.treated"><i></i>{{ problem.treated ? 'Tratado' : 'Pendente' }}</span>
+                    @if (canTreat && !problem.treated) { <button class="action-button neutral-action no-print" type="button" (click)="treat(problem)">Marcar como tratado</button> }
+                  </div>
+                </div>
+                @if (problem.media.length) { <app-checklist-evidence [media]="problem.media" /> }
+              </article>
+            }
+          </div>
+        </section>
+      }
+
+      <section class="detail-card comments-card no-print">
+        <header class="section-card-header"><div><h2><app-checklist-icon name="message-square" />Comentários</h2><p>Observações posteriores ao preenchimento ficam registradas aqui.</p></div></header>
+        <div class="card-content">@for (comment of record.comments; track comment.id) { <article class="comment"><div>@if (problemNumber(comment.problemId); as number) { <span class="comment-problem-reference">Tratamento da não conformidade #{{ number }}</span> }<strong>{{ comment.author }}</strong><small>{{ comment.at | date:'dd/MM/yyyy HH:mm':'-0300' }}</small><p>{{ comment.text }}</p></div>@if (canEditComment(comment)) { <div class="comment-actions"><button type="button" (click)="editComment(comment)" cTooltip="Editar comentário" cTooltipPlacement="top" aria-label="Editar comentário"><app-checklist-icon name="pencil" /></button><button type="button" class="danger" (click)="deleteComment(comment)" cTooltip="Excluir comentário" cTooltipPlacement="top" aria-label="Excluir comentário"><app-checklist-icon name="trash" /></button></div> }</article> } @empty { <p class="empty">Nenhum comentário.</p> }<div class="comment-form"><textarea cFormControl rows="3" [(ngModel)]="commentText" placeholder="Adicionar comentário"></textarea><button class="action-button primary-action" type="button" [disabled]="!commentText.trim()" (click)="addComment()">Comentar</button></div></div>
+      </section>
+
+      <section class="detail-card history-card no-print">
+        <header class="section-card-header"><div><h2><app-checklist-icon name="clock" />Histórico do documento</h2></div></header>
+        <ol class="history-timeline">@for (log of record.logs; track log.id) { <li><i></i><div><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p></div></li> } @empty { <li class="empty-history">Nenhum registro disponível.</li> }</ol>
+      </section>
+
+      <div class="document-actions no-print">
+        @if (record.status === 'Rascunho' && (store.admin || record.creatorId === store.user.id)) { <button type="button" class="action-button danger-action" (click)="deleteDraft()"><app-checklist-icon name="trash" /> Excluir rascunho</button> }
+        @if (store.admin && (record.status === 'Rascunho' || record.status === 'Em andamento')) { <button type="button" class="action-button neutral-action" (click)="delegate()"><app-checklist-icon name="user-cog" /> Delegar</button> }
+        @if (store.admin && snapshot.category.erp && flow.order) { <button type="button" class="action-button neutral-action" (click)="updateOrder.open(flow.id)"><app-checklist-icon name="history" /> Atualizar pedido/item</button> }
+        @if (store.admin && snapshot.category.serial && !flow.cancelled) { <button type="button" class="action-button neutral-action" (click)="updateSerial()"><app-checklist-icon name="pencil" /> Corrigir série</button> }
+        @if (store.admin && record.status === 'Finalizado') { <button type="button" class="action-button neutral-action" (click)="reopen()"><app-checklist-icon name="pencil" /> Voltar para edição</button> }
+        @if (store.admin && !flow.cancelled) { <button type="button" class="action-button danger-action" (click)="cancelFlow()"><app-checklist-icon name="ban" /> Cancelar fluxo</button> }
+      </div>
+    </main>
+
+    <section class="print-history print-only" [class.print-page-start]="!problems.length">
+      <header><div><strong>HISTÓRICO DO CHECKLIST</strong><span>{{ record.logs.length }} registro(s) de auditoria</span></div></header>
+      <ol>@for (log of record.logs; track log.id) { <li><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p></li> } @empty { <li>Nenhum registro disponível.</li> }</ol>
+    </section>
+    </div>
+
+  }
+</c-container>
+<app-checklist-action-modal />
+<app-checklist-client-history #history />
+<app-checklist-update-order-modal #updateOrder (updated)="orderUpdated()" />
+<app-checklist-delegate-modal (delegated)="delegated()" />

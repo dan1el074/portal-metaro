@@ -2,17 +2,14 @@ package br.com.metaro.portal.core.services;
 
 import br.com.metaro.portal.core.dto.request.RequestDto;
 import br.com.metaro.portal.util.email.EmailService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class RequestService {
-    @Autowired
-    private EmailService emailService;
-
-    @Value("${app.request.mail.to}")
-    private String toMail;
+    private final EmailService emailService;
+    private final RequestMailConfigService mailConfigService;
 
     public void requestNewAccess(RequestDto dto) throws Exception {
         String message = """
@@ -43,7 +40,8 @@ public class RequestService {
                      </table>
                 </div>
             """.formatted(dto.getName(), dto.getEmail());
-        emailService.sendHtmlEmail(toMail, "Requisição de acesso - %s".formatted(dto.getName()), message,
+        emailService.sendHtmlEmail(mailConfigService.getRecipient(),
+                "Requisição de acesso - %s".formatted(dto.getName()), message,
                 "Solicitação de acesso");
     }
 }

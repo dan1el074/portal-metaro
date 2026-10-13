@@ -1,0 +1,14 @@
+<c-container class="h-auto px-4 administration-page model-editor-page" fluid
+  ><header>
+    <h1>Editar modelo</h1>
+    <p>Altere o conteúdo usado nos próximos fluxos.</p>
+  </header>
+  @if (model) {
+    <app-checklist-model-form
+      [model]="model"
+      (modelChange)="changed()"
+      (saveModel)="save()"
+      (cancel)="cancel()"
+    />
+  }</c-container
+><app-checklist-action-modal />

@@ -1,0 +1,6 @@
+.upload-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 1rem; background: rgba(15, 23, 42, .58); }
+.upload-card { width: min(31rem, 100%); padding: 1.5rem; border-radius: .75rem; background: var(--cui-body-bg); box-shadow: 0 1rem 3rem rgba(0, 0, 0, .3); }
+.upload-card p { margin: .5rem 0; color: var(--cui-secondary-color); }
+.upload-card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-card small { display: block; margin-top: .4rem; text-align: right; }
+.upload-card .notice { margin-bottom: 0; font-size: .85rem; }

@@ -1,0 +1,319 @@
+:host {
+  display: block;
+}
+.checklist-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1600px;
+  min-width: 0;
+  padding-bottom: 2rem;
+  color: var(--cui-body-color);
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.ops-header {
+  display: grid;
+  margin: 0;
+  gap: 0.15rem;
+}
+.ops-welcome {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+.ops-access-level {
+  color: var(--cui-secondary-color);
+  font-size: 0.875rem;
+}
+.view-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 180px;
+  max-width: 100%;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 10px;
+  background: var(--cui-body-bg);
+  color: var(--cui-body-color);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.view-mode-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--cui-medium-emphasis);
+}
+.management-icon {
+  display: grid;
+  place-items: center;
+  color: var(--cui-primary);
+}
+.view-mode-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-right: 4px;
+  text-align: left;
+}
+.view-mode-text span {
+  color: var(--cui-medium-emphasis);
+  font-size: 11px;
+  font-weight: 500;
+}
+.view-menu {
+  min-width: 206px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.view-menu .view-menu-label {
+  padding: 6px 12px;
+  color: var(--cui-disabled);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.view-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.view-menu button.custom-active {
+  color: #285ea5;
+}
+.view-option-title {
+  margin-right: auto;
+}
+.fixed-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  margin-bottom: 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 10px;
+  background: var(--cui-body-bg);
+}
+.fixed-view > div {
+  display: flex;
+  flex-direction: column;
+}
+.fixed-view small {
+  color: var(--cui-medium-emphasis);
+  font-size: 11px;
+  font-weight: 500;
+}
+.fixed-view strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.management-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+.management-card {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  padding: 1rem;
+  text-align: left;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 0.5rem;
+  background: var(--cui-body-bg);
+  color: inherit;
+  transition: 0.15s;
+}
+.management-card:hover {
+  border-color: rgba(var(--cui-primary-rgb), 0.45);
+  transform: translateY(-1px);
+}
+.management-icon {
+  grid-row: 1/3;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.45rem;
+  background: rgba(var(--cui-primary-rgb), 0.1);
+}
+.management-card strong {
+  font-size: 0.9rem;
+}
+.management-card small {
+  color: var(--cui-secondary-color);
+  font-size: 0.75rem;
+}
+.secondary-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.5rem 0 1rem;
+}
+.secondary-actions button {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+.todo-card,
+.records-card {
+  margin-top: 1rem;
+  border: 1px solid var(--cui-border-color);
+  background: var(--cui-body-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.todo-card c-card-body {
+  padding: 1.15rem;
+}
+.section-heading h2,
+.records-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.section-heading h2 span {
+  color: var(--cui-secondary-color);
+}
+.section-heading p,
+.records-header p {
+  margin: 0.2rem 0 0;
+  color: var(--cui-secondary-color);
+  font-size: 0.8rem;
+}
+.todo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.todo-grid button {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  text-align: left;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+}
+.todo-grid button:hover {
+  background: rgba(var(--cui-emphasis-color-rgb), 0.03);
+}
+.todo-grid strong {
+  font-size: 0.8rem;
+}
+.todo-grid span {
+  font-size: 0.78rem;
+}
+.todo-grid small,
+.empty-state {
+  color: var(--cui-secondary-color);
+  font-size: 0.72rem;
+}
+.records-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px;
+}
+.records-header > div {
+  padding-right: 16px;
+}
+.records-header button {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+.category-tabs {
+  display: flex;
+  overflow: auto;
+  gap: 0.15rem;
+  padding: 0 20px;
+  border-top: 1px solid var(--cui-border-color);
+  border-bottom: 1px solid var(--cui-border-color);
+}
+.category-tabs button {
+  min-height: 48px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  padding: 0 0.8rem;
+  white-space: nowrap;
+  color: var(--cui-secondary-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+.category-tabs button.active {
+  border-color: var(--cui-primary);
+  color: var(--cui-primary);
+}
+.category-tabs span {
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 1rem;
+  background: rgba(var(--cui-emphasis-color-rgb), 0.08);
+  font-size: 10px;
+}
+.content-panel {
+  min-width: 0;
+  padding: 18px 20px 20px;
+}
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 0 0;
+}
+@media (max-width: 992px) {
+  .management-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .todo-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .ops-header {
+    width: 100%;
+    text-align: center;
+  }
+  .fix-dropdown,
+  .fixed-view {
+    align-self: flex-end;
+  }
+  .management-grid,
+  .todo-grid {
+    grid-template-columns: 1fr;
+  }
+  .view-mode-btn {
+    width: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .category-tabs {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .category-tabs::-webkit-scrollbar {
+    display: none;
+  }
+}

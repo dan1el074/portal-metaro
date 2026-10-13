@@ -1,0 +1,15 @@
+:host { display: block; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.form-grid .wide { grid-column: 1 / -1; }
+label { color: var(--cui-medium-emphasis); font-size: 13px; font-weight: 600; }
+label > span { color: var(--cui-danger); }
+input, select { margin-top: 6px; font-size: 14px; }
+.checks-grid { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 18px 0; }
+.checks-grid label { display: inline-flex; align-items: center; gap: 7px; color: var(--cui-body-color); font-weight: 500; }
+.checks-grid input { margin: 0; }
+.section-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 16px; border-top: 1px solid var(--cui-border-color); }
+.section-title h6 { margin: 0; font-size: 14px; }.section-title p { margin: 3px 0 0; color: var(--cui-secondary-color); font-size: 13px; }
+.add-field { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid var(--cui-border-color); border-radius: 7px; background: var(--cui-body-bg); color: var(--cui-primary); font-size: 13px; font-weight: 600; }
+.field-row { display: grid; grid-template-columns: 1.2fr 1fr 1.5fr 1fr 34px; gap: 10px; align-items: end; margin-top: 12px; padding: 12px; border: 1px solid var(--cui-border-color); border-radius: 8px; }
+.remove-field { display: inline-grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--cui-danger); }.remove-field app-checklist-icon { font-size: 17px; }
+@media (max-width: 780px) { .form-grid { grid-template-columns: 1fr; }.field-row { grid-template-columns: 1fr 1fr; }.remove-field { grid-column: -2 / -1; justify-self: end; } }

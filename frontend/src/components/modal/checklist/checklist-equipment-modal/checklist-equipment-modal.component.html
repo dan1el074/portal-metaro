@@ -1,0 +1,26 @@
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="visible = $event" alignment="center" backdrop="static" size="lg">
+  <c-modal-header>
+    <h5 cModalTitle>Gestão de equipamentos</h5>
+    <button cButtonClose type="button" aria-label="Fechar" cTooltip="Fechar" cTooltipPlacement="bottom" (click)="close()"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <p class="description">Cadastre os modelos de equipamentos usados nas categorias de Produção.</p>
+    <div class="new-equipment">
+      <label>Abreviação<input cFormControl [(ngModel)]="abbreviation" maxlength="20" placeholder="Ex.: NDA" /></label>
+      <label>Nome do equipamento<input cFormControl [(ngModel)]="name" (keyup.enter)="save()" placeholder="Ex.: Niveladora de Doca Avançada" /></label>
+      <div class="equipment-form-actions">@if (editingId) { <button cButton type="button" color="secondary" variant="outline" size="sm" (click)="cancelEdit()">Cancelar</button> }<button cButton type="button" color="primary" size="sm" [disabled]="!name.trim() || !abbreviation.trim()" (click)="save()"><app-checklist-icon [name]="editingId ? 'save' : 'plus'" />{{ editingId ? 'Salvar' : 'Adicionar' }}</button></div>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead><tr><th>#</th><th>Abreviação</th><th>Equipamento</th><th aria-label="Ações"></th></tr></thead>
+        <tbody>
+          @for (item of store.state().equipment; track item.id; let index = $index) {
+            <tr><td class="equipment-id">{{ index + 1 }}</td><td class="equipment-abbreviation">{{ item.abbreviation }}</td><td class="equipment-name">{{ item.name }}</td><td class="actions"><button type="button" (click)="edit(item.id)" cTooltip="Editar equipamento" cTooltipPlacement="top" aria-label="Editar equipamento"><app-checklist-icon name="pencil" /></button><button type="button" class="danger" (click)="remove(item.id)" cTooltip="Excluir equipamento" cTooltipPlacement="top" aria-label="Excluir equipamento"><app-checklist-icon name="trash" /></button></td></tr>
+          } @empty { <tr><td colspan="4" class="empty">Nenhum equipamento cadastrado.</td></tr> }
+        </tbody>
+      </table>
+    </div>
+  </c-modal-body>
+  <c-modal-footer><button cButton type="button" color="secondary" variant="outline" (click)="close()">Fechar</button></c-modal-footer>
+</c-modal>
+<app-checklist-action-modal />

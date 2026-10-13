@@ -42,7 +42,7 @@
 
                 <div class="sof-filed">
                   <span class="sof-field-label">Telefone</span>
-                  <span class="sof-field-value">{{ order.phone }}</span>
+                  <span class="sof-field-value">{{ order.phone?.trim() || '-' }}</span>
                 </div>
 
                 <div class="sof-filed">
@@ -79,6 +79,7 @@
           <button cTab [itemKey]="0">Timeline</button>
           <button cTab [itemKey]="1">Itens do Pedido</button>
           <button cTab [itemKey]="2">Arquivos</button>
+          <button cTab [itemKey]="3">Checklists <span class="tab-count">{{ linkedChecklistEquipment.length }}</span></button>
         </c-tabs-list>
 
         <c-tabs-content>
@@ -97,6 +98,22 @@
           <c-tab-panel [itemKey]="2">
             <div class="sof-tab-panel">
               <app-step-flow-media-list [order]="order" (openVideo)="onOpenVideoModal($event)" />
+            </div>
+          </c-tab-panel>
+
+          <c-tab-panel [itemKey]="3">
+            <div class="sof-tab-panel checklist-flows-panel">
+              <div class="linked-checklist-list">
+                @for(equipment of linkedChecklistEquipment;track equipment.flowId){
+                  @if (equipment.recordId) {
+                    <a class="linked-checklist-item" [routerLink]="['/qualidade/checklist', equipment.recordId]"><strong>Fluxo de checklist #{{ equipment.flowId }}</strong><span>Número de série: {{ equipment.serial }}</span><small>{{ equipment.item }}</small><em>Acessar checklist</em></a>
+                  } @else {
+                    <article class="linked-checklist-item"><strong>Fluxo de checklist #{{ equipment.flowId }}</strong><span>Número de série: {{ equipment.serial }}</span><small>{{ equipment.item }}</small></article>
+                  }
+                } @empty {
+                  <p class="empty-checklist-state">{{ checklistEquipmentLoading ? 'Carregando fluxos vinculados...' : 'Nenhum fluxo de checklist vinculado.' }}</p>
+                }
+              </div>
             </div>
           </c-tab-panel>
         </c-tabs-content>

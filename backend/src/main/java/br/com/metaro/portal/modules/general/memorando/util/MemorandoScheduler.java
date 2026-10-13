@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Component
 @Slf4j
@@ -47,6 +49,7 @@ public class MemorandoScheduler {
     }
 
     private void notifyAllDepartmentUsers(Memorando entity, Long myId) throws Exception {
+        Set<String> recipientEmails = new LinkedHashSet<>();
         for (Position department : entity.getFromDepartments()) {
             for (User user : department.getUsers()) {
                 if (!user.getId().equals(myId)) {
@@ -55,16 +58,20 @@ public class MemorandoScheduler {
                             true, NotificationType.MEMORANDO_FINISH, entity.getId(), null, user);
                 }
 
-                DateTimeFormatter fullDateFormattter = DateTimeFormatter.ofPattern("dd/MM/yyyy '·' HH:mm")
-                        .withZone(ZoneId.systemDefault());
-                DateTimeFormatter yearFormattter = DateTimeFormatter.ofPattern("yyyy")
-                        .withZone(ZoneId.systemDefault());
+                recipientEmails.add(user.getEmail());
+            }
+        }
 
-                String formatedDate = fullDateFormattter.format(Instant.now());
-                String year = yearFormattter.format(entity.getCreateAt());
+        DateTimeFormatter fullDateFormattter = DateTimeFormatter.ofPattern("dd/MM/yyyy '·' HH:mm")
+                .withZone(ZoneId.systemDefault());
+        DateTimeFormatter yearFormattter = DateTimeFormatter.ofPattern("yyyy")
+                .withZone(ZoneId.systemDefault());
 
-                try {
-                    emailService.sendHtmlEmail(user.getEmail(), "Memorando %d/%s finalizado"
+        String formatedDate = fullDateFormattter.format(Instant.now());
+        String year = yearFormattter.format(entity.getCreateAt());
+
+        try {
+            emailService.sendHtmlEmailBcc(recipientEmails, "Memorando %d/%s finalizado"
                         .formatted(entity.getNumber(), year), """
                             <html lang="pt-BR">
                               <head>
@@ -347,15 +354,8 @@ public class MemorandoScheduler {
                             </html>
                         """.formatted(formatedDate, entity.getNumber(), year, entity.getNumber(), year,
                             entity.getTitle(), entity.getRequest(), entity.getClient(), formatedDate), "Memorando");
-                } catch (Exception exception) {
-                    log.error(
-                            "Não foi possível enviar o memorando {} para {}",
-                            entity.getId(),
-                            user.getEmail(),
-                            exception
-                    );
-                }
-            }
+        } catch (Exception exception) {
+            log.error("Não foi possível enviar o memorando {}", entity.getId(), exception);
         }
     }
 }

@@ -1,0 +1,27 @@
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="visible = $event" alignment="center" backdrop="static" size="lg">
+  <c-modal-header><h5 cModalTitle>Novo checklist</h5><button cButtonClose type="button" aria-label="Fechar" cTooltip="Fechar" cTooltipPlacement="bottom" (click)="close()"></button></c-modal-header>
+  <c-modal-body>
+    <p class="description">Selecione a categoria e o modelo. A identificação será consultada e registrada antes do preenchimento.</p>
+    <div class="form-grid">
+      <label>Categoria<select cSelect [(ngModel)]="categoryId" (ngModelChange)="categoryChanged()">@for (categoryOption of availableCategories; track categoryOption.id) { <option [value]="categoryOption.id">{{ categoryOption.name }}</option> }</select></label>
+      <label>Modelo<select cSelect [(ngModel)]="templateId" (ngModelChange)="templateChanged()"><option value="">Selecione</option>@for (model of templates; track model.id) { <option [value]="model.id">{{ model.name }}</option> }</select></label>
+    </div>
+
+    @if (needsPredecessor) {
+      <label class="previous-label">Registro anterior<select cSelect [(ngModel)]="predecessorId"><option value="">Selecione o checklist finalizado</option>@for (record of predecessors; track record.id) { <option [value]="record.id">{{ store.flow(record).serial || store.title(record) }} · {{ record.finished | date:'dd/MM/yyyy HH:mm':'-0300' }}</option> }</select><small>Os dados de identificação serão mantidos a partir do fluxo anterior.</small></label>
+    } @else if (requiresErp || requiresSerial) {
+      <section class="identification-section">
+        <div class="section-heading"><strong>Identificação</strong><small>Essas informações ficarão bloqueadas durante o preenchimento.</small></div>
+        <div class="form-grid">
+          @if (requiresErp) {
+            <label>Pedido<div class="search-field"><input cFormControl [(ngModel)]="order" (ngModelChange)="orderChanged()" (keyup.enter)="searchOrder()" placeholder="Informe o pedido" /><button cButton type="button" color="secondary" variant="outline" [disabled]="!order.trim() || loadingOrder" (click)="searchOrder()">{{ loadingOrder ? 'Consultando...' : 'Buscar' }}</button></div>@if (orderError) { <small class="text-danger">{{ orderError }}</small> }</label>
+            <label>Item<select cSelect [(ngModel)]="item" [disabled]="!erpOrder"><option value="">Selecione</option>@for (orderItem of erpOrder?.items ?? []; track orderItem.code) { <option [value]="formatItem(orderItem)">{{ formatItem(orderItem) }}</option> }</select></label>
+          }
+          @if (requiresSerial) { <label>Número de série<input cFormControl [(ngModel)]="serial" /></label> }
+        </div>
+        @if (erpOrder) { <div class="erp-summary"><span>Cliente</span><strong>{{ erpOrder.client }}</strong><span>Vendedor</span><strong>{{ erpOrder.salesperson || '—' }}</strong></div> }
+      </section>
+    }
+  </c-modal-body>
+  <c-modal-footer><button cButton type="button" color="secondary" variant="outline" (click)="close()">Cancelar</button><button cButton type="button" color="primary" [disabled]="!canConfirm" (click)="confirm()">Criar checklist</button></c-modal-footer>
+</c-modal>

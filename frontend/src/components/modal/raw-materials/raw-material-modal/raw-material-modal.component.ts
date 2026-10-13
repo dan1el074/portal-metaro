@@ -33,19 +33,10 @@ import { ModalBackNavigationDirective } from '../../../../app/directive/modal-ba
 export class RawMaterialModalComponent implements OnInit {
   @Input() item!: RawMaterialsTable;
   protected icons = { cilPencil };
-  protected visible = false;
   protected value!: number;
 
   ngOnInit(): void {
     this.value = this.item.currentStorage;
-  }
-
-  toggleLiveDemo() {
-    this.visible = !this.visible;
-  }
-
-  handleLiveDemoChange(event: any) {
-    this.visible = event;
   }
 
   increment(): void {

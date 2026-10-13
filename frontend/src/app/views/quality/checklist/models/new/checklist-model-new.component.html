@@ -1,0 +1,1 @@
+<c-container class="h-auto px-4 administration-page model-editor-page" fluid><header><h1>Novo modelo</h1><p>Configure o conteúdo e o fluxo do checklist.</p></header>@if(model){<app-checklist-model-form [model]="model" (modelChange)="changed()" (saveModel)="save()" (cancel)="cancel()" />}</c-container><app-checklist-action-modal />

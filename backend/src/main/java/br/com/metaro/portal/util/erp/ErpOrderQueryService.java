@@ -24,6 +24,13 @@ public class ErpOrderQueryService {
         return probusOrderRepository.findProductionOrderByNumberWithoutRules(orderNumber);
     }
 
+    public Optional<ErpOrderDto> findProductionOrderByNumber(int orderNumber, ErpSource source) {
+        if (source == ErpSource.FOCCO) {
+            return Optional.of(foccoOrderClient.findProductionOrderByNumber(orderNumber));
+        }
+        return findProductionOrderByNumber(orderNumber);
+    }
+
     public List<ErpOrderLineDto> findOrderLinesByNumber(int orderNumber) {
         return probusOrderRepository.findOrderLinesByNumber(orderNumber);
     }

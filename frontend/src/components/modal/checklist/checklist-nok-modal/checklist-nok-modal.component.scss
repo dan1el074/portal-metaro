@@ -1,0 +1,237 @@
+.intro {
+  margin: 0 0 16px;
+  color: var(--cui-secondary-color);
+  font-size: 13px;
+}
+
+.problem-list {
+  display: grid;
+  gap: 16px;
+}
+
+.problem-card {
+  overflow: hidden;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 10px;
+  background: var(--cui-body-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+}
+
+.problem-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--cui-border-color);
+}
+
+.problem-card header strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.problem-card header button {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  place-items: center;
+}
+
+.problem-content {
+  padding: 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.form-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  color: var(--cui-secondary-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field-label {
+  display: inline;
+}
+
+.required {
+  color: var(--cui-danger);
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: 7px 10px;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 4px;
+  background-color: var(--cui-body-bg);
+  color: var(--cui-body-color);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+select {
+  padding-right: 36px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #6f9dd9;
+  box-shadow: 0 0 0 3px rgba(40, 94, 165, .12);
+}
+
+.select-with-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  gap: 8px;
+}
+
+.select-with-action button {
+  display: inline-grid;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  place-items: center;
+}
+
+.catalog-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.catalog-add button {
+  min-height: 46px;
+  font-size: 13px;
+}
+
+.file-upload {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--cui-border-color);
+  border-radius: 6px;
+  background: var(--cui-tertiary-bg);
+}
+
+.file-input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-upload > button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.file-upload > small {
+  color: var(--cui-secondary-color);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.file-list span {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 6px;
+  background: var(--cui-body-bg);
+  color: var(--cui-body-color);
+  font-size: 12px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.file-list .file-name {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cui-danger);
+}
+
+.file-list button:hover {
+  background: rgba(var(--cui-danger-rgb), 0.12);
+}
+
+c-modal-body > button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid .wide {
+    grid-column: auto;
+  }
+
+  .problem-content {
+    padding: 16px;
+  }
+
+  .catalog-add {
+    grid-template-columns: 1fr;
+  }
+}

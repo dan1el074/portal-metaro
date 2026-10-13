@@ -1,0 +1,64 @@
+<c-container class="h-auto px-4 administration-page checklist-page" fluid>
+  <header class="page-header">
+    <p class="ops-header"><span class="ops-welcome">Checklists</span><span class="ops-access-level">Inspeções, pendências e histórico da qualidade</span></p>
+    @if (store.admin) {
+      <c-dropdown class="fix-dropdown">
+        <button cDropdownToggle [caret]="false" class="view-mode-btn">
+          <span class="view-mode-icon"><app-checklist-icon [name]="currentView === 'admin' ? 'shield-check' : currentView === 'operator' ? 'user-cog' : 'eye'" /></span>
+          <span class="view-mode-text"><span>Visualizando como</span>{{ viewLabel() }}</span>
+          <app-checklist-icon name="chevron-down" />
+        </button>
+        <div cDropdownMenu class="view-menu">
+          <span cDropdownItemPlain class="view-menu-label">Perfil de acesso</span>
+          @for (view of views; track view.value) {
+            <button cDropdownItem [class.custom-active]="view.value === currentView" (click)="setView(view.value)">
+              <app-checklist-icon [name]="view.value === 'admin' ? 'shield-check' : view.value === 'operator' ? 'user-cog' : 'eye'" />
+              <span class="view-option-title">{{ view.label }}</span>@if (view.value === currentView) { <app-checklist-icon name="circle-check" /> }
+            </button>
+          }
+        </div>
+      </c-dropdown>
+    } @else {
+      <div class="fixed-view">
+        <span class="view-mode-icon"><app-checklist-icon [name]="currentView === 'operator' ? 'user-cog' : 'eye'" /></span>
+        <div><small>Perfil de acesso</small><strong>{{ viewLabel() }}</strong></div>
+      </div>
+    }
+  </header>
+
+  @if (store.warning()) { <div class="alert alert-warning">{{ store.warning() }}</div> }
+
+  @if (currentView === 'admin') {
+    <section class="management-grid" aria-label="Administração do checklist">
+      <button type="button" class="management-card" (click)="categories.open()"><span class="management-icon"><app-checklist-icon name="folder-cog" /></span><strong>Categorias</strong><small>{{ store.state().categories.length }} categorias e integrações</small></button>
+      <button type="button" class="management-card" (click)="openModels()"><span class="management-icon"><app-checklist-icon name="clipboard-list" /></span><strong>Modelos</strong><small>{{ store.state().templates.length }} modelos configurados</small></button>
+      <button type="button" class="management-card" (click)="equipmentModal.open()"><span class="management-icon"><app-checklist-icon name="package" /></span><strong>Equipamentos</strong><small>Tipos associados aos modelos</small></button>
+      <button type="button" class="management-card" (click)="accessModal.open()"><span class="management-icon"><app-checklist-icon name="users" /></span><strong>Controle de acesso</strong><small>Operadores por categoria</small></button>
+    </section>
+    <div class="secondary-actions"><button cButton color="secondary" variant="ghost" (click)="catalogModal.open()"><app-checklist-icon name="settings" /> Integração de Produção</button></div>
+  }
+
+  @if (currentView === 'operator') {
+    <c-card class="todo-card"><c-card-body><div class="section-heading"><div><h2>Lista de afazeres <span>{{ todos.length }}</span></h2><p>Checklists disponíveis nas suas categorias.</p></div></div>
+      <div class="todo-grid">@for (record of todos; track record.id) { <button type="button" (click)="openRecord(record.id)"><strong>{{ store.snapshot(record).category.name }}</strong><span>{{ store.title(record) }}</span><small>{{ record.status }} · {{ record.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></button> } @empty { <p class="empty-state">Nenhum checklist pendente.</p> }</div>
+    </c-card-body></c-card>
+  }
+
+  <c-card class="records-card">
+    <div class="records-header"><div><h2>Registros</h2><p>Consulte checklists em andamento e finalizados.</p></div>@if (currentView !== 'consultation' && store.operator) { <button cButton color="primary" (click)="newRecordModal.open()"><app-checklist-icon name="plus" /> Novo</button> }</div>
+    <nav class="category-tabs" aria-label="Categorias">
+      <button type="button" [class.active]="!categoryId" (click)="selectCategory('')">Todos <span>{{ store.state().records.length }}</span></button>
+      @for (category of store.state().categories; track category.id) { <button type="button" [class.active]="categoryId === category.id" (click)="selectCategory(category.id)">{{ category.name }} <span>{{ count(category.id) }}</span></button> }
+    </nav>
+    <div class="content-panel">
+      <app-checklist-table [data]="pageRows" [searchValue]="search" [selectedStatus]="status" [sorterValue]="sorter" (openRecord)="openRecord($event)" (filterChange)="search = $event; page = 1" (statusChange)="status = $event; page = 1" (sorterChange)="sorter = $event; page = 1" (itemsPerPageChange)="itemsPerPage = $event; page = 1" (clearAll)="clearFilters()" />
+      @if (rows.length > itemsPerPage) { <div class="pagination-wrap"><c-smart-pagination [activePage]="page" [pages]="pages" (activePageChange)="page = $event" /></div> }
+    </div>
+  </c-card>
+</c-container>
+
+<app-checklist-category-modal #categories />
+<app-checklist-equipment-modal #equipmentModal />
+<app-checklist-access-modal #accessModal />
+<app-checklist-catalog-modal #catalogModal />
+<app-checklist-new-record-modal #newRecordModal (createRecord)="createRecord($event)" />

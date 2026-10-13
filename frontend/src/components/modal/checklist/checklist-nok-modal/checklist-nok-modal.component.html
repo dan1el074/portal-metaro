@@ -1,0 +1,23 @@
+<c-modal size="xl" [visible]="visible" (visibleChange)="visible=$event" modalBackNavigation backdrop="static" [keyboard]="false"><c-modal-header><h5 cModalTitle>Descrever não conformidade</h5><button cButtonClose (click)="close()" cTooltip="Fechar" cTooltipPlacement="bottom" aria-label="Fechar"></button></c-modal-header><c-modal-body>
+  <p class="intro">Um item NOK pode conter mais de um problema. Preencha todos os campos de cada ocorrência.</p>
+  <div class="problem-list">@for(problem of problems;track problem.id;let index=$index){<section class="problem-card"><header><strong>Problema {{ index+1 }}</strong><button cButton color="danger" variant="ghost" size="sm" (click)="remove(index)" cTooltip="Remover problema" cTooltipPlacement="top" aria-label="Remover problema"><app-checklist-icon name="trash" /></button></header><div class="problem-content"><div class="form-grid">
+    @for(field of store.state().nokFields;track field.id){
+      <div class="form-field" [class.wide]="field.type === 'textarea' || field.type === 'files'"><span class="field-label">{{ field.label }}@if(field.required){ <span class="required">*</span> }</span>
+        @if(field.type === 'items'){
+          <div class="select-with-action"><select cSelect [ngModel]="fieldValue(problem,field)" (ngModelChange)="setFieldValue(problem,field,$event)"><option value="">Selecione</option>@for(option of options(field);track option){<option [value]="option">{{ option }}</option>}</select><button cButton type="button" color="secondary" variant="outline" (click)="toggleItemCreator(problem.id)" cTooltip="Adicionar novo tipo de item" cTooltipPlacement="top" aria-label="Adicionar novo tipo de item"><app-checklist-icon name="plus" /></button></div>
+          @if(newItemProblemId===problem.id){<div class="catalog-add"><input cFormControl [(ngModel)]="newItem" (keyup.enter)="addCatalogItem(problem,field)" placeholder="Novo tipo de item" /><button cButton type="button" color="secondary" variant="outline" [disabled]="!newItem.trim()" (click)="addCatalogItem(problem,field)">Adicionar</button></div>}
+        }@else if(field.type === 'defects' || field.type === 'departments'){
+          <select cSelect [ngModel]="fieldValue(problem,field)" (ngModelChange)="setFieldValue(problem,field,$event)"><option value="">Selecione</option>@for(option of options(field);track option){<option [value]="option">{{ option }}</option>}</select>
+        }@else if(field.type === 'textarea'){
+          <textarea cFormControl rows="3" [ngModel]="fieldValue(problem,field)" (ngModelChange)="setFieldValue(problem,field,$event)"></textarea>
+        }@else if(field.type === 'files'){
+          <div class="file-upload"><input #fileInput class="file-input" type="file" multiple accept="image/*,video/*" (change)="attach(problem,$event)" /><button cButton type="button" color="secondary" variant="outline" (click)="fileInput.click()"><app-checklist-icon name="file-text" /> Selecionar fotos e vídeos</button>@if(problem.media.length){<div class="file-list">@for(file of problem.media;track file.id;let fileIndex=$index){<span><app-checklist-icon name="file-text" /><span class="file-name">{{file.name}}</span><button type="button" (click)="removeMedia(problem,fileIndex)" cTooltip="Excluir anexo" cTooltipPlacement="top" [attr.aria-label]="'Excluir ' + file.name"><app-checklist-icon name="trash" /></button></span>}</div>}@else{<small>Nenhum arquivo selecionado.</small>}</div>
+        }@else{
+          <input cFormControl [type]="field.type === 'number' ? 'number' : 'text'" [ngModel]="fieldValue(problem,field)" (ngModelChange)="setFieldValue(problem,field,$event)" />
+        }
+      </div>
+    }
+  </div></div></section>}
+  </div>
+  <button cButton color="secondary" variant="ghost" (click)="add()"><app-checklist-icon name="plus" /> Adicionar outro problema</button>
+</c-modal-body><c-modal-footer><button cButton color="secondary" variant="outline" (click)="close()">Cancelar</button><button cButton color="primary" [disabled]="!valid()" (click)="save()">Salvar</button></c-modal-footer></c-modal>

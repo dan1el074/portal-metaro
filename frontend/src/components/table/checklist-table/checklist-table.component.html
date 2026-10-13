@@ -1,0 +1,52 @@
+<c-smart-table
+  [items]="data"
+  [loading]="loading"
+  [pagination]="false"
+  [tableFilter]="{ external: true }"
+  [tableFilterValue]="searchValue"
+  (tableFilterValueChange)="onFilterValueChange($event)"
+  [columnSorter]="true"
+  [sorterValue]="sorterValue"
+  (sorterValueChange)="onSorterValueChange($event)"
+  [columns]="columns"
+  [itemsPerPageSelect]="true"
+  [itemsPerPageOptions]="[10, 20, 30]"
+  (itemsPerPageChange)="itemsPerPageChange.emit($event)"
+  [tableProps]="{ hover: true, responsive: true }"
+  [tableBodyProps]="{ align: 'middle' }"
+  itemsPerPageLabel="Itens por página"
+  tableFilterLabel=""
+  tableFilterPlaceholder="Buscar pelo título..."
+  noItemsLabel="Nenhum checklist encontrado."
+  (rowClick)="open($event)"
+  header
+  clickableRows
+  class="step-flow-table administration-smart-table administration-wide-search search-cleaner-inline checklist-smart-table"
+>
+  <ng-template cTemplateId="tableCustomHeader">
+    <div class="custom-table-header filter-bar col-auto p-0">
+      <select aria-label="Filtrar por status" [ngModel]="selectedStatus" (ngModelChange)="statusChange.emit($event)">
+        <option value="">Todos os status</option>
+        @for (status of statuses; track status) { <option [value]="status">{{ status }}</option> }
+      </select>
+      <button type="button" class="clear-filter" (click)="clearAll.emit()" cTooltip="Limpar todos os filtros" cTooltipPlacement="top" aria-label="Limpar todos os filtros">
+        <app-checklist-icon name="filter-x" />
+      </button>
+    </div>
+  </ng-template>
+
+  <ng-template cTemplateId="columnLabel_all" let-column><span class="custom-header">{{ column.label }}</span></ng-template>
+  <ng-template cTemplateId="tableData" let-columnName="columnName" let-item="item" let-tdContent="tdContent">
+    <td class="custom-td">
+      @switch (columnName) {
+        @case ('number') { <span class="record-id">{{ item.number }}</span> }
+        @case ('title') { <span class="title-field">{{ item.title }}</span><small>{{ item.serial || 'Sem série' }}</small> }
+        @case ('category') { <span>{{ item.category }}</span> }
+        @case ('model') { <span>{{ item.model }}</span> }
+        @case ('status') { <span class="status-badge" [class]="'status-badge ' + badgeClass(item.status)"><i></i>{{ item.status }}</span> }
+        @case ('updated') { <span class="date-field">{{ item.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</span> }
+        @default { {{ tdContent }} }
+      }
+    </td>
+  </ng-template>
+</c-smart-table>

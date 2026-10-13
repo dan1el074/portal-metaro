@@ -98,6 +98,7 @@ export interface StepFlowOrder {
   videos: Array<StepFlowVideo>;
   currentStep: string;
   nextStep: string | null;
+  checklistIntegration: boolean;
 }
 
 export interface PagedResult<T> {
@@ -119,6 +120,15 @@ export interface StepFlowOrderInfo {
   discount: number;
   total: number;
   items: Array<StepFlowOrderItem>;
+  checklistFlowIds?: string[];
+}
+
+export interface StepFlowChecklistEquipment {
+  flowId: string;
+  recordId: string | null;
+  serial: string;
+  item: string;
+  selected: boolean;
 }
 
 // video

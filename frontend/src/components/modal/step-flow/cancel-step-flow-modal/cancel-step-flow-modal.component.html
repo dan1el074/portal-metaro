@@ -1,4 +1,4 @@
-<c-modal modalBackNavigation id="cancelStepFlowModal" alignment="center" backdrop="static" [visible]="visible" [scrollable]="true" (visibleChange)="handleLiveDemoChange($event)">
+<c-modal modalBackNavigation id="cancelStepFlowModal" alignment="center" backdrop="static" [visible]="visible" [scrollable]="true" (visibleChange)="handleVisibilityChange($event)">
   <c-modal-header>
     <h5 cModalTitle>Cancelar Registro <span class="order-number">#{{ orderNumber }}</span></h5>
     <button (click)="onClose()" cButtonClose></button>

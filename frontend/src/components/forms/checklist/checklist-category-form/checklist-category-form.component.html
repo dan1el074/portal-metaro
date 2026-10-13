@@ -1,0 +1,22 @@
+<div class="form-grid">
+  <label>Nome da categoria <span>*</span><input cFormControl [(ngModel)]="category.name" /></label>
+  <label>Tipo de integração <span>*</span><select cSelect [(ngModel)]="category.integration" (ngModelChange)="integrationChange.emit()"><option value="production">Integração Produção</option><option value="5s">Integração 5S</option><option value="none">Nenhuma</option></select></label>
+  <label>Registro — RE<input cFormControl [(ngModel)]="category.re" /></label>
+  <label>Referência — Ref. PR<input cFormControl [(ngModel)]="category.ref" /></label>
+  <label class="wide">Título do cabeçalho <span>*</span><input cFormControl [(ngModel)]="category.documentTitle" placeholder="Checklist de inspeção da qualidade" /></label>
+</div>
+<div class="checks-grid">
+  <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.departments" /> Selecionar setores</label>
+  <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.serial" [disabled]="category.integration === 'production'" /> Exigir série</label>
+  <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.erp" [disabled]="category.integration === 'production'" /> Integração ERP</label>
+</div>
+<div class="section-title"><div><h6>Campos obrigatórios do cabeçalho</h6><p>Campos solicitados no início da inspeção.</p></div><button type="button" class="add-field" (click)="addField()"><app-checklist-icon name="plus" /> Adicionar campo</button></div>
+@for (field of category.fields; track field.id; let index = $index) {
+  <div class="field-row">
+    <label>Nome<input cFormControl [(ngModel)]="field.label" /></label>
+    <label>Tipo<select cSelect [(ngModel)]="field.type">@for (type of fieldTypes; track type.value) { <option [value]="type.value">{{ type.label }}</option> }</select></label>
+    @if (field.type === 'select') { <label>Opções, separadas por ;<input cFormControl [ngModel]="field.options.join('; ')" (ngModelChange)="setOptions(field, $event)" /></label> }
+    <label>Valor padrão<input cFormControl [(ngModel)]="field.defaultValue" /></label>
+    <button type="button" class="remove-field" (click)="removeField(index)" cTooltip="Remover campo" cTooltipPlacement="top" aria-label="Remover campo"><app-checklist-icon name="trash" /></button>
+  </div>
+}

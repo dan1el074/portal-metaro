@@ -1,0 +1,36 @@
+@if (presented.length) {
+  <div class="evidence-gallery">
+    @for (item of presented; track item.id) {
+      <figure class="evidence-item" [class.video-evidence]="isVideo(item)">
+        @if (isImage(item) && (item.source || item.publicUrl)) {
+          <button type="button" class="evidence-image-link no-print" (click)="openImage(item)" [attr.aria-label]="'Abrir ' + item.name + ' em uma nova guia'">
+            <img [src]="item.source || item.publicUrl" [alt]="item.name" />
+          </button>
+          <img class="print-image print-only" [src]="item.source || item.publicUrl" [alt]="item.name" />
+        } @else if (isVideo(item)) {
+          <button type="button" class="video-preview no-print" (click)="openVideo(item)" [disabled]="!item.publicUrl" [attr.aria-label]="'Assistir ' + item.name">
+            @if (item.previewUrl) {
+              <img [src]="item.previewUrl" [alt]="'Prévia de ' + item.name" />
+            } @else if (item.source) {
+              <video [src]="item.source" controls preload="metadata"></video>
+            } @else {
+              <div class="unavailable-media"><app-checklist-icon name="file-text" /><span>Prévia indisponível nesta sessão</span></div>
+            }
+          </button>
+          <div class="video-qr">
+            @if (item.qrCode) {
+              <img [src]="item.qrCode" [alt]="'QR Code para assistir ' + item.name" />
+            } @else {
+              <div class="qr-placeholder"><app-checklist-icon name="file-text" /></div>
+              <span>QR Code disponível após a publicação do vídeo</span>
+            }
+          </div>
+        } @else {
+          <div class="unavailable-media"><app-checklist-icon name="file-text" /><span>Imagem indisponível</span></div>
+        }
+        <figcaption>{{ item.name }}</figcaption>
+      </figure>
+    }
+  </div>
+}
+<app-video-modal [visible]="!!selectedVideo" [video]="selectedVideo" (close)="closeVideo()" />

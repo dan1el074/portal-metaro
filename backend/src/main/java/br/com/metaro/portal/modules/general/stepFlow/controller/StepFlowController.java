@@ -58,8 +58,9 @@ public class StepFlowController {
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
     @PostMapping
-    public ResponseEntity<Void> create (@RequestBody ErpOrderDto erpOrderDto) {
-        stepFlowService.create(erpOrderDto);
+    public ResponseEntity<Void> create(@RequestBody ErpOrderDto erpOrderDto,
+                                       @RequestParam(defaultValue = "false") boolean legacy) {
+        stepFlowService.create(erpOrderDto, legacy);
         return ResponseEntity.noContent().build();
     }
 

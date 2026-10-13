@@ -1,91 +1,206 @@
-            <div class="sof-scroll-container">
-              <div class="sof-scroll" tabindex="0">
-                <div class="sof-file-container">
+<div class="sof-scroll-container">
+  <div class="sof-scroll" tabindex="0">
+    <div class="sof-file-container">
+      @if (order.pictures.length || order.videos.length) {
+        <div class="sof-file-toolbar">
+          <div
+            class="sof-file-filter"
+            role="group"
+            aria-label="Filtrar arquivos por tipo"
+          >
+            <button
+              type="button"
+              [class.active]="mediaFilter === 'all'"
+              [attr.aria-pressed]="mediaFilter === 'all'"
+              (click)="setMediaFilter('all')"
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              [class.active]="mediaFilter === 'video'"
+              [attr.aria-pressed]="mediaFilter === 'video'"
+              (click)="setMediaFilter('video')"
+            >
+              Vídeos
+            </button>
+            <button
+              type="button"
+              [class.active]="mediaFilter === 'image'"
+              [attr.aria-pressed]="mediaFilter === 'image'"
+              (click)="setMediaFilter('image')"
+            >
+              Fotos
+            </button>
+          </div>
+          <div class="sof-file-search" [class.expanded]="mediaSearchOpen">
+            @if (mediaSearchOpen) {
+              <input
+                #mediaSearchInput
+                type="search"
+                [(ngModel)]="mediaSearch"
+                placeholder="Buscar arquivo..."
+                aria-label="Buscar arquivos pelo nome"
+                autocomplete="off"
+                (keydown.escape)="toggleMediaSearch()"
+              />
+            }
+            <button
+              type="button"
+              class="sof-file-search-toggle"
+              [attr.aria-expanded]="mediaSearchOpen"
+              [attr.aria-label]="
+                mediaSearchOpen ? 'Fechar busca de arquivos' : 'Buscar arquivos'
+              "
+              [title]="mediaSearchOpen ? 'Fechar busca' : 'Buscar arquivos'"
+              (click)="toggleMediaSearch()"
+            >
+              @if (mediaSearchOpen) {
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"></path>
+                </svg>
+              } @else {
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <path d="m20 20-4-4"></path>
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
 
-                  @if (order.pictures.length || order.videos.length) {
-                    <div class="sof-file-toolbar">
-                      <div class="sof-file-filter" role="group" aria-label="Filtrar arquivos por tipo">
-                        <button type="button" [class.active]="mediaFilter === 'all'" [attr.aria-pressed]="mediaFilter === 'all'" (click)="setMediaFilter('all')">Todos</button>
-                        <button type="button" [class.active]="mediaFilter === 'video'" [attr.aria-pressed]="mediaFilter === 'video'" (click)="setMediaFilter('video')">Vídeos</button>
-                        <button type="button" [class.active]="mediaFilter === 'image'" [attr.aria-pressed]="mediaFilter === 'image'" (click)="setMediaFilter('image')">Fotos</button>
-                      </div>
-                      <div class="sof-file-search" [class.expanded]="mediaSearchOpen">
-                        @if (mediaSearchOpen) {
-                          <input #mediaSearchInput type="search" [(ngModel)]="mediaSearch" placeholder="Buscar arquivo..." aria-label="Buscar arquivos pelo nome" autocomplete="off" (keydown.escape)="toggleMediaSearch()" />
-                        }
-                        <button type="button" class="sof-file-search-toggle" [attr.aria-expanded]="mediaSearchOpen" [attr.aria-label]="mediaSearchOpen ? 'Fechar busca de arquivos' : 'Buscar arquivos'" [title]="mediaSearchOpen ? 'Fechar busca' : 'Buscar arquivos'" (click)="toggleMediaSearch()">
-                          @if (mediaSearchOpen) {
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
-                          } @else {
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
-                          }
-                        </button>
-                      </div>
-                    </div>
+        @for (media of filteredMedia; track media.type + "-" + media.id) {
+          @if (media.type === "image") {
+            <a
+              class="sof-file-item"
+              [href]="apiUrl + '/images/' + media.id"
+              target="_blank"
+            >
+              <ng-container
+                *ngTemplateOutlet="
+                  fileContent;
+                  context: { $implicit: media, type: 'Imagem' }
+                "
+              ></ng-container>
+            </a>
+          } @else {
+            <div
+              class="sof-file-item"
+              (click)="openVideo.emit(media)"
+              role="button"
+              tabindex="0"
+            >
+              <ng-container
+                *ngTemplateOutlet="
+                  fileContent;
+                  context: { $implicit: media, type: 'Vídeo' }
+                "
+              ></ng-container>
+            </div>
+          }
+        } @empty {
+          <i class="custom-error image media-empty">{{
+            mediaSearch
+              ? "Nenhum arquivo encontrado para esta busca."
+              : "Nenhum arquivo encontrado para este filtro."
+          }}</i>
+        }
+      } @else {
+        <i class="custom-error image media-empty">Nenhum arquivo anexado.</i>
+      }
 
-                    @for (media of filteredMedia; track media.type + '-' + media.id) {
-                      @if (media.type === 'image') {
-                        <a class="sof-file-item" [href]="apiUrl + '/images/' + media.id" target="_blank">
-                          <ng-container *ngTemplateOutlet="fileContent; context: { $implicit: media, type: 'Imagem' }"></ng-container>
-                        </a>
-                      } @else {
-                        <div class="sof-file-item" (click)="openVideo.emit(media)" role="button" tabindex="0">
-                          <ng-container *ngTemplateOutlet="fileContent; context: { $implicit: media, type: 'Vídeo' }"></ng-container>
-                        </div>
-                      }
-                    } @empty {
-                      <i class="custom-error image media-empty">{{ mediaSearch ? 'Nenhum arquivo encontrado para esta busca.' : 'Nenhum arquivo encontrado para este filtro.' }}</i>
-                    }
-                  } @else {
-                    <i class="custom-error image media-empty">Nenhum arquivo anexado.</i>
-                  }
+      <ng-template #fileContent let-media let-type="type">
+        <div class="sof-media-preview" [class.video]="media.type === 'video'">
+          @if (media.type === "image") {
+            <img
+              [src]="apiUrl + '/images/' + media.id + '/thumb'"
+              loading="lazy"
+              alt=""
+              (error)="onPreviewError($event)"
+            />
+          } @else {
+            <span class="sof-media-fallback" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                <path d="m10 9 5 3-5 3z"></path>
+              </svg>
+            </span>
+            @if (media.status === "READY") {
+              <img
+                [src]="
+                  apiUrl +
+                  '/api/step-flow/video/' +
+                  media.id +
+                  '/preview?animated=true'
+                "
+                loading="lazy"
+                alt=""
+                (error)="onPreviewError($event)"
+              />
+            }
+          }
+        </div>
+        <div class="step-icon">
+          @if (media.type === "image") {
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path
+                d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"
+              />
+              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+              <path d="M10 9H8" />
+              <path d="M16 13H8" />
+              <path d="M16 17H8" />
+            </svg>
+          } @else {
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M15.033 13.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56v-4.704a.645.645 0 0 1 .967-.56z"
+              />
+              <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+            </svg>
+          }
+        </div>
 
-                  <ng-template #fileContent let-media let-type="type">
-                    <div class="sof-media-preview" [class.video]="media.type === 'video'">
-                      @if (media.type === 'image') {
-                        <img [src]="apiUrl + '/images/' + media.id + '/thumb'" loading="lazy" alt="" (error)="onPreviewError($event)">
-                      } @else {
-                        <span class="sof-media-fallback" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-                            <path d="m10 9 5 3-5 3z"></path>
-                          </svg>
-                        </span>
-                        @if (media.status === 'READY') {
-                          <img [src]="apiUrl + '/api/step-flow/video/' + media.id + '/preview?animated=true'" loading="lazy" alt="" (error)="onPreviewError($event)" />
-                        }
-                      }
-                    </div>
-                    <div class="step-icon">
-                      @if (media.type === 'image') {
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round">
-                          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-                          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-                          <path d="M10 9H8" />
-                          <path d="M16 13H8" />
-                          <path d="M16 17H8" />
-                        </svg>
-                      } @else {
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round">
-                          <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/>
-                          <path d="M15.033 13.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56v-4.704a.645.645 0 0 1 .967-.56z"/>
-                          <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
-                        </svg>
-                      }
-                    </div>
+        <div class="sof-file-info">
+          <span>{{ media.name }}</span>
+          <small>{{ type }}</small>
+        </div>
 
-                    <div class="sof-file-info">
-                      <span>{{ media.name }}</span>
-                      <small>{{ type }}</small>
-                    </div>
+        <span class="sof-file-date">{{
+          media.createdAt | date: "dd/MM H:mm"
+        }}</span>
 
-                    <span class="sof-file-date">{{ media.createdAt | date:"dd/MM H:mm" }}</span>
-
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M15 3h6v6"/>
-                      <path d="M10 14 21 3"/>
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    </svg>
-                  </ng-template>
-                </div>
-              </div>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </svg>
+      </ng-template>
+    </div>
+  </div>
+</div>

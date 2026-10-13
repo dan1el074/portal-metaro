@@ -12,6 +12,10 @@ export const routes: Routes = [
     loadComponent: () => import('./layout/default-layout').then((m) => m.DefaultLayoutComponent), data: { title: 'Home' },
     children: [
       {
+        path: 'qualidade',
+        loadChildren: () => import('./views/quality/routes').then((m) => m.routes),
+      },
+      {
         path: 'home',
         loadChildren: () => import('./views/home/routes').then((m) => m.routes),
         canActivate: [AuthGuard]
