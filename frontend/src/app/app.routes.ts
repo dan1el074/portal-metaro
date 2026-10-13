@@ -38,6 +38,10 @@ export const routes: Routes = [
         loadChildren: () => import('./views/engineering/routes').then((m) => m.routes),
       },
       {
+        path: 'pcp',
+        loadChildren: () => import('./views/pcp/routes').then((m) => m.routes),
+      },
+      {
         path: 'system',
         loadChildren: () => import('./views/system/routes').then((m) => m.routes),
       }

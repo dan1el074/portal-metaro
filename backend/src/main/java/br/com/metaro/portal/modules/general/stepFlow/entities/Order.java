@@ -9,6 +9,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,15 @@ public class Order {
     private String carrier;
     @Column(nullable = false)
     private boolean checklistIntegration = true;
+    private Integer volumes;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal length;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal width;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal height;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal weight;
 
     // ERP
     private String client;

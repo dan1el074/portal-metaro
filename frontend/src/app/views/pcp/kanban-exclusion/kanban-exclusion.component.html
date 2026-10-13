@@ -1,0 +1,189 @@
+<c-container breakpoint="lg" class="h-auto px-4 kanban-page" fluid>
+  <header class="kanban-header">
+    <p class="ops-header">
+      <span class="ops-welcome">Exclusão de Kanban</span>
+      <span class="ops-access-level">Consulte um lote no ERP e gerencie seus itens</span>
+    </p>
+  </header>
+
+  <div class="kanban-content">
+    <c-card class="portal-card search-card border">
+    <c-card-body>
+      <form (ngSubmit)="search()">
+        <label for="lotNumber">Número do lote</label>
+        <div class="search-row">
+          <input
+            cFormControl
+            id="lotNumber"
+            name="lotNumber"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="Digite o número do lote"
+            [disabled]="searching || deleting"
+            [(ngModel)]="lotNumber"
+          >
+          <button
+            class="tool-action search-action"
+            type="submit"
+            [disabled]="searching || deleting"
+          >
+            @if (searching) {
+              <c-spinner size="sm" aria-hidden="true"></c-spinner>
+              Buscando no ERP...
+            } @else {
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.3-4.3"></path>
+              </svg>
+              Buscar no ERP
+            }
+          </button>
+        </div>
+      </form>
+    </c-card-body>
+    </c-card>
+
+    @if (searchedLot !== null) {
+      <section class="result-section" aria-live="polite">
+      <div class="result-summary">
+        <div class="result-description">
+          <span class="lot-badge">Lote {{ searchedLot }}</span>
+          <span>{{ items.length }} item(s) encontrado(s)</span>
+        </div>
+        <span class="selection-summary">{{ selectedCount }} de {{ items.length }} selecionado(s)</span>
+      </div>
+
+      @if (items.length) {
+        <c-card class="portal-card result-card border">
+          <div class="table-responsive">
+            <table class="result-table">
+              <thead>
+                <tr>
+                  <th class="check-column">
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todos os itens"
+                      [checked]="allSelected"
+                      [indeterminate]="someSelected"
+                      [disabled]="deleting"
+                      (change)="toggleAll($event)"
+                    >
+                  </th>
+                  <th>Nº Ordem</th>
+                  <th>Código do item</th>
+                  <th>Descrição do item</th>
+                  <th class="quantity-column">Quantidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of items; track item.orderId) {
+                  <tr [class.selected]="isSelected(item.orderId)">
+                    <td class="check-column">
+                      <input
+                        type="checkbox"
+                        [attr.aria-label]="'Selecionar ordem ' + item.orderNumber"
+                        [checked]="isSelected(item.orderId)"
+                        [disabled]="deleting"
+                        (change)="toggleItem(item.orderId, $event)"
+                      >
+                    </td>
+                    <td class="order-number">{{ item.orderNumber }}</td>
+                    <td><span class="item-code">{{ item.itemCode }}</span></td>
+                    <td>{{ item.itemDescription }}</td>
+                    <td class="quantity-column">
+                      <span class="quantity-value">{{ item.quantidade | number:'1.0-3' }}</span>
+                      <span class="quantity-unit">un</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </c-card>
+
+        <div class="result-actions">
+          <span>Selecione os itens que deseja excluir</span>
+          <button
+            class="tool-action delete-action"
+            type="button"
+            [disabled]="!selectedCount || deleting"
+            (click)="openConfirmation()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              <path d="M19 6l-1 14c-.1 1.1-1 2-2 2H8c-1 0-1.9-.9-2-2L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+            </svg>
+            Excluir
+            <span class="delete-count">{{ selectedCount }}</span>
+          </button>
+        </div>
+      } @else {
+        <div class="empty-state searched-empty">
+          <svg class="package-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path>
+            <path d="m7.5 4.27 9 5.15"></path>
+            <polyline points="3.29 7 12 12 20.71 7"></polyline>
+            <line x1="12" x2="12" y1="22" y2="12"></line>
+            <circle cx="18.5" cy="15.5" r="2.5"></circle>
+            <path d="M20.27 17.27 22 19"></path>
+          </svg>
+          <p>Nenhum item encontrado para o lote <strong>{{ searchedLot }}</strong></p>
+        </div>
+      }
+      </section>
+    } @else {
+      <div class="empty-state">
+      <svg class="package-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path>
+        <path d="m7.5 4.27 9 5.15"></path>
+        <polyline points="3.29 7 12 12 20.71 7"></polyline>
+        <line x1="12" x2="12" y1="22" y2="12"></line>
+        <circle cx="18.5" cy="15.5" r="2.5"></circle>
+        <path d="M20.27 17.27 22 19"></path>
+      </svg>
+      <p>Digite um número de lote e clique em <strong>Buscar no ERP</strong></p>
+      </div>
+    }
+  </div>
+</c-container>
+
+<c-modal
+  modalBackNavigation
+  alignment="center"
+  backdrop="static"
+  [visible]="confirmVisible"
+  (visibleChange)="onConfirmationVisibleChange($event)"
+>
+  <c-modal-header>
+    <h5 cModalTitle>Excluir itens do Kanban</h5>
+    <button cButtonClose [disabled]="deleting" (click)="closeConfirmation()"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <p class="confirmation-copy">
+      Você está prestes a excluir <strong>{{ selectedCount }} item(ns)</strong> diretamente do ERP.
+    </p>
+    <p class="confirmation-warning">Essa ação não poderá ser desfeita pelo portal. Deseja continuar?</p>
+  </c-modal-body>
+  <c-modal-footer>
+    <button class="tool-action modal-cancel" type="button" [disabled]="deleting" (click)="closeConfirmation()">
+      Cancelar
+    </button>
+    <button class="tool-action delete-action" type="button" [disabled]="deleting" (click)="confirmDeletion()">
+      @if (deleting) {
+        <c-spinner size="sm" aria-hidden="true"></c-spinner>
+        Excluindo...
+      } @else {
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 6h18"></path>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+          <path d="M19 6l-1 14c-.1 1.1-1 2-2 2H8c-1 0-1.9-.9-2-2L5 6"></path>
+        </svg>
+        Confirmar exclusão
+      }
+    </button>
+  </c-modal-footer>
+</c-modal>

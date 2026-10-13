@@ -39,8 +39,7 @@
       </table>
     </div>
 
-    @if (showMoney) {
-      <div class="sof-table-container">
+    <div class="sof-table-container">
         <table class="sof-table sof-table-total">
           <thead>
             <tr>
@@ -57,17 +56,48 @@
             <tr>
               <td>
                 <span>Frete</span>
-                <span
-                  ><strong
-                    >R$ {{ order.shipment | number: "1.2-2" : "pt-BR" }}</strong
-                  ></span
-                >
+                @if (showMoney) {
+                  <span><strong>R$ {{ order.shipment | number:'1.2-2':'pt-BR' }}</strong></span>
+                } @else {
+                  <span>-</span>
+                }
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span>Volumes</span>
+                <span>{{ order.volumes !== null ? order.volumes + ' un' : '-' }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span>Comprimento</span>
+                <span>{{ order.length !== null ? (order.length | number:'1.0-2':'pt-BR') + ' m' : '-' }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span>Largura</span>
+                <span>{{ order.width !== null ? (order.width | number:'1.0-2':'pt-BR') + ' m' : '-' }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span>Altura</span>
+                <span>{{ order.height !== null ? (order.height | number:'1.0-2':'pt-BR') + ' m' : '-' }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span>Peso</span>
+                <span>{{ order.weight !== null ? (order.weight | number:'1.0-2':'pt-BR') + ' kg' : '-' }}</span>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+    </div>
 
+    @if (showMoney) {
       <div class="sof-table-container">
         <table class="sof-table sof-table-total">
           <thead>
@@ -79,21 +109,19 @@
             <tr>
               <td>
                 <span>Subtotal</span>
-                <span>R$ {{ order.subtotal | number: "1.2-2" : "pt-BR" }}</span>
+                <span>R$ {{ order.subtotal | number:'1.2-2':'pt-BR' }}</span>
               </td>
             </tr>
             <tr>
               <td>
                 <span>Desconto</span>
-                <span>R$ {{ order.discount | number: "1.2-2" : "pt-BR" }}</span>
+                <span>R$ {{ order.discount | number:'1.2-2':'pt-BR' }}</span>
               </td>
             </tr>
             <tr class="sof-total">
               <td>
                 <span>Total do Pedido</span>
-                <span class="sof-total-value"
-                  >R$ {{ order.total | number: "1.2-2" : "pt-BR" }}</span
-                >
+                <span class="sof-total-value">R$ {{ order.total | number:'1.2-2':'pt-BR' }}</span>
               </td>
             </tr>
           </tbody>

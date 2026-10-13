@@ -71,6 +71,10 @@
   animation-fill-mode: forwards;
 }
 
+.app-toast:hover .app-toast__progress {
+  animation-play-state: paused;
+}
+
 @keyframes app-toast-progress {
   to { transform: scaleX(0); }
 }

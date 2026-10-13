@@ -5,7 +5,7 @@
 
       <div class="sofd-history">
         @for (step of order.steps; track step.id) {
-          @if (step.messages.length) {
+          @if (step.messages.length || hasShippingInfo(step)) {
             <c-accordion [alwaysOpen]="true">
               <c-accordion-item #acc="cAccordionItem" [visible]="false"
                 class="sofd-accordion"
@@ -34,32 +34,60 @@
                       </small>
                     </div>
 
-                    <div class="sofd-accordion-icons">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
-                      {{ step.messages.length }}
-                    </div>
+                    @if (step.messages.length) {
+                      <div class="sofd-accordion-icons">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        {{ step.messages.length }}
+                      </div>
+                    }
 
                   </button>
                 </ng-template>
 
                 <ng-template cTemplateId="accordionBodyTemplate">
                   <div class="sofd-accordion-body">
-                    <div class="sofd-sub-title">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
-                      Comentários
-                    </div>
+                    @if (step.messages.length) {
+                      <div class="sofd-sub-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Comentários
+                      </div>
 
-                    @for (message of step.messages; track message.id) {
-                      <div class="sofd-comment">
-                        <div class="sofd-comment-label">
-                          <span>{{ message.userName ? message.userName : 'Sistema' }}</span>
-                          {{ message.created ? (message.created | date:'dd/MM/yyyy HH:mm') : 'Agora' }}
+                      @for (message of step.messages; track message.id) {
+                        <div class="sofd-comment">
+                          <div class="sofd-comment-label">
+                            <span>{{ message.userName ? message.userName : 'Sistema' }}</span>
+                            {{ message.created ? (message.created | date:'dd/MM/yyyy HH:mm') : 'Agora' }}
+                          </div>
+                          <span [innerHtml]="message.message"></span>
                         </div>
-                        <span [innerHtml]="message.message"></span>
+                      }
+                    }
+
+                    @if (hasShippingInfo(step)) {
+                      <div class="sofd-sub-title sof-shipping-title">
+                        <svg class="sof-shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="m7.5 4.27 9 5.15"/>
+                          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                          <path d="m3.3 7 8.7 5 8.7-5"/>
+                          <path d="M12 22V12"/>
+                        </svg>
+                        Envio
+                      </div>
+                      <div class="sofd-shipping-info">
+                        @if (step.step === 'Montagem Final') {
+                          <div><span>Volumes</span><strong>{{ order.volumes }} un</strong></div>
+                          <div><span>Comprimento</span><strong>{{ order.length | number:'1.0-2':'pt-BR' }} m</strong></div>
+                          <div><span>Largura</span><strong>{{ order.width | number:'1.0-2':'pt-BR' }} m</strong></div>
+                          <div><span>Altura</span><strong>{{ order.height | number:'1.0-2':'pt-BR' }} m</strong></div>
+                          <div><span>Peso</span><strong>{{ order.weight | number:'1.0-2':'pt-BR' }} kg</strong></div>
+                        } @else if (step.step === 'Frete') {
+                          <div><span>Transportadora</span><strong>{{ order.carrier || '-' }}</strong></div>
+                          <div><span>Valor do frete</span><strong>R$ {{ order.shipment | number:'1.2-2':'pt-BR' }}</strong></div>
+                        }
                       </div>
                     }
                   </div>

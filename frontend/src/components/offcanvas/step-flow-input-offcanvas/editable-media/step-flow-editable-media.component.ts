@@ -26,6 +26,7 @@ export class StepFlowEditableMediaComponent {
   protected mediaFilter: StepFlowMediaFilter = 'all';
   protected mediaSearch = '';
   protected mediaSearchOpen = false;
+  protected showAllMedia = false;
 
   protected get filteredMedia(): StepFlowMedia[] {
     return getSortedStepFlowMedia(this.order.pictures, this.order.videos, this.mediaFilter, this.mediaSearch);
@@ -36,17 +37,46 @@ export class StepFlowEditableMediaComponent {
     return this.uploadingVideos.filter(video => matchesStepFlowMediaSearch(video.name, this.mediaSearch));
   }
 
+  protected get visibleUploadingVideos(): UploadingVideo[] {
+    return this.showAllMedia ? this.filteredUploadingVideos : this.filteredUploadingVideos.slice(0, 4);
+  }
+
+  protected get visibleMedia(): StepFlowMedia[] {
+    if (this.showAllMedia) return this.filteredMedia;
+    const remainingSlots = Math.max(0, 4 - this.visibleUploadingVideos.length);
+    return this.filteredMedia.slice(0, remainingSlots);
+  }
+
+  protected get hasMoreThanFourMedia(): boolean {
+    return this.filteredUploadingVideos.length + this.filteredMedia.length > 4;
+  }
+
   protected setMediaFilter(filter: StepFlowMediaFilter): void {
     this.mediaFilter = filter;
+    this.showAllMedia = this.mediaSearchOpen;
   }
 
   protected toggleMediaSearch(): void {
     this.mediaSearchOpen = !this.mediaSearchOpen;
     if (!this.mediaSearchOpen) {
       this.mediaSearch = '';
+      this.showAllMedia = false;
       return;
     }
+    this.showAllMedia = true;
     setTimeout(() => this.mediaSearchInput?.nativeElement.focus());
+  }
+
+  protected showMoreMedia(): void {
+    this.showAllMedia = true;
+  }
+
+  protected showLessMedia(): void {
+    this.showAllMedia = false;
+    if (this.mediaSearchOpen) {
+      this.mediaSearchOpen = false;
+      this.mediaSearch = '';
+    }
   }
 
   protected onPreviewError(event: Event): void {

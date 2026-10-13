@@ -91,6 +91,52 @@
       <form cForm [formGroup]="form" (ngSubmit)="onSubmit()">
         @if (order.currentStep == "Montagem Final") {
           <div class="mb-3">
+            <label class="custom-label">Informações de envio</label>
+            <div class="shipping-measurements">
+              <div>
+                <label cLabel for="volumes">Volumes</label>
+                <div class="input-group field-with-unit">
+                  <input cFormControl formControlName="volumes" id="volumes" type="number" min="0" step="1" inputmode="numeric" placeholder="0" />
+                  <span class="input-group-text unit-tooltip" data-tooltip="Unidade">un</span>
+                </div>
+              </div>
+              <div>
+                <label cLabel for="length">Comprimento</label>
+                <div class="input-group field-with-unit">
+                  <input cFormControl formControlName="length" id="length" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
+                  <span class="input-group-text unit-tooltip" data-tooltip="Metro">m</span>
+                </div>
+              </div>
+              <div>
+                <label cLabel for="width">Largura</label>
+                <div class="input-group field-with-unit">
+                  <input cFormControl formControlName="width" id="width" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
+                  <span class="input-group-text unit-tooltip" data-tooltip="Metro">m</span>
+                </div>
+              </div>
+              <div>
+                <label cLabel for="height">Altura</label>
+                <div class="input-group field-with-unit">
+                  <input cFormControl formControlName="height" id="height" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
+                  <span class="input-group-text unit-tooltip" data-tooltip="Metro">m</span>
+                </div>
+              </div>
+              <div>
+                <label cLabel for="weight">Peso</label>
+                <div class="input-group field-with-unit">
+                  <input cFormControl formControlName="weight" id="weight" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
+                  <span class="input-group-text unit-tooltip" data-tooltip="Quilograma">kg</span>
+                </div>
+              </div>
+            </div>
+            @if (shippingValidationForNextStep && hasInvalidShippingMeasurements()) {
+              <small class="shipping-validation-error">Preencha todos os campos com valores válidos antes de avançar.</small>
+            } @else if (form.get('volumes')?.touched && form.get('volumes')?.invalid || form.get('length')?.touched && form.get('length')?.invalid || form.get('width')?.touched && form.get('width')?.invalid || form.get('height')?.touched && form.get('height')?.invalid || form.get('weight')?.touched && form.get('weight')?.invalid) {
+              <small class="shipping-validation-error">Informe valores válidos.</small>
+            }
+          </div>
+
+          <div class="mb-3">
             <label class="custom-label">Itens a produzir</label>
 
             <div class="sof-file-container">

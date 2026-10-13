@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -234,6 +236,10 @@ public class StepFlowService {
         currentStep.setFinishedAt(Instant.now());
         currentStep.setFinishedBy(userService.authenticate());
 
+        if (type.equals(StepType.FINAL_ASSEMBLY)) {
+            checkShippingMeasurements(order);
+        }
+
         if (type.equals(StepType.SHIPPING)) {
             order.setStatus(OrderStatus.COMPLETED);
         }
@@ -375,6 +381,7 @@ public class StepFlowService {
             case FINAL_ASSEMBLY -> {
                 proccessImage(dto, currentStep);
                 checkQuantity(dto, order);
+                updateShippingMeasurements(dto, order);
             }
             case PCP -> checkCancelled(dto, order);
             case FREIGHT -> {
@@ -434,6 +441,40 @@ public class StepFlowService {
         if (dto.getCancelled() == null || !dto.getCancelled().equals("true")) return;
 
         order.setStatus(OrderStatus.CANCELLED);
+    }
+
+    private void updateShippingMeasurements(OrderInputDto dto, Order order) {
+        if (dto.getVolumes() != null && !dto.getVolumes().isBlank()) {
+            try {
+                int volumes = Integer.parseInt(dto.getVolumes());
+                if (volumes < 0) throw new NumberFormatException();
+                order.setVolumes(volumes);
+            } catch (NumberFormatException exception) {
+                throw new UnprocessableEntityException("Volumes deve ser um número inteiro maior ou igual a zero!");
+            }
+        }
+
+        if (dto.getLength() != null && !dto.getLength().isBlank()) order.setLength(parseMeasurement(dto.getLength(), "Comprimento"));
+        if (dto.getWidth() != null && !dto.getWidth().isBlank()) order.setWidth(parseMeasurement(dto.getWidth(), "Largura"));
+        if (dto.getHeight() != null && !dto.getHeight().isBlank()) order.setHeight(parseMeasurement(dto.getHeight(), "Altura"));
+        if (dto.getWeight() != null && !dto.getWeight().isBlank()) order.setWeight(parseMeasurement(dto.getWeight(), "Peso"));
+    }
+
+    private BigDecimal parseMeasurement(String value, String fieldName) {
+        try {
+            BigDecimal measurement = new BigDecimal(value.replace(',', '.'));
+            if (measurement.signum() < 0 || measurement.scale() > 2) throw new NumberFormatException();
+            return measurement.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new UnprocessableEntityException(fieldName + " deve ser um número maior ou igual a zero, com até 2 casas decimais!");
+        }
+    }
+
+    private void checkShippingMeasurements(Order order) {
+        if (order.getVolumes() == null || order.getLength() == null || order.getWidth() == null
+                || order.getHeight() == null || order.getWeight() == null) {
+            throw new UnprocessableEntityException("Preencha todas as informações de envio antes de avançar!");
+        }
     }
 
     private void proccessImage(OrderInputDto dto, OrderStep step) throws IOException {
