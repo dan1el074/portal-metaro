@@ -69,6 +69,7 @@ export class StepFlowInputOffcanvasComponent {
   protected showNextStepConfirmationModal = false;
   protected mediaToDelete: DeletableStepFlowMedia | null = null;
   protected deleteMediaLoading = false;
+  protected shippingValidationForNextStep = false;
   protected editingFileId: string | null = null;
   protected editingFileName = '';
   protected editingFileExtension = '';
@@ -152,6 +153,7 @@ export class StepFlowInputOffcanvasComponent {
       comment: '',
     });
     this.files.set([]);
+    this.shippingValidationForNextStep = false;
     this.cancelFileNameEdit();
     this.captureFormInitialValue();
   }
@@ -189,7 +191,6 @@ export class StepFlowInputOffcanvasComponent {
       const control = this.form.get(name);
       if (order.currentStep === 'Montagem Final') {
         control?.setValidators([
-          Validators.required,
           Validators.min(0),
           Validators.pattern(name === 'volumes' ? /^\d+$/ : /^\d+(\.\d{1,2})?$/),
         ]);
@@ -346,11 +347,11 @@ export class StepFlowInputOffcanvasComponent {
       }));
 
       formData.append('itemsJson', JSON.stringify(itemsPayload));
-      formData.append('volumes', String(volumes));
-      formData.append('length', String(length));
-      formData.append('width', String(width));
-      formData.append('height', String(height));
-      formData.append('weight', String(weight));
+      this.appendIfNotEmpty(formData, 'volumes', volumes);
+      this.appendIfNotEmpty(formData, 'length', length);
+      this.appendIfNotEmpty(formData, 'width', width);
+      this.appendIfNotEmpty(formData, 'height', height);
+      this.appendIfNotEmpty(formData, 'weight', weight);
     }
 
     if (this.order?.currentStep === 'Montagem Final' || this.order?.currentStep === 'Expedição') {
@@ -387,12 +388,32 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onNextStep(): void {
+    if (this.order?.currentStep === 'Montagem Final' && this.hasInvalidShippingMeasurements()) {
+      this.shippingValidationForNextStep = true;
+      this.toasterService.error('Preencha todas as informações de envio antes de avançar.');
+      return;
+    }
+
+    this.shippingValidationForNextStep = false;
+
     if (this.hasUnsavedCurrentStepChanges()) {
       this.showNextStepConfirmationModal = true;
       return;
     }
 
     this.advanceToNextStep();
+  }
+
+  protected hasIncompleteShippingMeasurements(): boolean {
+    return ['volumes', 'length', 'width', 'height', 'weight'].some(name => {
+      const value = this.form.get(name)?.value;
+      return value === null || value === undefined || String(value).trim() === '';
+    });
+  }
+
+  protected hasInvalidShippingMeasurements(): boolean {
+    return this.hasIncompleteShippingMeasurements()
+      || ['volumes', 'length', 'width', 'height', 'weight'].some(name => this.form.get(name)?.invalid);
   }
 
   private hasUnsavedCurrentStepChanges(): boolean {
