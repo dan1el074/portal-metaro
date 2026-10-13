@@ -75,11 +75,7 @@ export class ToastrService {
     progress.style.animationDuration = `${timeOut}ms`;
     toast.appendChild(progress);
 
-    let timer: number | undefined;
     const remove = (): void => {
-      if (timer !== undefined) {
-        this.document.defaultView?.clearTimeout(timer);
-      }
       this.activeMessages.delete(signature);
       toast.remove();
       if (!container.childElementCount) {
@@ -88,9 +84,9 @@ export class ToastrService {
     };
 
     toast.addEventListener('click', remove, { once: true });
+    progress.addEventListener('animationend', remove, { once: true });
     this.activeMessages.add(signature);
     container.appendChild(toast);
-    timer = this.document.defaultView?.setTimeout(remove, timeOut);
   }
 
   private getContainer(): HTMLElement {
