@@ -79,7 +79,9 @@
           <button cTab [itemKey]="0">Timeline</button>
           <button cTab [itemKey]="1">Itens do Pedido</button>
           <button cTab [itemKey]="2">Arquivos</button>
-          <button cTab [itemKey]="3">Checklists <span class="tab-count">{{ linkedChecklistEquipment.length }}</span></button>
+          @if (order.checklistIntegration) {
+            <button cTab [itemKey]="3">Checklists <span class="tab-count">{{ linkedChecklistEquipment.length }}</span></button>
+          }
         </c-tabs-list>
 
         <c-tabs-content>
