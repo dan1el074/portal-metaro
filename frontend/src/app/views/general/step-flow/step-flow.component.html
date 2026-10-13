@@ -293,7 +293,7 @@
         (nextStepTask)="onNextStep($event)"
         (reloadOrders)="reloadOrders()"
       ></app-step-flow-input-offcanvas>
-      <app-new-step-flow-modal [visible]="showNewModal" (closeModal)="toggleNewModal(false)" (createNewOrder)="createNewOrder($event)" (createLegacyOrder)="createLegacyOrder($event)"></app-new-step-flow-modal>
+      <app-new-step-flow-modal [visible]="showNewModal" [isAdmin]="isAdmin" (closeModal)="toggleNewModal(false)" (createNewOrder)="createNewOrder($event)" (createLegacyOrder)="createLegacyOrder($event)"></app-new-step-flow-modal>
     }
   }
 

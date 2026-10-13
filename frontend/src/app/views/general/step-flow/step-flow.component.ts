@@ -49,7 +49,6 @@ interface StepFlowView extends Step {
 export class StepFlowComponent implements OnInit, AfterViewInit {
   @ViewChild('stepFlowOffcanvas')stepFlowOffcanvas!: StepFlowOffcanvasComponent;
   @ViewChild('stepFlowInputOffcanvas')stepFlowInputOffcanvas!: StepFlowInputOffcanvasComponent;
-  @ViewChild(NewStepFlowModalComponent) newStepFlowModal!: NewStepFlowModalComponent;
 
   protected isAdmin: boolean = false;
   protected hasConsultationAccess: boolean = false;
@@ -235,6 +234,7 @@ export class StepFlowComponent implements OnInit, AfterViewInit {
   }
 
   protected createLegacyOrder(order: StepFlowOrderInfo): void {
+    this.toggleNewModal(false);
     this.createOrder(order, true);
   }
 
@@ -247,11 +247,6 @@ export class StepFlowComponent implements OnInit, AfterViewInit {
       },
       error: error => {
         const message = error.error?.error || 'Não foi possível criar o registro.';
-        const checklistUnavailable = message === 'O pedido precisa possuir ao menos um número de série com o primeiro checklist finalizado.';
-        if (!legacy && this.isAdmin && checklistUnavailable) {
-          this.newStepFlowModal.openLegacyWarning(order);
-          return;
-        }
         this.toaster.error(message);
       }
     });

@@ -1,10 +1,9 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
-import { FormArray, FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ToastrService } from '../../../../app/services/toast.service';
 import { ButtonCloseDirective, ButtonDirective, FormControlDirective, FormLabelDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, SpinnerComponent } from '@coreui/angular';
 import { StepFlowService } from '../../../../app/services/step-flow.service';
 import { StepFlowChecklistEquipment, StepFlowOrderInfo, StepFlowOrderItem } from '../../../../app/interface/step-flow.interface';
-import { ErpSource } from '../../../../app/interface/erp.interface';
 import { CommonModule } from '@angular/common';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
 import { map, switchMap } from 'rxjs';
@@ -22,7 +21,6 @@ import { map, switchMap } from 'rxjs';
     ButtonDirective,
     ButtonCloseDirective,
     ReactiveFormsModule,
-    FormsModule,
     FormLabelDirective,
     FormControlDirective,
     SpinnerComponent
@@ -33,6 +31,7 @@ import { map, switchMap } from 'rxjs';
 })
 export class NewStepFlowModalComponent {
   @Input() visible!: boolean;
+  @Input() isAdmin = false;
   @Output() closeModal = new EventEmitter<void>();
   @Output() createNewOrder = new EventEmitter<StepFlowOrderInfo>();
   @Output() createLegacyOrder = new EventEmitter<StepFlowOrderInfo>();
@@ -44,8 +43,7 @@ export class NewStepFlowModalComponent {
   protected loadSearch: boolean = false;
   protected duplicateWarningVisible = false;
   protected pendingOrder: StepFlowOrderInfo | null = null;
-  protected legacyWarningVisible = false;
-  protected legacyOrder: StepFlowOrderInfo | null = null;
+  protected pendingLegacy = false;
   protected checklistEquipment: StepFlowChecklistEquipment[] = [];
 
   protected get selectedChecklistEquipmentCount(): number {
@@ -59,8 +57,8 @@ export class NewStepFlowModalComponent {
     private cdf: ChangeDetectorRef
   ) {
     this.newOrderForm = this.formBuilder.group({
-      source: ['FOCCO' as ErpSource, Validators.required],
       number: ['', [Validators.required, Validators.pattern('^[0-9]+$')]],
+      checklistIntegration: [true],
     });
 
     this.itemsForm = this.formBuilder.array([]);
@@ -68,6 +66,10 @@ export class NewStepFlowModalComponent {
 
   protected get itemsFormControls(): FormGroup[] {
     return this.itemsForm.controls as FormGroup[];
+  }
+
+  protected get useChecklistIntegration(): boolean {
+    return !this.isAdmin || this.newOrderForm.get('checklistIntegration')?.value !== false;
   }
 
   public ngOnChanges(): void {
@@ -86,7 +88,7 @@ export class NewStepFlowModalComponent {
   }
 
   private resetForm(): void {
-    this.newOrderForm.reset({ source: 'FOCCO', number: '' });
+    this.newOrderForm.reset({ number: '', checklistIntegration: true });
     this.itemsForm.clear();
     this.valid = undefined;
     this.searchResult = null;
@@ -94,6 +96,7 @@ export class NewStepFlowModalComponent {
     this.loadSearch = false;
     this.duplicateWarningVisible = false;
     this.pendingOrder = null;
+    this.pendingLegacy = false;
   }
 
   protected onSearch(): void {
@@ -107,10 +110,8 @@ export class NewStepFlowModalComponent {
     this.checklistEquipment = [];
     this.itemsForm.clear();
 
-    const source = this.newOrderForm.get('source')?.value as ErpSource;
     this.stepFlowService.findOrderInfoByNumber(
-      Number(this.newOrderForm.get('number')?.value),
-      source
+      Number(this.newOrderForm.get('number')?.value)
     ).pipe(
       switchMap((data: StepFlowOrderInfo) =>
         this.stepFlowService.listAvailableChecklistEquipment(data.number)
@@ -136,7 +137,7 @@ export class NewStepFlowModalComponent {
             break;
 
           case 502:
-            this.toaster.error(error.error?.error || "Não foi possível consultar o ERP selecionado.");
+            this.toaster.error(error.error?.error || "Não foi possível consultar o FoccoERP.");
             break;
 
           default:
@@ -184,8 +185,17 @@ export class NewStepFlowModalComponent {
       return;
     }
 
-    const selectedEquipment = this.checklistEquipment.filter(item => item.selected);
-    if (this.checklistEquipment.length > 0 && selectedEquipment.length === 0) {
+    const legacy = !this.useChecklistIntegration;
+    const selectedEquipment = legacy ? [] : this.checklistEquipment.filter(item => item.selected);
+    if (!legacy && this.checklistEquipment.length === 0) {
+      this.toaster.error(
+        this.isAdmin
+          ? 'Nenhum checklist válido foi encontrado. Desmarque a integração para criar o registro na versão legado.'
+          : 'Nenhum checklist válido foi encontrado para este pedido.'
+      );
+      return;
+    }
+    if (!legacy && this.checklistEquipment.length > 0 && selectedEquipment.length === 0) {
       this.toaster.error('Selecione ao menos um item para continuar.');
       return;
     }
@@ -228,43 +238,37 @@ export class NewStepFlowModalComponent {
 
     if (this.hasPreviouslyUsedQuantity()) {
       this.pendingOrder = updatedResult;
+      this.pendingLegacy = legacy;
       this.duplicateWarningVisible = true;
       return;
     }
 
-    this.createNewOrder.emit(updatedResult);
+    this.emitCreation(updatedResult, legacy);
   }
 
   protected closeDuplicateWarning(): void {
     this.duplicateWarningVisible = false;
     this.pendingOrder = null;
+    this.pendingLegacy = false;
   }
 
   protected confirmDuplicate(): void {
     if (!this.pendingOrder) return;
 
     const order = this.pendingOrder;
+    const legacy = this.pendingLegacy;
     this.duplicateWarningVisible = false;
     this.pendingOrder = null;
+    this.pendingLegacy = false;
+    this.emitCreation(order, legacy);
+  }
+
+  private emitCreation(order: StepFlowOrderInfo, legacy: boolean): void {
+    if (legacy) {
+      this.createLegacyOrder.emit(order);
+      return;
+    }
     this.createNewOrder.emit(order);
-  }
-
-  public openLegacyWarning(order: StepFlowOrderInfo): void {
-    this.legacyOrder = order;
-    this.legacyWarningVisible = true;
-    this.cdf.detectChanges();
-  }
-
-  protected closeLegacyWarning(): void {
-    this.legacyWarningVisible = false;
-    this.legacyOrder = null;
-  }
-
-  protected confirmLegacyCreation(): void {
-    if (!this.legacyOrder) return;
-    const order = this.legacyOrder;
-    this.closeLegacyWarning();
-    this.createLegacyOrder.emit(order);
   }
 
   private hasPreviouslyUsedQuantity(): boolean {

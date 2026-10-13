@@ -38,7 +38,7 @@ export class MemorandoFormComponent implements OnInit, OnChanges {
   ) {
     this.createForm = this.formBuilder.group({
       request: ['', [Validators.required]],
-      erpSource: ['PROBUS', [Validators.required]],
+      erpSource: ['FOCCO', [Validators.required]],
       client: ['', [Validators.required, Validators.minLength(5)]],
       items: [[], [Validators.required]],
       title: ['', [Validators.required]],
@@ -79,7 +79,7 @@ export class MemorandoFormComponent implements OnInit, OnChanges {
   protected onExit(): void {
     this.createForm.reset({
       request: '',
-      erpSource: 'PROBUS',
+      erpSource: 'FOCCO',
       client: '',
       items: [],
       title: '',
