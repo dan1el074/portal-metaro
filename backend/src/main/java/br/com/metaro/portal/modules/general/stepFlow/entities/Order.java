@@ -9,7 +9,6 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -34,15 +33,6 @@ public class Order {
     private OrderStatus status; // LATE -> apenas quando a dueDate passar (apenas DTO)
     private Double shipment;
     private String carrier;
-    private Integer volumes;
-    @Column(precision = 12, scale = 2)
-    private BigDecimal length;
-    @Column(precision = 12, scale = 2)
-    private BigDecimal width;
-    @Column(precision = 12, scale = 2)
-    private BigDecimal height;
-    @Column(precision = 12, scale = 2)
-    private BigDecimal weight;
 
     // ERP
     private String client;
@@ -72,6 +62,9 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("id ASC")
     private List<OrderStep> steps;
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<OrderVolume> volumes;
 
     // métodos
     public void addItem(OrderItem item) {
@@ -82,6 +75,11 @@ public class Order {
     public void addStep(OrderStep step) {
         steps.add(step);
         step.setOrder(this);
+    }
+
+    public void addVolume(OrderVolume volume) {
+        volumes.add(volume);
+        volume.setOrder(this);
     }
 
     @Transient

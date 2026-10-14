@@ -14,4 +14,8 @@ import { TruncatePipe } from '../../../../app/pipes/truncate.pipe';
 export class StepFlowOrderItemsComponent {
   @Input({ required: true }) order!: StepFlowOrder;
   @Input() showMoney = false;
+
+  protected get totalVolumes(): number {
+    return this.order.volumes.reduce((total, volume) => total + volume.quantity, 0);
+  }
 }

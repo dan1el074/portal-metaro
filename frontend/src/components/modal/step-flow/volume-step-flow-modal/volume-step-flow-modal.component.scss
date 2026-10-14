@@ -1,0 +1,37 @@
+.volume-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+
+  .volume-field {
+    min-width: 0;
+
+    label {
+      margin-bottom: 4px;
+      color: var(--cui-medium-emphasis);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    input[type="number"] {
+      appearance: textfield;
+      -moz-appearance: textfield;
+
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+      }
+    }
+  }
+
+  .quantity-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .volume-form { grid-template-columns: 1fr; }
+  .volume-form .quantity-field { grid-column: auto; }
+}
