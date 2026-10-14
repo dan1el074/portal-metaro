@@ -308,12 +308,10 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
     const viewportWidth = container.canvas.size.width / pixelRatio;
     const viewportHeight = container.canvas.size.height / pixelRatio;
     const isDesktop = viewportWidth >= 992;
-    const launchSpeed = isDesktop
-      ? Math.min(64, Math.max(35, viewportHeight / 18))
-      : Math.min(48, Math.max(30, viewportHeight / 23));
-    const count = isDesktop ? 190 : Math.min(110, Math.max(80, Math.round(viewportHeight * .13)));
-    const maxAngleOffset = isDesktop ? 44 : 18;
-    const waveCount = isDesktop ? 7 : 5;
+    const launchSpeed = Math.min(64, Math.max(35, viewportHeight / (isDesktop ? 18 : 20)));
+    const count = isDesktop ? 190 : Math.min(150, Math.max(100, Math.round(viewportHeight * .16)));
+    const maxAngleOffset = isDesktop ? 44 : 32;
+    const waveCount = isDesktop ? 7 : 6;
     const origin = {
       x: container.canvas.size.width / 2,
       y: container.canvas.size.height - 6 * pixelRatio,
@@ -327,14 +325,12 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
         const angleOffset = -maxAngleOffset + Math.random() * maxAngleOffset * 2;
         const direction = -90 + angleOffset;
         const verticalCompensation = Math.max(.7, Math.cos(angleOffset * Math.PI / 180));
-        const speedVariation = isDesktop ? .86 + Math.random() * .28 : .9 + Math.random() * .2;
-        const speed = launchSpeed * speedVariation / verticalCompensation;
+        const speed = launchSpeed * (.86 + Math.random() * .28) / verticalCompensation;
         container.particles.addParticle(origin, {
           move: {
             enable: true,
-            decay: isDesktop ? .008 : .01,
+            decay: .008,
             direction,
-            gravity: { enable: true, acceleration: isDesktop ? 9.81 : 14 },
             speed,
             straight: true,
           },
