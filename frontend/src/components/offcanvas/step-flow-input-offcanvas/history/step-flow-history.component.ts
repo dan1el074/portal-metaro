@@ -23,8 +23,7 @@ export class StepFlowHistoryComponent {
 
   protected hasShippingInfo(step: StepFlowOrderStep): boolean {
     if (step.step === 'Montagem Final') {
-      return [this.order.volumes, this.order.length, this.order.width, this.order.height, this.order.weight]
-        .some(value => value !== null && value !== undefined);
+      return this.order.volumes.length > 0;
     }
 
     if (step.step === 'Frete') {

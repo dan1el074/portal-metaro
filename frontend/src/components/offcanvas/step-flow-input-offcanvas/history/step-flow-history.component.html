@@ -75,15 +75,27 @@
                           <path d="m3.3 7 8.7 5 8.7-5"/>
                           <path d="M12 22V12"/>
                         </svg>
-                        Envio
+                        {{ step.step === 'Montagem Final' ? 'Volumes' : 'Envio' }}
                       </div>
-                      <div class="sofd-shipping-info">
+                      <div class="sofd-shipping-info" [class.volume-shipping-info]="step.step === 'Montagem Final'">
                         @if (step.step === 'Montagem Final') {
-                          <div><span>Volumes</span><strong>{{ order.volumes }} un</strong></div>
-                          <div><span>Comprimento</span><strong>{{ order.length | number:'1.0-2':'pt-BR' }} m</strong></div>
-                          <div><span>Largura</span><strong>{{ order.width | number:'1.0-2':'pt-BR' }} m</strong></div>
-                          <div><span>Altura</span><strong>{{ order.height | number:'1.0-2':'pt-BR' }} m</strong></div>
-                          <div><span>Peso</span><strong>{{ order.weight | number:'1.0-2':'pt-BR' }} kg</strong></div>
+                          @for (volume of order.volumes; track volume.id ?? $index) {
+                            <div class="history-volume-card">
+                              <div class="history-volume-summary">
+                                <strong>{{ volume.quantity }}x</strong>
+                                <span class="history-volume-measurements">
+                                  <span class="volume-label">Comprimento:</span>
+                                  <span>{{ volume.length | number:'1.0-2':'pt-BR' }} m,</span>
+                                  <span class="volume-label">Largura:</span>
+                                  <span>{{ volume.width | number:'1.0-2':'pt-BR' }} m,</span>
+                                  <span class="volume-label">Altura:</span>
+                                  <span>{{ volume.height | number:'1.0-2':'pt-BR' }} m,</span>
+                                  <span class="volume-label">Peso:</span>
+                                  <span>{{ volume.weight | number:'1.0-2':'pt-BR' }} kg</span>
+                                </span>
+                              </div>
+                            </div>
+                          }
                         } @else if (step.step === 'Frete') {
                           <div><span>Transportadora</span><strong>{{ order.carrier || '-' }}</strong></div>
                           <div><span>Valor do frete</span><strong>R$ {{ order.shipment | number:'1.2-2':'pt-BR' }}</strong></div>

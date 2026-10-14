@@ -1,0 +1,62 @@
+<c-modal modalBackNavigation [visible]="visible" backdrop="static" alignment="center" (visibleChange)="!$event && onClose()">
+  <c-modal-header>
+    <h5 cModalTitle>{{ volume ? 'Editar volume' : 'Adicionar volume' }}</h5>
+    <button cButtonClose type="button" (click)="onClose()"></button>
+  </c-modal-header>
+
+  <c-modal-body>
+    <form [formGroup]="form" class="volume-form" (ngSubmit)="onSave()">
+      <div class="volume-field">
+        <label cLabel for="volumeLength">Comprimento</label>
+        <div class="input-group">
+          <input cFormControl id="volumeLength" formControlName="length" type="number" min="0" step="0.01" inputmode="decimal" />
+          <span class="input-group-text">m</span>
+        </div>
+      </div>
+
+      <div class="volume-field">
+        <label cLabel for="volumeWidth">Largura</label>
+        <div class="input-group">
+          <input cFormControl id="volumeWidth" formControlName="width" type="number" min="0" step="0.01" inputmode="decimal" />
+          <span class="input-group-text">m</span>
+        </div>
+      </div>
+
+      <div class="volume-field">
+        <label cLabel for="volumeHeight">Altura</label>
+        <div class="input-group">
+          <input cFormControl id="volumeHeight" formControlName="height" type="number" min="0" step="0.01" inputmode="decimal" />
+          <span class="input-group-text">m</span>
+        </div>
+      </div>
+
+      <div class="volume-field">
+        <label cLabel for="volumeWeight">Peso</label>
+        <div class="input-group">
+          <input cFormControl id="volumeWeight" formControlName="weight" type="number" min="0" step="0.01" inputmode="decimal" />
+          <span class="input-group-text">kg</span>
+        </div>
+      </div>
+
+      <div class="volume-field">
+        <label cLabel for="volumeQuantity">Quantidade</label>
+        <input cFormControl id="volumeQuantity" formControlName="quantity" type="number" min="1" step="1" inputmode="numeric" />
+      </div>
+    </form>
+
+    @if (form.touched && form.invalid) {
+      <small class="text-danger">Preencha todos os campos com valores válidos.</small>
+    }
+  </c-modal-body>
+
+  <c-modal-footer>
+    <button cButton color="secondary" type="button" (click)="onClose()" [disabled]="saving">Cancelar</button>
+    <button cButton color="primary" type="button" (click)="onSave()" [disabled]="saving">
+      @if (saving) {
+        <c-spinner size="sm" aria-hidden="true" />
+      } @else {
+        Salvar
+      }
+    </button>
+  </c-modal-footer>
+</c-modal>

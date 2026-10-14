@@ -178,6 +178,15 @@ app-step-flow-history { display: block; }
             border-radius: 12px;
             background-color: rgba(var(--cui-emphasis-color-rgb), 0.04);
 
+            &.volume-shipping-info {
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+              padding: 0;
+              border-radius: 0;
+              background: transparent;
+            }
+
             div {
               display: flex;
               align-items: baseline;
@@ -192,6 +201,35 @@ app-step-flow-history { display: block; }
 
             strong {
               text-align: left;
+            }
+
+            .history-volume-card {
+              align-items: center;
+              padding: 11px 14px;
+              border: 0;
+              border-radius: 12px;
+              background-color: rgba(var(--cui-emphasis-color-rgb), 0.04);
+            }
+
+            .history-volume-summary {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              gap: 12px;
+              font-size: 13px;
+
+              strong { color: var(--cui-body-color); font-size: inherit; }
+              span { color: var(--cui-body-color); }
+              .volume-label { color: var(--cui-medium-emphasis); }
+            }
+
+            .history-volume-measurements {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              column-gap: 5px;
+              row-gap: 2px;
+              line-height: 1.2;
             }
           }
         }

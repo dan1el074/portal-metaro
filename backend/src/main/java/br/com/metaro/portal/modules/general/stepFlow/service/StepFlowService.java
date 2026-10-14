@@ -189,6 +189,7 @@ public class StepFlowService {
         entity.setCurrentStep(StepType.FINAL_ASSEMBLY);
         entity.setStatus(OrderStatus.IN_PROGRESS);
         entity.setShipment(0.0);
+        entity.setVolumes(new ArrayList<>());
 
         this.orderRepository.save(entity);
         if (!legacy) {
@@ -237,7 +238,7 @@ public class StepFlowService {
         currentStep.setFinishedBy(userService.authenticate());
 
         if (type.equals(StepType.FINAL_ASSEMBLY)) {
-            checkShippingMeasurements(order);
+            checkVolumes(order);
         }
 
         if (type.equals(StepType.SHIPPING)) {
@@ -346,34 +347,52 @@ public class StepFlowService {
             currentStep.getMessages().add(new StepMessage(StringUtils.toMarkdown(dto.getComment()), currentStep, me));
         }
 
-        if (dto.getNewStepId() != null && order.getCurrentStep() != StepType.values()[dto.getNewStepId()]) {
-            boolean isAdmin = me.getAuthorities().stream().anyMatch(a -> a
-                    .getAuthority().equals("ROLE_ADMIN"));
-
-            if (!isAdmin) {
-                throw new ForbiddenException("Apenas administradores podem alterar etapas!");
+        if (dto.getNewStepId() != null) {
+            if (dto.getNewStepId() < 0 || dto.getNewStepId() >= StepType.values().length) {
+                throw new UnprocessableEntityException("Etapa inválida!");
             }
 
-            if (dto.getNewStepId() > order.getCurrentStep().ordinal()) {
-                throw new UnprocessableEntityException("Só é permitido retroceder etapas!");
-            }
+            StepType newStep = StepType.values()[dto.getNewStepId()];
+            if (order.getCurrentStep() != newStep) {
 
-            currentStep.getMessages().add(new StepMessage("*Etapa alterada*: %s -> %s".formatted(order.getCurrentStep()
-                    .getDescription(), StepType.values()[dto.getNewStepId()].getDescription()), currentStep, me));
-            order.setCurrentStep(StepType.values()[dto.getNewStepId()]);
+                boolean isAdmin = me.getAuthorities().stream().anyMatch(a -> a
+                        .getAuthority().equals("ROLE_ADMIN"));
 
-            for (OrderStep step : order.getSteps()) {
-                step.setChecklistPending(false);
-                if (step.getStep().ordinal() < dto.getNewStepId()) {
-                    step.setStatus(StepStatus.DONE);
-                    continue;
-                }
-                if (step.getStep().ordinal() == dto.getNewStepId()) {
-                    step.setStatus(StepStatus.ACTIVE);
-                    continue;
+                if (!isAdmin) {
+                    throw new ForbiddenException("Apenas administradores podem alterar etapas!");
                 }
 
-                step.setStatus(StepStatus.WAITING);
+                currentStep.getMessages().add(new StepMessage("*Etapa alterada*: %s -> %s".formatted(order.getCurrentStep()
+                        .getDescription(), newStep.getDescription()), currentStep, me));
+
+                boolean movingForward = newStep.ordinal() > order.getCurrentStep().ordinal();
+                Instant transitionAt = Instant.now();
+                order.setCurrentStep(newStep);
+
+                for (OrderStep step : order.getSteps()) {
+                    if (step.getStep().ordinal() < dto.getNewStepId()) {
+                        if (movingForward && step.getStatus() != StepStatus.DONE) {
+                            if (step.getStartedAt() == null) {
+                                step.setStartedAt(transitionAt);
+                            }
+                            step.setFinishedAt(transitionAt);
+                            step.setFinishedBy(me);
+                        }
+                        step.setStatus(StepStatus.DONE);
+                        continue;
+                    }
+                    if (step.getStep().ordinal() == dto.getNewStepId()) {
+                        step.setStatus(StepStatus.ACTIVE);
+                        if (movingForward) {
+                            step.setStartedAt(transitionAt);
+                            step.setFinishedAt(null);
+                            step.setFinishedBy(null);
+                        }
+                        continue;
+                    }
+
+                    step.setStatus(StepStatus.WAITING);
+                }
             }
         }
 
@@ -381,7 +400,6 @@ public class StepFlowService {
             case FINAL_ASSEMBLY -> {
                 proccessImage(dto, currentStep);
                 checkQuantity(dto, order);
-                updateShippingMeasurements(dto, order);
             }
             case PCP -> checkCancelled(dto, order);
             case FREIGHT -> {
@@ -443,25 +461,9 @@ public class StepFlowService {
         order.setStatus(OrderStatus.CANCELLED);
     }
 
-    private void updateShippingMeasurements(OrderInputDto dto, Order order) {
-        if (dto.getVolumes() != null && !dto.getVolumes().isBlank()) {
-            try {
-                int volumes = Integer.parseInt(dto.getVolumes());
-                if (volumes < 0) throw new NumberFormatException();
-                order.setVolumes(volumes);
-            } catch (NumberFormatException exception) {
-                throw new UnprocessableEntityException("Volumes deve ser um número inteiro maior ou igual a zero!");
-            }
-        }
-
-        if (dto.getLength() != null && !dto.getLength().isBlank()) order.setLength(parseMeasurement(dto.getLength(), "Comprimento"));
-        if (dto.getWidth() != null && !dto.getWidth().isBlank()) order.setWidth(parseMeasurement(dto.getWidth(), "Largura"));
-        if (dto.getHeight() != null && !dto.getHeight().isBlank()) order.setHeight(parseMeasurement(dto.getHeight(), "Altura"));
-        if (dto.getWeight() != null && !dto.getWeight().isBlank()) order.setWeight(parseMeasurement(dto.getWeight(), "Peso"));
-    }
-
     private BigDecimal parseMeasurement(String value, String fieldName) {
         try {
+            if (value == null || value.isBlank()) throw new NumberFormatException();
             BigDecimal measurement = new BigDecimal(value.replace(',', '.'));
             if (measurement.signum() < 0 || measurement.scale() > 2) throw new NumberFormatException();
             return measurement.setScale(2, RoundingMode.UNNECESSARY);
@@ -470,10 +472,13 @@ public class StepFlowService {
         }
     }
 
-    private void checkShippingMeasurements(Order order) {
-        if (order.getVolumes() == null || order.getLength() == null || order.getWidth() == null
-                || order.getHeight() == null || order.getWeight() == null) {
-            throw new UnprocessableEntityException("Preencha todas as informações de envio antes de avançar!");
+    private void checkVolumes(Order order) {
+        User me = userService.authenticate();
+        boolean isAdmin = me.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+
+        if (!isAdmin && order.getVolumes().isEmpty()) {
+            throw new UnprocessableEntityException("Cadastre ao menos um volume antes de avançar!");
         }
     }
 
@@ -500,6 +505,65 @@ public class StepFlowService {
     public List<OrderItemInputDto> parseItems(String itemsJson) throws IOException {
         if (itemsJson == null || itemsJson.isBlank()) return List.of();
         return objectMapper.readValue(itemsJson, new TypeReference<>() {});
+    }
+
+    @Transactional
+    public OrderVolumeDto createVolume(Long orderId, OrderVolumeInputDto dto) {
+        Order order = getOrderForVolumeChange(orderId);
+        OrderVolume volume = new OrderVolume();
+        volume.setOrder(order);
+        applyVolumeInput(volume, dto);
+        order.addVolume(volume);
+        orderRepository.saveAndFlush(order);
+        return new OrderVolumeDto(volume);
+    }
+
+    @Transactional
+    public OrderVolumeDto updateVolume(Long orderId, Long volumeId, OrderVolumeInputDto dto) {
+        Order order = getOrderForVolumeChange(orderId);
+        OrderVolume volume = order.getVolumes().stream()
+                .filter(current -> current.getId().equals(volumeId))
+                .findFirst()
+                .orElseThrow(ResourceNotFoundException::new);
+
+        applyVolumeInput(volume, dto);
+        orderRepository.save(order);
+        return new OrderVolumeDto(volume);
+    }
+
+    @Transactional
+    public void deleteVolume(Long orderId, Long volumeId) {
+        Order order = getOrderForVolumeChange(orderId);
+        boolean removed = order.getVolumes().removeIf(volume -> volume.getId().equals(volumeId));
+        if (!removed) throw new ResourceNotFoundException();
+        orderRepository.save(order);
+    }
+
+    private Order getOrderForVolumeChange(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow(ResourceNotFoundException::new);
+        User me = userService.authenticate();
+
+        if (!canInteract(order, me)) {
+            throw new ForbiddenException("Usuário não corresponde ao setor competente!");
+        }
+        if (!order.getCurrentStep().equals(StepType.FINAL_ASSEMBLY)) {
+            throw new UnprocessableEntityException("Volumes só podem ser alterados durante a Montagem Final!");
+        }
+        if (!order.getStatus().equals(OrderStatus.IN_PROGRESS)) {
+            throw new UnprocessableEntityException("Não é possível alterar volumes deste pedido!");
+        }
+        return order;
+    }
+
+    private void applyVolumeInput(OrderVolume volume, OrderVolumeInputDto input) {
+        if (input.getQuantity() == null || input.getQuantity() < 1) {
+            throw new UnprocessableEntityException("Quantidade deve ser um número inteiro maior que zero!");
+        }
+        volume.setQuantity(input.getQuantity());
+        volume.setLength(parseMeasurement(input.getLength(), "Comprimento"));
+        volume.setWidth(parseMeasurement(input.getWidth(), "Largura"));
+        volume.setHeight(parseMeasurement(input.getHeight(), "Altura"));
+        volume.setWeight(parseMeasurement(input.getWeight(), "Peso"));
     }
 
     public void checkIfHavePictures(Order order) {
