@@ -189,13 +189,19 @@ export function recordTitle(record: Checklist, flow: Flow): string {
   };
   template.sections.forEach((section, sectionIndex) =>
     section.questions.forEach((question, questionIndex) => {
-      values[`%${sectionIndex + 1}.${questionIndex + 1}`] = record.answers[question.id]?.value || '';
+      const field = question.fields[0];
+      if (!field) return;
+      values[`%${sectionIndex + 1}.${questionIndex + 1}`] = record.answers[question.id]?.fields[field.id] || '';
     }),
   );
   const title = template.title
     .replace(/%(?:data|serie|pedido|cliente|item|vendedor|\d+\.\d+)/g, (token) => values[token] || '…')
     .replace(/\{data\}/g, values['%data'])
-    .replace(/\{([^}]+)\}/g, (_, id: string) => record.answers[id]?.value || '…')
+    .replace(/\{([^}]+)\}/g, (_, id: string) => {
+      const question = template.sections.flatMap((section) => section.questions).find((item) => item.id === id);
+      const field = question?.fields[0];
+      return field ? record.answers[id]?.fields[field.id] || '…' : '…';
+    })
     .trim();
   return title || `${template.name} · ${record.id.slice(0, 8)}`;
 }

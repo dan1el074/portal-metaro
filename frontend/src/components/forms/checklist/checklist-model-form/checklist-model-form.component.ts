@@ -63,8 +63,12 @@ export class ChecklistModelFormComponent {
     }
     this.model.sections.forEach((section, sectionIndex) =>
       section.questions.forEach((question, questionIndex) => {
+        const field = question.fields[0];
+        if (!field) return;
         const number = `${sectionIndex + 1}.${questionIndex + 1}`;
-        variables.push({ key: `%${number}`, label: `Resposta de: ${ question.label || 'Item sem nome'}.` });
+        const questionLabel = question.label || 'Item sem nome';
+        const fieldLabel = field.label || 'Campo adicional sem nome';
+        variables.push({ key: `%${number}`, label: `${questionLabel} — resposta de: ${fieldLabel}.` });
       }),
     );
     return variables;

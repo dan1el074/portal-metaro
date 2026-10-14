@@ -22,7 +22,7 @@ input:focus, select:focus, textarea:focus { border-color: #6f9dd9; box-shadow: 0
 .title-formula-help[open] summary app-checklist-icon { transform: rotate(180deg); }
 .title-formula-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; }
 .title-formula-content > div { display: flex; min-width: 0; align-items: center; gap: 8px; font-size: 13px; }
-.title-formula-content code { min-width: 30px; color: var(--cui-primary); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.title-formula-content code { min-width: 30px; flex: 0 0 auto; color: var(--cui-primary); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .title-formula-content span { min-width: 0; }
 .title-formula-content small { grid-column: 1 / -1; margin-top: 4px; color: var(--cui-secondary-color); font-size: 12px; }
 .check-line { display: flex !important; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid var(--cui-border-color); border-radius: 6px; color: var(--cui-body-color) !important; font-size: 13px !important; }
