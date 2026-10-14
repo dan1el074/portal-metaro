@@ -66,48 +66,52 @@
       <form cForm [formGroup]="form" (ngSubmit)="onSubmit()">
         @if (order.currentStep == "Montagem Final") {
           <div class="mb-3">
-            <label class="custom-label">Informações de envio</label>
-            <div class="shipping-measurements">
-              <div>
-                <label cLabel for="volumes">Volumes</label>
-                <div class="input-group field-with-unit">
-                  <input cFormControl formControlName="volumes" id="volumes" type="number" min="0" step="1" inputmode="numeric" placeholder="0" />
-                  <span class="input-group-text unit-tooltip" data-tooltip="Unidade">un</span>
+            <label class="custom-label">Informação de volumes</label>
+
+            <div class="volume-list">
+              @for (volume of order.volumes; track volume.id ?? $index; let i = $index) {
+                <div class="volume-card">
+                  <div class="volume-summary" aria-label="Resumo do volume">
+                    <strong>{{ volume.quantity }}x</strong>
+                    <span class="volume-measurements">
+                      <span class="volume-label">Comprimento:</span>
+                      <span>{{ volume.length | number:'1.0-2':'pt-BR' }} m,</span>
+                      <span class="volume-label">Largura:</span>
+                      <span>{{ volume.width | number:'1.0-2':'pt-BR' }} m,</span>
+                      <span class="volume-label">Altura:</span>
+                      <span>{{ volume.height | number:'1.0-2':'pt-BR' }} m,</span>
+                      <span class="volume-label">Peso:</span>
+                      <span>{{ volume.weight | number:'1.0-2':'pt-BR' }} kg</span>
+                    </span>
+                  </div>
+
+                  <div class="volume-actions">
+                    <button type="button" class="volume-action edit" (click)="openEditVolumeModal(volume, i)" [disabled]="volumeMutationLoading" aria-label="Editar volume">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>
+                      </svg>
+                    </button>
+                    <button type="button" class="volume-action delete" (click)="deleteVolume(i)" [disabled]="volumeMutationLoading" aria-label="Excluir volume">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label cLabel for="length">Comprimento</label>
-                <div class="input-group field-with-unit">
-                  <input cFormControl formControlName="length" id="length" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
-                  <span class="input-group-text unit-tooltip" data-tooltip="Metro">m</span>
-                </div>
-              </div>
-              <div>
-                <label cLabel for="width">Largura</label>
-                <div class="input-group field-with-unit">
-                  <input cFormControl formControlName="width" id="width" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
-                  <span class="input-group-text unit-tooltip" data-tooltip="Metro">m</span>
-                </div>
-              </div>
-              <div>
-                <label cLabel for="height">Altura</label>
-                <div class="input-group field-with-unit">
-                  <input cFormControl formControlName="height" id="height" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
-                  <span class="input-group-text unit-tooltip" data-tooltip="Metro">m</span>
-                </div>
-              </div>
-              <div>
-                <label cLabel for="weight">Peso</label>
-                <div class="input-group field-with-unit">
-                  <input cFormControl formControlName="weight" id="weight" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
-                  <span class="input-group-text unit-tooltip" data-tooltip="Quilograma">kg</span>
-                </div>
-              </div>
+              } @empty {
+                <div class="volume-empty">Nenhum volume cadastrado.</div>
+              }
             </div>
-            @if (shippingValidationForNextStep && hasInvalidShippingMeasurements()) {
-              <small class="shipping-validation-error">Preencha todos os campos com valores válidos antes de avançar.</small>
-            } @else if (form.get('volumes')?.touched && form.get('volumes')?.invalid || form.get('length')?.touched && form.get('length')?.invalid || form.get('width')?.touched && form.get('width')?.invalid || form.get('height')?.touched && form.get('height')?.invalid || form.get('weight')?.touched && form.get('weight')?.invalid) {
-              <small class="shipping-validation-error">Informe valores válidos.</small>
+
+            <button cButton color="primary" type="button" class="add-volume-button" (click)="openAddVolumeModal()" [disabled]="volumeMutationLoading">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Adicionar volume
+            </button>
+
+            @if (shippingValidationForNextStep && !isAdmin && order.volumes.length === 0) {
+              <small class="shipping-validation-error">Cadastre ao menos um volume antes de avançar.</small>
             }
           </div>
 
@@ -157,6 +161,7 @@
               <span class="input-group-text">R$</span>
               <input cFormControl appCurrencyMask formControlName="shippment" id="shippment" type="text" inputmode="decimal" placeholder="0,00" class="custom-input" />
             </div>
+            <small class="freight-volume-hint">Considerar {{ totalVolumes }} volumes.</small>
           </div>
         }
 
@@ -195,7 +200,7 @@
           </div>
         }
 
-        @if (isAdmin && order.currentStep != "Montagem Final") {
+        @if (isAdmin) {
           <div class="mb-3">
             <label cLabel for="setStage" class="custom-label">Escolher etapa</label>
             <select cSelect id="setStage" [formControl]="adminStepControl">
@@ -219,7 +224,7 @@
             </button>
           }
 
-          <button cButton color="primary" type="submit" class="sofd-action-btn">
+          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="saveLoading || volumeMutationLoading">
             @if (!saveLoading) {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="save-icon">
                 <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
@@ -262,7 +267,7 @@
         color="primary"
         class="sofd-action-btn"
         (click)="onNextStep()"
-        [disabled]="nextStepLoading"
+        [disabled]="nextStepLoading || volumeMutationLoading"
         [attr.aria-busy]="nextStepLoading"
       >
         @if (nextStepLoading) {
@@ -291,6 +296,13 @@
 <app-cancel-step-flow-modal [visible]="showCancelModal" [orderNumber]="order ? order.number : 0 " (close)="toggleCancelModel(false)" (cancelTask)="onCancel($event)"></app-cancel-step-flow-modal>
 <app-video-modal [visible]="showVideoModal" [video]="selectedVideo" (close)="onCloseVideoModal()"></app-video-modal>
 <app-quantity-step-flow-modal [visible]="showEditQuantityModal" [item]="editingItem" (close)="onCloseEditQuantityModal()" (save)="onSaveEditQuantity($event)"></app-quantity-step-flow-modal>
+<app-volume-step-flow-modal
+  [visible]="showVolumeModal"
+  [volume]="editingVolume"
+  [saving]="volumeMutationLoading"
+  (close)="closeVolumeModal()"
+  (save)="saveVolume($event)"
+></app-volume-step-flow-modal>
 <app-delete-step-flow-media-modal
   [visible]="mediaToDelete !== null"
   [media]="mediaToDelete"

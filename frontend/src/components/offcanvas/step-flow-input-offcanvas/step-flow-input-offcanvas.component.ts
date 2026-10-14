@@ -14,12 +14,13 @@ import { CurrencyMaskDirective } from './../../../app/directive/currency-mask.di
 import { StepFlowVideosService } from './../../../app/services/step-flow-videos.service';
 import { BackNavigationService } from '../../../app/services/back-navigation.service';
 import { StepFlowService } from '../../../app/services/step-flow.service';
-import { Step, StepFlowOrder, StepFlowOrderItem, StepFlowVideo, UploadingVideo, UploadedFile } from '../../../app/interface/step-flow.interface';
+import { Step, StepFlowOrder, StepFlowOrderItem, StepFlowVideo, StepFlowVolume, UploadingVideo, UploadedFile } from '../../../app/interface/step-flow.interface';
 import { StepFlowImage } from '../../../app/interface/image.interface';
 import { EditableItem, QuantityStepFlowModalComponent } from '../../modal/step-flow/quantity-step-flow-modal/quantity-step-flow-modal.component';
 import { StepFlowHistoryComponent } from './history/step-flow-history.component';
 import { StepFlowEditableMediaComponent } from './editable-media/step-flow-editable-media.component';
 import { StepFlowUploadComponent } from './upload/step-flow-upload.component';
+import { VolumeStepFlowModalComponent } from '../../modal/step-flow/volume-step-flow-modal/volume-step-flow-modal.component';
 
 @Component({
   selector: 'app-step-flow-input-offcanvas',
@@ -41,7 +42,8 @@ import { StepFlowUploadComponent } from './upload/step-flow-upload.component';
     StepFlowUploadComponent,
     QuantityStepFlowModalComponent,
     DeleteStepFlowMediaModalComponent,
-    UnsavedChangesStepFlowModalComponent
+    UnsavedChangesStepFlowModalComponent,
+    VolumeStepFlowModalComponent
   ],
   templateUrl: './step-flow-input-offcanvas.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -70,6 +72,10 @@ export class StepFlowInputOffcanvasComponent {
   protected mediaToDelete: DeletableStepFlowMedia | null = null;
   protected deleteMediaLoading = false;
   protected shippingValidationForNextStep = false;
+  protected showVolumeModal = false;
+  protected editingVolume: StepFlowVolume | null = null;
+  protected editingVolumeIndex: number | null = null;
+  protected volumeMutationLoading = false;
   protected editingFileId: string | null = null;
   protected editingFileName = '';
   protected editingFileExtension = '';
@@ -102,11 +108,6 @@ export class StepFlowInputOffcanvasComponent {
     this.form = this.formBuilder.group({
       carrier: [''],
       shippment: [null],
-      volumes: [null],
-      length: [null],
-      width: [null],
-      height: [null],
-      weight: [null],
       comment: [''],
     });
 
@@ -116,6 +117,10 @@ export class StepFlowInputOffcanvasComponent {
 
   protected get itemsFormControls(): Array<FormGroup> {
     return this.itemsForm.controls as Array<FormGroup>;
+  }
+
+  protected get totalVolumes(): number {
+    return this.order?.volumes.reduce((total, volume) => total + volume.quantity, 0) ?? 0;
   }
 
   public open(id: number): void {
@@ -131,6 +136,7 @@ export class StepFlowInputOffcanvasComponent {
     this.toggleCancelModel(false);
     this.showNextStepConfirmationModal = false;
     this.resetDeleteMediaModal();
+    this.closeVolumeModal();
     this.backNav.unregister();
   }
 
@@ -139,21 +145,18 @@ export class StepFlowInputOffcanvasComponent {
     this.toggleCancelModel(false);
     this.showNextStepConfirmationModal = false;
     this.resetDeleteMediaModal();
+    this.closeVolumeModal();
   }
 
   private resetForm(): void {
     this.form.reset({
       carrier: '',
       shippment: null,
-      volumes: null,
-      length: null,
-      width: null,
-      height: null,
-      weight: null,
       comment: '',
     });
     this.files.set([]);
     this.shippingValidationForNextStep = false;
+    this.closeVolumeModal();
     this.cancelFileNameEdit();
     this.captureFormInitialValue();
   }
@@ -185,29 +188,9 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   private populateStepFields(order: StepFlowOrder): void {
-    const measurementControls = ['volumes', 'length', 'width', 'height', 'weight'];
-
-    measurementControls.forEach(name => {
-      const control = this.form.get(name);
-      if (order.currentStep === 'Montagem Final') {
-        control?.setValidators([
-          Validators.min(0),
-          Validators.pattern(name === 'volumes' ? /^\d+$/ : /^\d+(\.\d{1,2})?$/),
-        ]);
-      } else {
-        control?.clearValidators();
-      }
-      control?.updateValueAndValidity({ emitEvent: false });
-    });
-
     this.form.patchValue({
       carrier: order.currentStep === 'Frete' ? order.carrier ?? '' : '',
       shippment: order.currentStep === 'Frete' ? order.shipment ?? null : null,
-      volumes: order.currentStep === 'Montagem Final' ? order.volumes : null,
-      length: order.currentStep === 'Montagem Final' ? order.length : null,
-      width: order.currentStep === 'Montagem Final' ? order.width : null,
-      height: order.currentStep === 'Montagem Final' ? order.height : null,
-      weight: order.currentStep === 'Montagem Final' ? order.weight : null,
       comment: '',
     });
     this.form.markAsPristine();
@@ -249,7 +232,12 @@ export class StepFlowInputOffcanvasComponent {
 
     let hasQuantityChanges = false;
 
-    if (this.order?.currentStep === 'Montagem Final') {
+    const currentStepId = this.steps.find(step => step.title === this.order?.currentStep)?.id ?? null;
+    const isAdminStageChange = this.isAdmin
+      && this.adminStepControl.dirty
+      && this.adminStepControl.value !== currentStepId;
+
+    if (this.order?.currentStep === 'Montagem Final' && !isAdminStageChange) {
       if (this.itemsForm.invalid) {
         this.itemsForm.markAllAsTouched();
         return;
@@ -330,7 +318,7 @@ export class StepFlowInputOffcanvasComponent {
 
   private buildFormData(): FormData {
     const formData = new FormData();
-    const { carrier, shippment, volumes, length, width, height, weight, comment } = this.form.value;
+    const { carrier, shippment, comment } = this.form.value;
 
     if (this.isAdmin && this.adminStepControl.dirty) {
       const stepId = this.adminStepControl.value;
@@ -347,11 +335,6 @@ export class StepFlowInputOffcanvasComponent {
       }));
 
       formData.append('itemsJson', JSON.stringify(itemsPayload));
-      this.appendIfNotEmpty(formData, 'volumes', volumes);
-      this.appendIfNotEmpty(formData, 'length', length);
-      this.appendIfNotEmpty(formData, 'width', width);
-      this.appendIfNotEmpty(formData, 'height', height);
-      this.appendIfNotEmpty(formData, 'weight', weight);
     }
 
     if (this.order?.currentStep === 'Montagem Final' || this.order?.currentStep === 'Expedição') {
@@ -388,9 +371,9 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onNextStep(): void {
-    if (this.order?.currentStep === 'Montagem Final' && this.hasInvalidShippingMeasurements()) {
+    if (!this.isAdmin && this.order?.currentStep === 'Montagem Final' && this.order.volumes.length === 0) {
       this.shippingValidationForNextStep = true;
-      this.toasterService.error('Preencha todas as informações de envio antes de avançar.');
+      this.toasterService.error('Cadastre ao menos um volume antes de avançar.');
       return;
     }
 
@@ -404,18 +387,6 @@ export class StepFlowInputOffcanvasComponent {
     this.advanceToNextStep();
   }
 
-  protected hasIncompleteShippingMeasurements(): boolean {
-    return ['volumes', 'length', 'width', 'height', 'weight'].some(name => {
-      const value = this.form.get(name)?.value;
-      return value === null || value === undefined || String(value).trim() === '';
-    });
-  }
-
-  protected hasInvalidShippingMeasurements(): boolean {
-    return this.hasIncompleteShippingMeasurements()
-      || ['volumes', 'length', 'width', 'height', 'weight'].some(name => this.form.get(name)?.invalid);
-  }
-
   private hasUnsavedCurrentStepChanges(): boolean {
     return this.getComparableFormValue() !== this.initialCurrentStepFormValue
       || this.haveProducedQuantitiesChanged()
@@ -427,18 +398,87 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   private getComparableFormValue(): string {
-    const { carrier, shippment, volumes, length, width, height, weight, comment } = this.form.getRawValue();
+    const { carrier, shippment, comment } = this.form.getRawValue();
 
     return JSON.stringify({
       carrier: this.normalizeComparableValue(carrier),
       shippment: this.normalizeComparableValue(shippment),
-      volumes: this.normalizeComparableValue(volumes),
-      length: this.normalizeComparableValue(length),
-      width: this.normalizeComparableValue(width),
-      height: this.normalizeComparableValue(height),
-      weight: this.normalizeComparableValue(weight),
       comment: this.normalizeComparableValue(comment),
     });
+  }
+
+  protected openAddVolumeModal(): void {
+    this.editingVolume = null;
+    this.editingVolumeIndex = null;
+    this.showVolumeModal = true;
+  }
+
+  protected openEditVolumeModal(volume: StepFlowVolume, index: number): void {
+    this.editingVolume = { ...volume };
+    this.editingVolumeIndex = index;
+    this.showVolumeModal = true;
+  }
+
+  protected closeVolumeModal(): void {
+    if (this.volumeMutationLoading) return;
+    this.showVolumeModal = false;
+    this.editingVolume = null;
+    this.editingVolumeIndex = null;
+  }
+
+  protected saveVolume(volume: StepFlowVolume): void {
+    if (!this.order || this.volumeMutationLoading) return;
+
+    this.volumeMutationLoading = true;
+    const request = volume.id === null
+      ? this.stepFlowService.createVolume(this.order.id, volume)
+      : this.stepFlowService.updateVolume(this.order.id, volume);
+
+    request.pipe(finalize(() => {
+      this.volumeMutationLoading = false;
+      this.cdf.detectChanges();
+    })).subscribe({
+      next: persistedVolume => {
+        if (!this.order) return;
+        const volumes = [...this.order.volumes];
+        if (this.editingVolumeIndex === null) {
+          volumes.push(persistedVolume);
+        } else {
+          volumes[this.editingVolumeIndex] = persistedVolume;
+        }
+        this.order = { ...this.order, volumes };
+        this.shippingValidationForNextStep = false;
+        this.showVolumeModal = false;
+        this.editingVolume = null;
+        this.editingVolumeIndex = null;
+        this.toasterService.success('Volume salvo com sucesso.');
+      },
+      error: error => this.toasterService.error(error.error?.error ?? 'Erro ao salvar volume.'),
+    });
+  }
+
+  protected deleteVolume(index: number): void {
+    if (!this.order || this.volumeMutationLoading) return;
+    const volume = this.order.volumes[index];
+    if (volume.id === null) return;
+
+    this.volumeMutationLoading = true;
+    this.stepFlowService.deleteVolume(this.order.id, volume.id)
+      .pipe(finalize(() => {
+        this.volumeMutationLoading = false;
+        this.cdf.detectChanges();
+      }))
+      .subscribe({
+        next: () => {
+          if (!this.order) return;
+          this.order = {
+            ...this.order,
+            volumes: this.order.volumes.filter(current => current.id !== volume.id),
+          };
+          this.toasterService.success('Volume excluído com sucesso.');
+        },
+        error: error => this.toasterService.error(error.error?.error ?? 'Erro ao excluir volume.'),
+      });
   }
 
   private normalizeComparableValue(value: unknown): unknown {
