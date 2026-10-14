@@ -368,6 +368,103 @@
       color: var(--cui-danger);
     }
 
+    .freight-volume-hint {
+      display: block;
+      margin-top: 5px;
+      color: #155dfb;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .add-volume-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      height: 34px;
+      margin-top: 8px;
+      margin-left: auto;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+
+      svg { width: 15px; height: 15px; }
+    }
+
+    .volume-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .volume-card {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .volume-summary {
+          display: flex;
+          flex: 1;
+          min-width: 0;
+          align-items: center;
+          gap: 12px;
+          padding: 11px 14px;
+          border: 1px solid var(--cui-border-color);
+          border-radius: var(--cui-border-radius);
+          font-size: 13px;
+
+          > strong {
+            flex-shrink: 0;
+            color: var(--cui-body-color);
+            font-size: 13px;
+          }
+        }
+
+        .volume-measurements {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          column-gap: 5px;
+          row-gap: 2px;
+          color: var(--cui-body-color);
+          line-height: 1.2;
+
+          .volume-label {
+            color: var(--cui-medium-emphasis);
+          }
+        }
+
+        .volume-actions {
+          display: flex;
+          align-items: center;
+        }
+
+        .volume-action {
+          display: grid;
+          width: 34px;
+          height: 34px;
+          padding: 0;
+          border: 0;
+          border-radius: 9px;
+          background: transparent;
+          color: var(--cui-medium-emphasis);
+          place-items: center;
+
+          svg { width: 17px; height: 17px; }
+          &.edit:hover { color: #155dfb; background: rgba(21, 93, 251, .08); }
+          &.delete:hover { color: var(--cui-danger); background: rgba(229, 83, 83, .08); }
+        }
+      }
+
+      .volume-empty {
+        padding: 18px;
+        border: 1px dashed var(--cui-border-color);
+        border-radius: var(--cui-border-radius);
+        color: var(--cui-medium-emphasis);
+        font-size: 13px;
+        text-align: center;
+      }
+    }
+
     .items-container {
       display: flex;
       flex-direction: column;

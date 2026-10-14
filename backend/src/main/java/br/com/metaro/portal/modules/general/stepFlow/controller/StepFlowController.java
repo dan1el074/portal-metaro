@@ -3,6 +3,8 @@ package br.com.metaro.portal.modules.general.stepFlow.controller;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderMinDto;
+import br.com.metaro.portal.modules.general.stepFlow.dto.OrderVolumeDto;
+import br.com.metaro.portal.modules.general.stepFlow.dto.OrderVolumeInputDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.StepFlowInfoDto;
 import br.com.metaro.portal.modules.general.stepFlow.service.StepFlowService;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
@@ -76,6 +78,35 @@ public class StepFlowController {
         dto.setItems(stepFlowService.parseItems(itemsJson));
         OrderDto newDto = stepFlowService.update(id, dto);
         return ResponseEntity.ok(newDto);
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @PostMapping(value = "/{orderId}/volumes")
+    public ResponseEntity<OrderVolumeDto> createVolume(
+            @PathVariable Long orderId,
+            @RequestBody OrderVolumeInputDto dto
+    ) {
+        return ResponseEntity.ok(stepFlowService.createVolume(orderId, dto));
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @PutMapping(value = "/{orderId}/volumes/{volumeId}")
+    public ResponseEntity<OrderVolumeDto> updateVolume(
+            @PathVariable Long orderId,
+            @PathVariable Long volumeId,
+            @RequestBody OrderVolumeInputDto dto
+    ) {
+        return ResponseEntity.ok(stepFlowService.updateVolume(orderId, volumeId, dto));
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @DeleteMapping(value = "/{orderId}/volumes/{volumeId}")
+    public ResponseEntity<Void> deleteVolume(
+            @PathVariable Long orderId,
+            @PathVariable Long volumeId
+    ) {
+        stepFlowService.deleteVolume(orderId, volumeId);
+        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")

@@ -70,6 +70,15 @@ export interface StepFlowOrderItem {
   total: number;
 }
 
+export interface StepFlowVolume {
+  id: number | null;
+  quantity: number;
+  length: number;
+  width: number;
+  height: number;
+  weight: number;
+}
+
 export interface StepFlowOrder {
   id: number;
   number: number;
@@ -88,11 +97,7 @@ export interface StepFlowOrder {
   discount: number;
   shipment: number;
   carrier: string;
-  volumes: number | null;
-  length: number | null;
-  width: number | null;
-  height: number | null;
-  weight: number | null;
+  volumes: Array<StepFlowVolume>;
   total: number;
   pictures: Array<StepFlowImage>;
   videos: Array<StepFlowVideo>;
