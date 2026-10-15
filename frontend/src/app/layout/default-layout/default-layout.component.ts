@@ -20,6 +20,7 @@ let birthdayConfettiPresetLoader: Promise<void> | undefined;
 interface BirthdayConfettiStorage {
   user: string;
   shown: 'true' | 'false';
+  date: string;
 }
 
 @Component({
@@ -52,6 +53,7 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
   public navItems!: Array<INavData>;
   private birthdayConfettiCleanupTimer?: ReturnType<typeof setTimeout>;
   private birthdayConfettiContainer?: Container;
+  private birthdayConfettiFrame?: number;
   private birthdayConfettiLaunchTimers: Array<ReturnType<typeof setTimeout>> = [];
   private birthdayConfettiTimer?: ReturnType<typeof setTimeout>;
   private readonly birthdayConfettiStorageKey = 'birthday-confetti';
@@ -98,6 +100,7 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
   public ngOnDestroy(): void {
     if (this.birthdayConfettiTimer) clearTimeout(this.birthdayConfettiTimer);
     if (this.birthdayConfettiCleanupTimer) clearTimeout(this.birthdayConfettiCleanupTimer);
+    if (this.birthdayConfettiFrame) cancelAnimationFrame(this.birthdayConfettiFrame);
     this.clearBirthdayConfettiLaunchTimers();
     this.birthdayConfettiContainer?.destroy();
   }
@@ -206,15 +209,25 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
   }
 
   private scheduleBirthdayConfetti(delay = 0): void {
+    if (!this.isDesktopViewport()) return;
     if (!this.shouldShowBirthdayConfetti()) return;
 
-    this.saveBirthdayConfettiStorage('true');
+    if (this.birthdayConfettiTimer) clearTimeout(this.birthdayConfettiTimer);
 
     this.birthdayConfettiTimer = setTimeout(() => {
+      if (!this.isDesktopViewport()) return;
+
       this.showBirthdayConfetti = true;
       this.cdr.detectChanges();
-      void this.startBirthdayConfettiAnimation();
+      this.birthdayConfettiFrame = requestAnimationFrame(() => {
+        this.birthdayConfettiFrame = undefined;
+        void this.startBirthdayConfettiAnimation();
+      });
     }, delay);
+  }
+
+  private isDesktopViewport(): boolean {
+    return window.matchMedia('(min-width: 992px)').matches;
   }
 
   private shouldShowBirthdayConfetti(): boolean {
@@ -232,7 +245,10 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
     }
 
     const stored = this.getBirthdayConfettiStorage();
-    return stored?.user !== this.user.username || stored.shown !== 'true';
+    const todayValue = this.getBirthdayConfettiDate(today);
+    return stored?.user !== this.user.username
+      || stored.shown !== 'true'
+      || stored.date !== todayValue;
   }
 
   private getBirthdayConfettiStorage(): BirthdayConfettiStorage | null {
@@ -247,18 +263,31 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
   }
 
   private saveBirthdayConfettiStorage(shown: 'true' | 'false'): void {
-    const value: BirthdayConfettiStorage = { user: this.user.username, shown };
+    const value: BirthdayConfettiStorage = {
+      user: this.user.username,
+      shown,
+      date: this.getBirthdayConfettiDate(new Date()),
+    };
     localStorage.setItem(this.birthdayConfettiStorageKey, JSON.stringify(value));
+  }
+
+  private getBirthdayConfettiDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}/${month}/${day}`;
   }
 
   private async startBirthdayConfettiAnimation(): Promise<void> {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.saveBirthdayConfettiStorage('false');
       this.finishBirthdayConfettiAnimation();
       return;
     }
 
     const host = this.birthdayConfettiHost?.nativeElement;
     if (!host) {
+      this.saveBirthdayConfettiStorage('false');
       this.finishBirthdayConfettiAnimation();
       return;
     }
@@ -289,15 +318,24 @@ export class DefaultLayoutComponent implements OnInit, OnDestroy {
     }
 
     this.birthdayConfettiContainer = container;
-    this.fireBirthdayConfettiCannon(container);
+    try {
+      this.fireBirthdayConfettiCannon(container);
+      this.saveBirthdayConfettiStorage('true');
+    } catch {
+      this.saveBirthdayConfettiStorage('false');
+      this.finishBirthdayConfettiAnimation();
+      return;
+    }
     this.birthdayConfettiCleanupTimer = setTimeout(() => this.finishBirthdayConfettiAnimation(), 6000);
   }
 
   private finishBirthdayConfettiAnimation(): void {
     if (this.birthdayConfettiCleanupTimer) clearTimeout(this.birthdayConfettiCleanupTimer);
+    if (this.birthdayConfettiFrame) cancelAnimationFrame(this.birthdayConfettiFrame);
     this.clearBirthdayConfettiLaunchTimers();
     this.birthdayConfettiContainer?.destroy();
     this.birthdayConfettiCleanupTimer = undefined;
+    this.birthdayConfettiFrame = undefined;
     this.birthdayConfettiContainer = undefined;
     this.showBirthdayConfetti = false;
     this.cdr.detectChanges();

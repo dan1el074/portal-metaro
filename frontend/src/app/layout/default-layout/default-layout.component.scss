@@ -56,3 +56,9 @@
   height: 100% !important;
   pointer-events: none !important;
 }
+
+@media (max-width: 991.98px) {
+  .birthday-confetti {
+    display: none;
+  }
+}
