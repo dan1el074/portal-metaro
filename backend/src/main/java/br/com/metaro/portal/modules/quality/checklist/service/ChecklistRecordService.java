@@ -542,9 +542,7 @@ public class ChecklistRecordService {
     private void validateProblem(ChecklistProblemDto problem, Set<String> items, Set<String> defects) {
         requireValue(problem.getId(), "É necessário informar o ID do problema.");
         requireValue(problem.getItem(), "É necessário informar o tipo de item do problema.");
-        requireValue(problem.getCode(), "É necessário informar o código do item do problema.");
         requireValue(problem.getDefect(), "É necessário informar o defeito do problema.");
-        requireValue(problem.getDescription(), "É necessário informar a descrição do problema.");
         requireValue(problem.getDepartment(), "É necessário informar o departamento do problema.");
         if (!items.contains(normalize(problem.getItem())) || !defects.contains(normalize(problem.getDefect()))) {
             throw new UnprocessableEntityException("O problema utiliza um item de catálogo inativo ou desconhecido.");

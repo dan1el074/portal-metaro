@@ -28,9 +28,9 @@ export const emptyChecklistSection = (production: boolean): Section => ({ id: ch
 export const emptyChecklistCategory = (): Category => ({ id: checklistId(), name: '', integration: 'production', active: true, reason: '', logo: true, re: '', ref: '', documentTitle: 'Checklist de inspeção da qualidade', clientNokHistory: true, dates: false, departments: true, serial: true, erp: true, fields: [], operators: [] });
 export const defaultChecklistNokFields = (): NokFormField[] => [
   { id: 'nok-item', label: 'Tipo de item', type: 'items', required: true, binding: 'item' },
-  { id: 'nok-code', label: 'Código', type: 'text', required: true, binding: 'code' },
+  { id: 'nok-code', label: 'Código', type: 'text', required: false, binding: 'code' },
   { id: 'nok-defect', label: 'Tipo de defeito', type: 'defects', required: true, binding: 'defect' },
   { id: 'nok-department', label: 'Setor responsável', type: 'departments', required: true, binding: 'department' },
-  { id: 'nok-description', label: 'Complemento', type: 'textarea', required: true, binding: 'description' },
+  { id: 'nok-description', label: 'Complemento', type: 'textarea', required: false, binding: 'description' },
   { id: 'nok-media', label: 'Fotos e vídeos', type: 'files', required: false, binding: 'media' },
 ];

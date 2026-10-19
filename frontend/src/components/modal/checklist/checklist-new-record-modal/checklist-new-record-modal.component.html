@@ -10,7 +10,7 @@
     @if (hasPredecessor) {
       <label class="previous-label">Registro anterior<select cSelect [(ngModel)]="predecessorId"><option value="">{{ needsPredecessor ? 'Selecione o checklist finalizado' : 'Iniciar sem cumprir o requisito' }}</option>@for (record of predecessors; track record.id) { <option [value]="record.id">{{ store.flow(record).serial || store.title(record) }} · {{ record.finished | date:'dd/MM/yyyy HH:mm':'-0300' }}</option> }</select><small>{{ predecessorId ? 'Os dados de identificação serão mantidos a partir do fluxo anterior.' : 'Um novo fluxo será iniciado diretamente neste checklist.' }}</small></label>
     }
-    @if (!predecessorId && (requiresErp || requiresSerial)) {
+    @if (!predecessorId && (requiresErp || showsSerial)) {
       <section class="identification-section">
         <div class="section-heading"><strong>Identificação</strong><small>Essas informações ficarão bloqueadas durante o preenchimento.</small></div>
         <div class="form-grid">
@@ -18,7 +18,7 @@
             <label>Pedido<div class="search-field"><input cFormControl [(ngModel)]="order" (ngModelChange)="orderChanged()" (keyup.enter)="searchOrder()" placeholder="Informe o pedido" /><button cButton type="button" color="secondary" variant="outline" [disabled]="!order.trim() || loadingOrder" (click)="searchOrder()">{{ loadingOrder ? 'Consultando...' : 'Buscar' }}</button></div>@if (orderError) { <small class="text-danger">{{ orderError }}</small> }</label>
             <label>Item<select cSelect [(ngModel)]="item" [disabled]="!erpOrder"><option value="">Selecione</option>@for (orderItem of erpOrder?.items ?? []; track orderItem.code) { <option [value]="formatItem(orderItem)">{{ formatItem(orderItem) }}</option> }</select></label>
           }
-          @if (requiresSerial) { <label>Número de série<input cFormControl [(ngModel)]="serial" /></label> }
+          @if (showsSerial) { <label>Número de série{{ requiresSerial ? '' : ' (opcional)' }}<input cFormControl [(ngModel)]="serial" /></label> }
         </div>
         @if (erpOrder) { <div class="erp-summary"><span>Cliente</span><strong>{{ erpOrder.client }}</strong><span>Vendedor</span><strong>{{ erpOrder.salesperson || '—' }}</strong></div> }
       </section>
