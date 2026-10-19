@@ -103,10 +103,14 @@ export class ChecklistNewRecordModalComponent {
     return !this.predecessorId && !!this.category?.erp;
   }
 
+  protected get showsSerial(): boolean {
+    return !this.predecessorId && !!this.category?.serial;
+  }
+
   protected get requiresSerial(): boolean {
     const template = this.templates.find((item) => item.id === this.templateId);
-    if (!template || this.predecessorId) return false;
-    return !!this.category?.serial && !isProductionKit({
+    if (!template || !this.showsSerial) return false;
+    return !isProductionKit({
       template,
       category: this.category!,
       equipment: '',

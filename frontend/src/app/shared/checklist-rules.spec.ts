@@ -1,5 +1,6 @@
 import { Checklist, Flow, Template } from '../interface/checklist.interface';
 import { recordTitle, validateRecord } from './checklist-rules';
+import { defaultChecklistNokFields } from './checklist-factory';
 
 describe('checklist rules', () => {
   it('usa a resposta do primeiro campo adicional na variável da pergunta', () => {
@@ -83,6 +84,13 @@ describe('checklist rules', () => {
     const equipment = validRecord('EQUIPAMENTO');
     equipment.flow.serial = '';
     expect(validateRecord(equipment.record, equipment.flow)).toBe('Informe o número de série.');
+  });
+
+  it('mantém código e complemento do NOK como opcionais', () => {
+    const fields = defaultChecklistNokFields();
+
+    expect(fields.find((field) => field.binding === 'code')?.required).toBeFalse();
+    expect(fields.find((field) => field.binding === 'description')?.required).toBeFalse();
   });
 });
 
