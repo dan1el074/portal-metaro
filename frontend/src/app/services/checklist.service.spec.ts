@@ -50,6 +50,7 @@ describe('ChecklistService', () => {
       signature: true,
       predecessorId: '',
       automatic: false,
+      optionalPredecessor: false,
       version: 0,
     };
 

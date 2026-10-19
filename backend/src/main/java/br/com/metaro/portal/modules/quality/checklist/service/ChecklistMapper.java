@@ -65,6 +65,7 @@ public class ChecklistMapper {
         dto.setSignature(entity.isSignature());
         dto.setPredecessorId(entity.getPredecessor() == null ? null : entity.getPredecessor().getId());
         dto.setAutomatic(entity.isAutomatic());
+        dto.setOptionalPredecessor(entity.isOptionalPredecessor());
         dto.setVersion(entity.getVersion());
         dto.setDisplayOrder(entity.getDisplayOrder());
         return dto;

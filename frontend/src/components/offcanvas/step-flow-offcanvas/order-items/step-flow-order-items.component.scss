@@ -100,6 +100,40 @@ app-step-flow-order-items {
           }
         }
 
+        .volume-info-table {
+          tbody td {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+          }
+
+          .volume-quantity {
+            flex-shrink: 0;
+            color: var(--cui-body-color);
+            font-size: inherit;
+          }
+
+          .volume-details {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            column-gap: 5px;
+            row-gap: 2px;
+            color: var(--cui-body-color);
+            line-height: 1.2;
+
+            .volume-label {
+              color: var(--cui-medium-emphasis);
+            }
+          }
+
+          .empty-volumes {
+            color: var(--cui-medium-emphasis);
+            justify-content: center;
+          }
+        }
+
         &.sof-table-scroll {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;

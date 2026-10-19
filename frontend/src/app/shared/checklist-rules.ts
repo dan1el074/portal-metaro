@@ -145,10 +145,8 @@ export function setNokFieldValue(problem: Problem, field: NokFormField, value: s
 
 export function validateRecord(record: Checklist, flow: Flow, nokFields = defaultChecklistNokFields()): string | null {
   const snap = flow.plan.find((s) => s.template.id === record.templateId)!;
-  if (snap.category.serial && !flow.serial.trim())
+  if (snap.category.serial && !isProductionKit(snap) && !flow.serial.trim())
     return 'Informe o número de série.';
-  if (snap.category.erp && (!flow.order || !flow.item || !flow.clientId))
-    return 'Selecione o pedido e o item na consulta ao ERP.';
   if (snap.category.departments && !record.departments.length)
     return 'Selecione pelo menos um setor.';
   if (snap.category.fields.some((f) => !record.fields[f.id]?.trim()))
@@ -175,6 +173,11 @@ export function validateRecord(record: Checklist, flow: Flow, nokFields = defaul
   return null;
 }
 
+export function isProductionKit(snapshot: Flow['plan'][number]): boolean {
+  return snapshot.category.integration === 'production'
+    && snapshot.template.name.trim().toLocaleUpperCase('pt-BR') === 'KIT';
+}
+
 export function recordTitle(record: Checklist, flow: Flow): string {
   const template = flow.plan.find(
     (s) => s.template.id === record.templateId,
@@ -189,13 +192,19 @@ export function recordTitle(record: Checklist, flow: Flow): string {
   };
   template.sections.forEach((section, sectionIndex) =>
     section.questions.forEach((question, questionIndex) => {
-      values[`%${sectionIndex + 1}.${questionIndex + 1}`] = record.answers[question.id]?.value || '';
+      const field = question.fields[0];
+      if (!field) return;
+      values[`%${sectionIndex + 1}.${questionIndex + 1}`] = record.answers[question.id]?.fields[field.id] || '';
     }),
   );
   const title = template.title
     .replace(/%(?:data|serie|pedido|cliente|item|vendedor|\d+\.\d+)/g, (token) => values[token] || '…')
     .replace(/\{data\}/g, values['%data'])
-    .replace(/\{([^}]+)\}/g, (_, id: string) => record.answers[id]?.value || '…')
+    .replace(/\{([^}]+)\}/g, (_, id: string) => {
+      const question = template.sections.flatMap((section) => section.questions).find((item) => item.id === id);
+      const field = question?.fields[0];
+      return field ? record.answers[id]?.fields[field.id] || '…' : '…';
+    })
     .trim();
   return title || `${template.name} · ${record.id.slice(0, 8)}`;
 }

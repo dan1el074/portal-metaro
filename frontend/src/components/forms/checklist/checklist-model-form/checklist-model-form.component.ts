@@ -63,8 +63,12 @@ export class ChecklistModelFormComponent {
     }
     this.model.sections.forEach((section, sectionIndex) =>
       section.questions.forEach((question, questionIndex) => {
+        const field = question.fields[0];
+        if (!field) return;
         const number = `${sectionIndex + 1}.${questionIndex + 1}`;
-        variables.push({ key: `%${number}`, label: `Resposta de: ${ question.label || 'Item sem nome'}.` });
+        const questionLabel = question.label || 'Item sem nome';
+        const fieldLabel = field.label || 'Campo adicional sem nome';
+        variables.push({ key: `%${number}`, label: `${questionLabel} — resposta de: ${fieldLabel}.` });
       }),
     );
     return variables;
@@ -94,6 +98,7 @@ export class ChecklistModelFormComponent {
     this.model.equipmentId = '';
     this.model.predecessorId = '';
     this.model.automatic = false;
+    this.model.optionalPredecessor = false;
     const production = this.category?.integration === 'production';
     if (production) { this.model.name = ''; this.model.signature = true; }
     this.model.sections.forEach((section) => (section.options = production ? ['OK', 'NOK', 'N/A'] : ['OK', 'N/A']));

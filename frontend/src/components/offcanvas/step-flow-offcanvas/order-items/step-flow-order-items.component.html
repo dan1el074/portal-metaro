@@ -39,7 +39,8 @@
       </table>
     </div>
 
-    <div class="sof-table-container">
+    @if (showMoney) {
+      <div class="sof-table-container">
         <table class="sof-table sof-table-total">
           <thead>
             <tr>
@@ -55,46 +56,50 @@
             </tr>
             <tr>
               <td>
-                <span>Frete</span>
-                @if (showMoney) {
-                  <span><strong>R$ {{ order.shipment | number:'1.2-2':'pt-BR' }}</strong></span>
-                } @else {
-                  <span>-</span>
-                }
-              </td>
-            </tr>
-            <tr>
-              <td>
                 <span>Volumes</span>
-                <span>{{ order.volumes !== null ? order.volumes + ' un' : '-' }}</span>
+                <span>{{ totalVolumes }} un</span>
               </td>
             </tr>
             <tr>
               <td>
-                <span>Comprimento</span>
-                <span>{{ order.length !== null ? (order.length | number:'1.0-2':'pt-BR') + ' m' : '-' }}</span>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <span>Largura</span>
-                <span>{{ order.width !== null ? (order.width | number:'1.0-2':'pt-BR') + ' m' : '-' }}</span>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <span>Altura</span>
-                <span>{{ order.height !== null ? (order.height | number:'1.0-2':'pt-BR') + ' m' : '-' }}</span>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <span>Peso</span>
-                <span>{{ order.weight !== null ? (order.weight | number:'1.0-2':'pt-BR') + ' kg' : '-' }}</span>
+                <span>Frete</span>
+                <span><strong>R$ {{ order.shipment | number:'1.2-2':'pt-BR' }}</strong></span>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    }
+
+    <div class="sof-table-container">
+      <table class="sof-table volume-info-table">
+        <thead>
+          <tr>
+            <th>Informações de Volumes</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (volume of order.volumes; track volume.id ?? $index) {
+            <tr>
+              <td>
+                <strong class="volume-quantity">{{ volume.quantity }}x</strong>
+                <span class="volume-details">
+                  <span class="volume-label">Comprimento:</span>
+                  <span>{{ volume.length | number:'1.0-2':'pt-BR' }} m,</span>
+                  <span class="volume-label">Largura:</span>
+                  <span>{{ volume.width | number:'1.0-2':'pt-BR' }} m,</span>
+                  <span class="volume-label">Altura:</span>
+                  <span>{{ volume.height | number:'1.0-2':'pt-BR' }} m,</span>
+                  <span class="volume-label">Peso:</span>
+                  <span>{{ volume.weight | number:'1.0-2':'pt-BR' }} kg</span>
+                </span>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td class="empty-volumes">Nenhum volume cadastrado.</td></tr>
+          }
+        </tbody>
+      </table>
     </div>
 
     @if (showMoney) {

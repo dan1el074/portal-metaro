@@ -15,6 +15,7 @@ import { ChecklistUpdateOrderModalComponent } from '../../../../../../components
 import { ChecklistEvidenceComponent } from '../../../../../../components/cards/checklist-evidence/checklist-evidence.component';
 import { ChecklistDelegateModalComponent } from '../../../../../../components/modal/checklist/checklist-delegate-modal/checklist-delegate-modal.component';
 import { ChecklistLinkedStepFlow, ChecklistService } from '../../../../../services/checklist.service';
+import { isProductionKit } from '../../../../../shared/checklist-rules';
 
 @Component({
   selector: 'app-checklist-record-detail',
@@ -267,11 +268,11 @@ export class ChecklistRecordDetailComponent implements OnInit {
       message: 'A correção será aplicada a todo o fluxo e registrada no histórico.',
       inputLabel: 'Número de série',
       inputValue: this.flow.serial,
-      required: true,
+      required: !isProductionKit(this.snapshot),
       confirmLabel: 'Salvar série',
     });
 
-    if (!serial || serial.trim() === this.flow.serial) return;
+    if (serial === null || serial.trim() === this.flow.serial) return;
 
     try {
       await this.store.updateSerial(this.record.id, serial);
@@ -318,6 +319,28 @@ export class ChecklistRecordDetailComponent implements OnInit {
     await this.store.cancelFlow(this.record.id, reason);
     this.load();
     this.cdr.detectChanges();
+  }
+
+  protected async skipChecklist(): Promise<void> {
+    const reason = await this.actionModal.open({
+      title: 'Pular checklist',
+      message: 'Este checklist será encerrado sem preenchimento e o fluxo seguirá para a próxima etapa.',
+      inputLabel: 'Justificativa',
+      required: true,
+      danger: true,
+      confirmLabel: 'Pular checklist',
+    });
+
+    if (!reason) return;
+
+    try {
+      await this.store.skipChecklist(this.record.id, reason);
+      this.load();
+      this.toaster.success('Checklist pulado com justificativa.');
+      this.cdr.detectChanges();
+    } catch (error) {
+      this.toaster.warning(error instanceof Error ? error.message : 'Não foi possível pular o checklist.');
+    }
   }
 
   protected orderUpdated(): void {

@@ -183,6 +183,7 @@ public class ChecklistConfigurationService {
         entity.setSectionsJson(mapper.write(dto.getSections()));
         entity.setSignature(category.getIntegration() == ChecklistIntegration.PRODUCTION || dto.isSignature());
         entity.setAutomatic(predecessor != null && dto.isAutomatic());
+        entity.setOptionalPredecessor(predecessor != null && dto.isOptionalPredecessor());
         entity.setDisplayOrder(dto.getDisplayOrder());
         entity.setUpdatedAt(now);
         return mapper.toDto(templateRepository.save(entity));
@@ -197,6 +198,7 @@ public class ChecklistConfigurationService {
         copy.setEquipmentId(null);
         copy.setPredecessorId(null);
         copy.setAutomatic(false);
+        copy.setOptionalPredecessor(false);
         copy.setVersion(0);
         copy.setDisplayOrder(source.getDisplayOrder() + 1);
         return copy;

@@ -7,9 +7,10 @@
       <label>Modelo<select cSelect [(ngModel)]="templateId" (ngModelChange)="templateChanged()"><option value="">Selecione</option>@for (model of templates; track model.id) { <option [value]="model.id">{{ model.name }}</option> }</select></label>
     </div>
 
-    @if (needsPredecessor) {
-      <label class="previous-label">Registro anterior<select cSelect [(ngModel)]="predecessorId"><option value="">Selecione o checklist finalizado</option>@for (record of predecessors; track record.id) { <option [value]="record.id">{{ store.flow(record).serial || store.title(record) }} · {{ record.finished | date:'dd/MM/yyyy HH:mm':'-0300' }}</option> }</select><small>Os dados de identificação serão mantidos a partir do fluxo anterior.</small></label>
-    } @else if (requiresErp || requiresSerial) {
+    @if (hasPredecessor) {
+      <label class="previous-label">Registro anterior<select cSelect [(ngModel)]="predecessorId"><option value="">{{ needsPredecessor ? 'Selecione o checklist finalizado' : 'Iniciar sem cumprir o requisito' }}</option>@for (record of predecessors; track record.id) { <option [value]="record.id">{{ store.flow(record).serial || store.title(record) }} · {{ record.finished | date:'dd/MM/yyyy HH:mm':'-0300' }}</option> }</select><small>{{ predecessorId ? 'Os dados de identificação serão mantidos a partir do fluxo anterior.' : 'Um novo fluxo será iniciado diretamente neste checklist.' }}</small></label>
+    }
+    @if (!predecessorId && (requiresErp || requiresSerial)) {
       <section class="identification-section">
         <div class="section-heading"><strong>Identificação</strong><small>Essas informações ficarão bloqueadas durante o preenchimento.</small></div>
         <div class="form-grid">

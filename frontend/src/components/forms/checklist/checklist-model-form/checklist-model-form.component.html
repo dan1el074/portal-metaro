@@ -51,6 +51,7 @@
             </select>
           </label>
           <label class="check-line automatic-option"><input cFormCheckInput type="checkbox" [(ngModel)]="model.automatic" [disabled]="!model.predecessorId" (ngModelChange)="changed()" /> Gerar automaticamente após concluir o requisito</label>
+          <label class="check-line automatic-option"><input cFormCheckInput type="checkbox" [(ngModel)]="model.optionalPredecessor" [disabled]="!model.predecessorId" (ngModelChange)="changed()" /> Requisito não obrigatório</label>
         </div>
       </div>
     </c-card-body>

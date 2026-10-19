@@ -40,7 +40,7 @@
 
   @if (currentView === 'operator') {
     <c-card class="todo-card"><c-card-body><div class="section-heading"><div><h2>Lista de afazeres <span>{{ todos.length }}</span></h2><p>Checklists disponíveis nas suas categorias.</p></div></div>
-      <div class="todo-grid">@for (record of todos; track record.id) { <button type="button" (click)="openRecord(record.id)"><strong>{{ store.snapshot(record).category.name }}</strong><span>{{ store.title(record) }}</span><small>{{ record.status }} · {{ record.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></button> } @empty { <p class="empty-state">Nenhum checklist pendente.</p> }</div>
+      <div class="todo-grid">@for (record of todos; track record.id) { <button type="button" (click)="openRecord(record.id)"><strong>{{ store.snapshot(record).category.name }}</strong><span>{{ store.title(record) }}</span><small>Pedido: {{ store.flow(record).order || '—' }} · Série: {{ store.flow(record).serial || '—' }}</small><small>{{ record.status }} · {{ record.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></button> } @empty { <p class="empty-state">Nenhum checklist pendente.</p> }</div>
     </c-card-body></c-card>
   }
 

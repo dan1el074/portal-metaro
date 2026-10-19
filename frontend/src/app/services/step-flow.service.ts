@@ -1,5 +1,5 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { AdminDashboard, PagedResult, StepFlowChecklistEquipment, StepFlowData, StepFlowOrder, StepFlowOrderInfo } from './../interface/step-flow.interface';
+import { AdminDashboard, PagedResult, StepFlowChecklistEquipment, StepFlowData, StepFlowOrder, StepFlowOrderInfo, StepFlowVolume } from './../interface/step-flow.interface';
 import { Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -51,6 +51,18 @@ export class StepFlowService {
 
   public nextStep(orderId: number): Observable<void> {
     return this.http.put<void>(this.api + '/' + orderId + '/nextStep', null);
+  }
+
+  public createVolume(orderId: number, volume: StepFlowVolume): Observable<StepFlowVolume> {
+    return this.http.post<StepFlowVolume>(`${this.api}/${orderId}/volumes`, volume);
+  }
+
+  public updateVolume(orderId: number, volume: StepFlowVolume): Observable<StepFlowVolume> {
+    return this.http.put<StepFlowVolume>(`${this.api}/${orderId}/volumes/${volume.id}`, volume);
+  }
+
+  public deleteVolume(orderId: number, volumeId: number): Observable<void> {
+    return this.http.delete<void>(`${this.api}/${orderId}/volumes/${volumeId}`);
   }
 
   public deleteImageById(id: number): Observable<void> {

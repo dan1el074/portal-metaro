@@ -15,11 +15,6 @@ import java.util.List;
 public class OrderInputDto {
     private String carrier;
     private String shippment;
-    private String volumes;
-    private String length;
-    private String width;
-    private String height;
-    private String weight;
     private String comment;
     private String cancelled;
     private Integer newStepId;
