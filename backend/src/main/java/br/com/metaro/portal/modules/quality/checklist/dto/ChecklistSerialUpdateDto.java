@@ -1,6 +1,5 @@
 package br.com.metaro.portal.modules.quality.checklist.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -9,6 +8,5 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class ChecklistSerialUpdateDto {
-    @NotBlank
     private String serial;
 }

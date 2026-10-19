@@ -88,7 +88,7 @@ public class ChecklistRecordService {
         }
 
         ChecklistFlow flow;
-        if (template.getPredecessor() == null) {
+        if (template.getPredecessor() == null || input.getPredecessorRecordId() == null && template.isOptionalPredecessor()) {
             if (input.getPredecessorRecordId() != null) {
                 throw new UnprocessableEntityException("Um modelo raiz não aceita um registro predecessor.");
             }
@@ -255,6 +255,32 @@ public class ChecklistRecordService {
     }
 
     @Transactional
+    public void skipChecklist(Long recordId, ChecklistReasonDto input) {
+        User actor = userService.authenticate();
+        assertAdministrator(actor);
+        ChecklistRecord record = findRecord(recordId);
+        if (!Set.of(ChecklistStatus.DRAFT, ChecklistStatus.IN_PROGRESS, ChecklistStatus.PENDING).contains(record.getStatus())) {
+            throw new UnprocessableEntityException("Somente um checklist ainda não concluído pode ser pulado.");
+        }
+        ChecklistFlow flow = record.getFlow();
+        if (flow.isCancelled()) throw new UnprocessableEntityException("Um fluxo cancelado não pode ser alterado.");
+
+        Map<String, String> skipped = skipped(flow);
+        skipped.put(record.getTemplate().getId().toString(), input.getReason().trim());
+        flow.setSkippedJson(mapper.write(skipped));
+        flow.setUpdatedAt(Instant.now());
+        flowRepository.save(flow);
+
+        record.setStatus(ChecklistStatus.CANCELLED);
+        record.setOwner(null);
+        record.setUpdatedAt(Instant.now());
+        recordRepository.save(record);
+        addAudit(record, actor, "CHECKLIST_SKIPPED", input.getReason().trim());
+        createNextRecordAfterSkip(record, actor);
+        checklistStepFlowService.completeWaitingSteps(flow.getId(), actor);
+    }
+
+    @Transactional
     public void deleteDraft(Long id) throws java.io.IOException {
         User user = userService.authenticate();
         ChecklistRecord record = findRecord(id);
@@ -355,7 +381,11 @@ public class ChecklistRecordService {
         assertAdministrator(actor);
         ChecklistFlow flow = findRecord(recordId).getFlow();
         if (flow.isCancelled()) throw new UnprocessableEntityException("Um fluxo de checklist cancelado não pode ser editado.");
-        String serial = input.getSerial().trim();
+        boolean productionKit = plan(flow).stream().anyMatch(this::isProductionKit);
+        String serial = trim(input.getSerial());
+        if (serial == null && !productionKit) {
+            throw new UnprocessableEntityException("É necessário informar o número de série.");
+        }
         String normalized = normalizeSerial(serial);
         if (flowRepository.existsByNormalizedSerialAndIdNot(normalized, flow.getId())) {
             throw new UnprocessableEntityException("O número de série já pertence a outro fluxo de checklist.");
@@ -373,7 +403,7 @@ public class ChecklistRecordService {
 
     private ChecklistFlow createFlow(ChecklistTemplate root, ChecklistRecordCreateDto input) {
         ChecklistFlow flow = new ChecklistFlow();
-        applyCommercialData(flow, root.getCategory(), input);
+        applyCommercialData(flow, root, input);
         flow.setPlanJson(mapper.write(buildPlan(root)));
         flow.setSkippedJson("{}");
         flow.setCancelled(false);
@@ -445,9 +475,12 @@ public class ChecklistRecordService {
         return record;
     }
 
-    private void applyCommercialData(ChecklistFlow flow, ChecklistCategory category, ChecklistRecordCreateDto input) {
+    private void applyCommercialData(ChecklistFlow flow, ChecklistTemplate template, ChecklistRecordCreateDto input) {
+        ChecklistCategory category = template.getCategory();
         String serial = trim(input.getSerial());
-        if (category.isSerialRequired() && serial == null) throw new UnprocessableEntityException("É necessário informar o número de série.");
+        if (category.isSerialRequired() && !isProductionKit(template) && serial == null) {
+            throw new UnprocessableEntityException("É necessário informar o número de série.");
+        }
         String normalizedSerial = normalizeSerial(serial);
         if (normalizedSerial != null && flowRepository.findByNormalizedSerial(normalizedSerial).isPresent()) {
             throw new UnprocessableEntityException("O número de série já pertence a outro fluxo de checklist.");
@@ -475,12 +508,9 @@ public class ChecklistRecordService {
         Map<String, ChecklistAnswerDto> answers = readAnswers(record);
         Map<String, String> fields = mapper.read(record.getFieldsJson(), new TypeReference<>() {});
         List<String> departments = mapper.read(record.getDepartmentsJson(), new TypeReference<>() {});
-        if (snapshot.getCategory().isSerial() && trim(record.getFlow().getSerialNumber()) == null) {
+        if (snapshot.getCategory().isSerial() && !isProductionKit(snapshot)
+                && trim(record.getFlow().getSerialNumber()) == null) {
             throw new UnprocessableEntityException("É necessário informar o número de série.");
-        }
-        if (snapshot.getCategory().isErp() && (trim(record.getFlow().getOrderNumber()) == null
-                || trim(record.getFlow().getClientId()) == null || trim(record.getFlow().getCommercialItem()) == null)) {
-            throw new UnprocessableEntityException("A identificação do ERP está incompleta.");
         }
         if (snapshot.getCategory().isDepartments() && (departments == null || departments.isEmpty())) {
             throw new UnprocessableEntityException("É necessário informar pelo menos um departamento.");
@@ -547,6 +577,33 @@ public class ChecklistRecordService {
                 recordRepository.save(generated);
                 addAudit(generated, null, "GENERATED", "Gerado automaticamente após a conclusão do predecessor.");
             }
+            return;
+        }
+    }
+
+    private void createNextRecordAfterSkip(ChecklistRecord record, User actor) {
+        ChecklistFlow flow = record.getFlow();
+        List<ChecklistSnapshotDto> plan = plan(flow);
+        Map<String, String> skipped = skipped(flow);
+        int index = indexOf(plan, record.getTemplate().getId());
+        for (int nextIndex = index + 1; nextIndex < plan.size(); nextIndex++) {
+            ChecklistSnapshotDto next = plan.get(nextIndex);
+            Long templateId = next.getTemplate().getId();
+            if (recordRepository.existsByFlowIdAndTemplateId(flow.getId(), templateId)) return;
+            if (skipped.containsKey(templateId.toString())) continue;
+            ChecklistCategory category = categoryRepository.findById(next.getCategory().getId()).orElseThrow(ResourceNotFoundException::new);
+            if (!category.isActive()) {
+                skipped.put(templateId.toString(), Objects.requireNonNullElse(category.getDeactivationReason(), "Categoria inativa"));
+                flow.setSkippedJson(mapper.write(skipped));
+                flow.setUpdatedAt(Instant.now());
+                flowRepository.save(flow);
+                addAudit(record, actor, "CATEGORY_SKIPPED", category.getName() + ": " + skipped.get(templateId.toString()));
+                continue;
+            }
+            ChecklistTemplate template = templateRepository.findById(templateId).orElseThrow(ResourceNotFoundException::new);
+            ChecklistRecord generated = createEmptyRecord(flow, template, actor, true);
+            recordRepository.save(generated);
+            addAudit(generated, actor, "GENERATED", "Gerado após o administrador pular o checklist anterior.");
             return;
         }
     }
@@ -717,6 +774,16 @@ public class ChecklistRecordService {
 
     private String normalizeSerial(String value) {
         return value == null ? null : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isProductionKit(ChecklistTemplate template) {
+        return template.getCategory().getIntegration() == ChecklistIntegration.PRODUCTION
+                && "KIT".equalsIgnoreCase(template.getName().trim());
+    }
+
+    private boolean isProductionKit(ChecklistSnapshotDto snapshot) {
+        return "production".equals(snapshot.getCategory().getIntegration())
+                && "KIT".equalsIgnoreCase(snapshot.getTemplate().getName().trim());
     }
 
     private ErpOrderDto findErpOrder(String orderNumber) {

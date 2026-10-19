@@ -98,6 +98,7 @@ export class ChecklistModelFormComponent {
     this.model.equipmentId = '';
     this.model.predecessorId = '';
     this.model.automatic = false;
+    this.model.optionalPredecessor = false;
     const production = this.category?.integration === 'production';
     if (production) { this.model.name = ''; this.model.signature = true; }
     this.model.sections.forEach((section) => (section.options = production ? ['OK', 'NOK', 'N/A'] : ['OK', 'N/A']));

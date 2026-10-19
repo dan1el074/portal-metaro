@@ -125,6 +125,9 @@ export class ChecklistService {
   cancel(id: string, reason: string): Observable<void> {
     return this.http.put<void>(`${this.api}/records/${id}/cancel`, { reason });
   }
+  skip(id: string, reason: string): Observable<void> {
+    return this.http.put<void>(`${this.api}/records/${id}/skip`, { reason });
+  }
   deleteDraft(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/records/${id}`); }
   updateOrder(id: string, order: string, item: string): Observable<Flow> {
     return this.http.put<Flow>(`${this.api}/records/${id}/order`, { order, item });

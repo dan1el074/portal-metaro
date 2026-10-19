@@ -145,10 +145,8 @@ export function setNokFieldValue(problem: Problem, field: NokFormField, value: s
 
 export function validateRecord(record: Checklist, flow: Flow, nokFields = defaultChecklistNokFields()): string | null {
   const snap = flow.plan.find((s) => s.template.id === record.templateId)!;
-  if (snap.category.serial && !flow.serial.trim())
+  if (snap.category.serial && !isProductionKit(snap) && !flow.serial.trim())
     return 'Informe o número de série.';
-  if (snap.category.erp && (!flow.order || !flow.item || !flow.clientId))
-    return 'Selecione o pedido e o item na consulta ao ERP.';
   if (snap.category.departments && !record.departments.length)
     return 'Selecione pelo menos um setor.';
   if (snap.category.fields.some((f) => !record.fields[f.id]?.trim()))
@@ -173,6 +171,11 @@ export function validateRecord(record: Checklist, flow: Flow, nokFields = defaul
     }
   }
   return null;
+}
+
+export function isProductionKit(snapshot: Flow['plan'][number]): boolean {
+  return snapshot.category.integration === 'production'
+    && snapshot.template.name.trim().toLocaleUpperCase('pt-BR') === 'KIT';
 }
 
 export function recordTitle(record: Checklist, flow: Flow): string {

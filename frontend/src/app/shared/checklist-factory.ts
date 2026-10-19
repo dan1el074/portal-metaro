@@ -31,6 +31,6 @@ export const defaultChecklistNokFields = (): NokFormField[] => [
   { id: 'nok-code', label: 'Código', type: 'text', required: true, binding: 'code' },
   { id: 'nok-defect', label: 'Tipo de defeito', type: 'defects', required: true, binding: 'defect' },
   { id: 'nok-department', label: 'Setor responsável', type: 'departments', required: true, binding: 'department' },
-  { id: 'nok-description', label: 'Não conformidade', type: 'textarea', required: true, binding: 'description' },
+  { id: 'nok-description', label: 'Complemento', type: 'textarea', required: true, binding: 'description' },
   { id: 'nok-media', label: 'Fotos e vídeos', type: 'files', required: false, binding: 'media' },
 ];

@@ -1,5 +1,5 @@
 import { Checklist, Flow, Template } from '../interface/checklist.interface';
-import { recordTitle } from './checklist-rules';
+import { recordTitle, validateRecord } from './checklist-rules';
 
 describe('checklist rules', () => {
   it('usa a resposta do primeiro campo adicional na variável da pergunta', () => {
@@ -25,6 +25,7 @@ describe('checklist rules', () => {
       signature: false,
       predecessorId: '',
       automatic: false,
+      optionalPredecessor: false,
       version: 1,
     } satisfies Template;
     const flow = {
@@ -67,4 +68,46 @@ describe('checklist rules', () => {
 
     expect(recordTitle(record, flow)).toBe('Lote ABC-123');
   });
+
+  it('permite finalizar registros ERP legados sem o identificador interno do cliente', () => {
+    const { record, flow } = validRecord('EQUIPAMENTO');
+    flow.clientId = '';
+    expect(validateRecord(record, flow)).toBeNull();
+  });
+
+  it('permite número de série vazio somente para o equipamento de produção KIT', () => {
+    const kit = validRecord('KIT');
+    kit.flow.serial = '';
+    expect(validateRecord(kit.record, kit.flow)).toBeNull();
+
+    const equipment = validRecord('EQUIPAMENTO');
+    equipment.flow.serial = '';
+    expect(validateRecord(equipment.record, equipment.flow)).toBe('Informe o número de série.');
+  });
 });
+
+function validRecord(name: string): { record: Checklist; flow: Flow } {
+  const template: Template = {
+    id: 'template', categoryId: 'category', name, equipmentId: 'equipment', title: '%data',
+    sections: [], signature: true, predecessorId: '', automatic: false, optionalPredecessor: false, version: 1,
+  };
+  const flow: Flow = {
+    id: 'flow', serial: 'SERIE', order: '123', clientId: 'client', client: 'Cliente', item: 'Item', seller: '',
+    plan: [{
+      template,
+      category: {
+        id: 'category', name: 'Produção', integration: 'production', active: true, reason: '', logo: true,
+        re: '', ref: '', documentTitle: '', clientNokHistory: true, dates: false, departments: false,
+        serial: true, erp: true, fields: [], operators: [],
+      },
+      equipment: name,
+    }],
+    skipped: {}, cancelled: false,
+  };
+  const record: Checklist = {
+    id: 'record', flowId: flow.id, templateId: template.id, creatorId: 1, ownerId: 1, owner: 'Operador',
+    created: '', updated: '', status: 'Rascunho', automatic: false, answers: {}, fields: {}, departments: [],
+    comments: [], logs: [], revisions: [],
+  };
+  return { record, flow };
+}

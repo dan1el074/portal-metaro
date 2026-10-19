@@ -258,6 +258,8 @@ public class ChecklistStepFlowService {
         List<ChecklistSnapshotDto> plan = mapper.read(flow.getPlanJson(), new TypeReference<>() {});
         ChecklistSnapshotDto required = plan.stream().filter(snapshot -> snapshot.getCategory().getId().equals(categoryId)).findFirst().orElse(null);
         if (required == null) return false;
+        Map<String, String> skipped = mapper.read(flow.getSkippedJson(), new TypeReference<>() {});
+        if (skipped.containsKey(required.getTemplate().getId().toString())) return !flow.isCancelled();
         ChecklistRecord record = recordRepository.findByFlowIdAndTemplateId(flow.getId(), required.getTemplate().getId()).orElse(null);
         return !flow.isCancelled() && record != null && record.getStatus() == ChecklistStatus.FINISHED;
     }

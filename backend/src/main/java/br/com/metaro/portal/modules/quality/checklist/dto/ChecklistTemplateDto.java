@@ -25,6 +25,7 @@ public class ChecklistTemplateDto {
     private boolean signature;
     private Long predecessorId;
     private boolean automatic;
+    private boolean optionalPredecessor;
     private int version;
     private int displayOrder;
 }

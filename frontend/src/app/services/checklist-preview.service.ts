@@ -134,6 +134,7 @@ export class ChecklistPreviewService {
     template.categoryId = String(template.categoryId);
     template.equipmentId = template.equipmentId == null ? '' : String(template.equipmentId);
     template.predecessorId = template.predecessorId == null ? '' : String(template.predecessorId);
+    template.optionalPredecessor ??= false;
     migrateTitleFormula(template);
     return template;
   }
@@ -307,7 +308,7 @@ export class ChecklistPreviewService {
       )
         throw new Error('Este fluxo não permite esta inserção manual.');
     } else {
-      if (template.predecessorId)
+      if (template.predecessorId && !template.optionalPredecessor)
         throw new Error('Selecione o registro anterior elegível.');
       const error = validateTemplate(template, this.state());
       if (error) throw new Error(`Modelo precisa de configuração: ${error}`);
@@ -495,7 +496,7 @@ export class ChecklistPreviewService {
     await firstValueFrom(this.api.completeVideo(recordId, info.evidence.id));
   }
   private auditAction(action: string): string {
-    return ({ CREATED: 'Criado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Finalizado', FINISHED_INPUT: 'Preenchimento finalizado', CLAIMED: 'Assumido', DELEGATED: 'Delegado', REOPENED: 'Reaberto', CANCELLED: 'Cancelado', TREATED: 'Tratado', PROBLEM_TREATED: 'Problema tratado', TREATMENT_REVERSED: 'Tratamento revertido', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', GENERATED: 'Gerado automaticamente' } as Record<string, string>)[action] ?? action;
+    return ({ CREATED: 'Criado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Finalizado', FINISHED_INPUT: 'Preenchimento finalizado', CLAIMED: 'Assumido', DELEGATED: 'Delegado', REOPENED: 'Reaberto', CANCELLED: 'Cancelado', TREATED: 'Tratado', PROBLEM_TREATED: 'Problema tratado', TREATMENT_REVERSED: 'Tratamento revertido', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist pulado', GENERATED: 'Gerado automaticamente' } as Record<string, string>)[action] ?? action;
   }
   private nextSnapshot(flow: Flow, templateId: string) {
     let index = flow.plan.findIndex((s) => s.template.id === templateId) + 1;
@@ -647,6 +648,12 @@ export class ChecklistPreviewService {
 
   async cancelFlow(recordId: string, reason: string): Promise<void> {
     await firstValueFrom(this.api.cancel(recordId, reason));
+    await this.load(true);
+  }
+
+  async skipChecklist(recordId: string, reason: string): Promise<void> {
+    this.requireAdmin();
+    await firstValueFrom(this.api.skip(recordId, reason));
     await this.load(true);
   }
 
