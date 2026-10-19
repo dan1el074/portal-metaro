@@ -1,5 +1,5 @@
 <c-modal size="xl" [visible]="visible" (visibleChange)="visible=$event" modalBackNavigation backdrop="static" [keyboard]="false"><c-modal-header><h5 cModalTitle>Descrever não conformidade</h5><button cButtonClose (click)="close()" cTooltip="Fechar" cTooltipPlacement="bottom" aria-label="Fechar"></button></c-modal-header><c-modal-body>
-  <p class="intro">Um item NOK pode conter mais de um problema. Preencha todos os campos de cada ocorrência.</p>
+  <p class="intro">Um item NOK pode conter mais de um problema. Preencha os campos obrigatórios de cada ocorrência.</p>
   <div class="problem-list">@for(problem of problems;track problem.id;let index=$index){<section class="problem-card"><header><strong>Problema {{ index+1 }}</strong><button cButton color="danger" variant="ghost" size="sm" (click)="remove(index)" cTooltip="Remover problema" cTooltipPlacement="top" aria-label="Remover problema"><app-checklist-icon name="trash" /></button></header><div class="problem-content"><div class="form-grid">
     @for(field of store.state().nokFields;track field.id){
       <div class="form-field" [class.wide]="field.type === 'textarea' || field.type === 'files'"><span class="field-label">{{ field.label }}@if(field.required){ <span class="required">*</span> }</span>
