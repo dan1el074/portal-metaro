@@ -98,6 +98,13 @@ public class ChecklistRecordController {
     }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @PutMapping("/{id}/skip")
+    public ResponseEntity<Void> skipChecklist(@PathVariable Long id, @Valid @RequestBody ChecklistReasonDto dto) {
+        service.skipChecklist(id, dto);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
     @PutMapping("/{id}/delegate/{userId}")
     public ResponseEntity<ChecklistRecordDto> delegate(@PathVariable Long id, @PathVariable Long userId) {
         return ResponseEntity.ok(service.delegate(id, userId));

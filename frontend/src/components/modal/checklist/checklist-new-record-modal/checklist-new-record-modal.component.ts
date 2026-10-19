@@ -6,6 +6,7 @@ import { Checklist, Category, Template } from '../../../../app/interface/checkli
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
 import { ChecklistErpOrder, ChecklistRecordCreate, ChecklistService } from '../../../../app/services/checklist.service';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
+import { isProductionKit } from '../../../../app/shared/checklist-rules';
 
 @Component({
   selector: 'app-checklist-new-record-modal',
@@ -68,7 +69,7 @@ export class ChecklistNewRecordModalComponent {
   }
 
   private templatesForCategory(categoryId: string): Template[] {
-    const models = this.store.state().templates.filter((item) => item.categoryId === categoryId && !item.predecessorId);
+    const models = this.store.state().templates.filter((item) => item.categoryId === categoryId && (!item.predecessorId || item.optionalPredecessor));
     for (const record of this.store.state().records) {
       if (!this.store.visible(record) || record.status !== 'Finalizado' || this.store.blocked(record)) continue;
       const flow = this.store.flow(record);
@@ -80,6 +81,11 @@ export class ChecklistNewRecordModalComponent {
   }
 
   protected get needsPredecessor(): boolean {
+    const template = this.templates.find((item) => item.id === this.templateId);
+    return !!template?.predecessorId && !template.optionalPredecessor;
+  }
+
+  protected get hasPredecessor(): boolean {
     return !!this.templates.find((item) => item.id === this.templateId)?.predecessorId;
   }
 
@@ -94,11 +100,17 @@ export class ChecklistNewRecordModalComponent {
   }
 
   protected get requiresErp(): boolean {
-    return !this.needsPredecessor && !!this.category?.erp;
+    return !this.predecessorId && !!this.category?.erp;
   }
 
   protected get requiresSerial(): boolean {
-    return !this.needsPredecessor && !!this.category?.serial;
+    const template = this.templates.find((item) => item.id === this.templateId);
+    if (!template || this.predecessorId) return false;
+    return !!this.category?.serial && !isProductionKit({
+      template,
+      category: this.category!,
+      equipment: '',
+    });
   }
 
   protected get canConfirm(): boolean {

@@ -31,6 +31,7 @@ public class ChecklistTemplate {
     private String sectionsJson;
     private boolean signature;
     private boolean automatic;
+    private boolean optionalPredecessor;
     private int version;
     private int displayOrder;
     private Instant createdAt;

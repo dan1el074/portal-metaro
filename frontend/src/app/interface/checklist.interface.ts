@@ -56,6 +56,7 @@ export interface Template {
   signature: boolean;
   predecessorId: string;
   automatic: boolean;
+  optionalPredecessor: boolean;
   version: number;
 }
 export interface Evidence {
