@@ -250,8 +250,11 @@ class StepFlowServiceTests {
 
     private StepFlowService serviceWith(OrderRepository orderRepository, UserService userService) {
         StepFlowService service = new StepFlowService();
+        ChecklistStepFlowService checklistStepFlowService = mock(ChecklistStepFlowService.class);
+        when(checklistStepFlowService.isStepRequirementSatisfied(1L, StepType.FINAL_ASSEMBLY)).thenReturn(true);
         ReflectionTestUtils.setField(service, "orderRepository", orderRepository);
         ReflectionTestUtils.setField(service, "userService", userService);
+        ReflectionTestUtils.setField(service, "checklistStepFlowService", checklistStepFlowService);
         return service;
     }
 
