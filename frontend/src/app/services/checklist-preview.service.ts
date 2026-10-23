@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom, forkJoin } from 'rxjs';
 import { UserService } from './user.service';
 import { Checklist, ChecklistState, Flow, Template } from '../interface/checklist.interface';
-import { checklistCopy as copy, checklistId as uid, checklistNow as now, defaultChecklistNokFields } from '../shared/checklist-factory';
+import { CHECKLIST_BODY_EVIDENCE_ID, checklistCopy as copy, checklistId as uid, checklistNow as now, defaultChecklistNokFields } from '../shared/checklist-factory';
 import { blockingPredecessor, migrateTitleFormula, normalizeChecklistIntegration, recordTitle, validateRecord, validateTemplate } from '../shared/checklist-rules';
 import { ChecklistCatalogEntry, ChecklistRecordCreate, ChecklistService } from './checklist.service';
 import { ChecklistMediaPreviewService } from './checklist-media-preview.service';
@@ -52,6 +52,7 @@ export class ChecklistPreviewService {
       result.categories.forEach((category) => {
         category.id = String(category.id);
         category.integration = normalizeChecklistIntegration(category.integration);
+        category.media ??= false;
       });
       result.categories.sort((first, second) => Number(first.id) - Number(second.id));
       result.equipment.forEach((equipment) => equipment.id = String(equipment.id));
@@ -89,6 +90,7 @@ export class ChecklistPreviewService {
     record.logs ??= [];
     record.revisions ??= [];
     record.fields ??= {};
+    record.media ??= [];
     record.comments.forEach((comment) => comment.id = String(comment.id));
     record.logs.forEach((log) => {
       log.id = String(log.id);
@@ -106,6 +108,7 @@ export class ChecklistPreviewService {
       snapshot.flowId = String(snapshot.flowId);
       snapshot.templateId = String(snapshot.templateId);
       if (statuses[snapshot.status]) snapshot.status = statuses[snapshot.status];
+      snapshot.media ??= [];
     });
     return record;
   }
@@ -125,6 +128,7 @@ export class ChecklistPreviewService {
       snapshot.template.categoryId = String(snapshot.template.categoryId);
       snapshot.template.equipmentId = snapshot.template.equipmentId == null ? '' : String(snapshot.template.equipmentId);
       snapshot.template.predecessorId = snapshot.template.predecessorId == null ? '' : String(snapshot.template.predecessorId);
+      snapshot.category.media = snapshot.category.integration === 'production' || !!snapshot.category.media;
     });
     return flow;
   }
@@ -381,6 +385,7 @@ export class ChecklistPreviewService {
         snapshot.category.fields.map((f) => [f.id, f.defaultValue]),
       ),
       departments: [],
+      media: [],
       comments: [],
       logs: [],
       revisions: [],
@@ -452,8 +457,14 @@ export class ChecklistPreviewService {
   }
 
   private async synchronizeEvidence(recordId: string, previous: Checklist | undefined, submitted: Checklist): Promise<void> {
-    const previousIds = new Set(Object.values(previous?.answers ?? {}).flatMap((answer) => answer.problems).flatMap((problem) => problem.media).map((item) => item.id));
-    const submittedMedia = Object.values(submitted.answers).flatMap((answer) => answer.problems.map((problem) => ({ problem, media: problem.media }))).flatMap(({ problem, media }) => media.map((evidence) => ({ problemId: problem.id, evidence })));
+    const previousIds = new Set([
+      ...(previous?.media ?? []).map((item) => item.id),
+      ...Object.values(previous?.answers ?? {}).flatMap((answer) => answer.problems).flatMap((problem) => problem.media).map((item) => item.id),
+    ]);
+    const submittedMedia = [
+      ...submitted.media.map((evidence) => ({ problemId: CHECKLIST_BODY_EVIDENCE_ID, evidence })),
+      ...Object.values(submitted.answers).flatMap((answer) => answer.problems.map((problem) => ({ problem, media: problem.media }))).flatMap(({ problem, media }) => media.map((evidence) => ({ problemId: problem.id, evidence }))),
+    ];
     const submittedIds = new Set(submittedMedia.map(({ evidence }) => evidence.id));
     await Promise.all([...previousIds].filter((id) => !submittedIds.has(id)).map((id) => firstValueFrom(this.api.deleteEvidence(recordId, id))));
     const pending = submittedMedia.filter(({ evidence }) => this.mediaPreview.getFile(evidence.id));

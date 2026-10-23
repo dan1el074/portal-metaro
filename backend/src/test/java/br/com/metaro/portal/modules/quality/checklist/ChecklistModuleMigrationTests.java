@@ -30,6 +30,8 @@ class ChecklistModuleMigrationTests {
             statement.execute("INSERT INTO tb_stepflow_order DEFAULT VALUES");
             ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V17__create_checklist_module.sql"));
             ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V19__add_optional_checklist_predecessor.sql"));
+            statement.execute("INSERT INTO tb_checklist_category (name, integration, document_title) VALUES ('Produção', 'PRODUCTION', 'Produção')");
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V21__add_checklist_category_media.sql"));
 
             statement.execute("INSERT INTO tb_stepflow_order DEFAULT VALUES");
 
@@ -64,6 +66,14 @@ class ChecklistModuleMigrationTests {
             try (var result = statement.executeQuery("SELECT column_default FROM information_schema.columns WHERE table_name = 'TB_CHECKLIST_TEMPLATE' AND column_name = 'OPTIONAL_PREDECESSOR'")) {
                 result.next();
                 assertThat(result.getString(1)).isEqualTo("FALSE");
+            }
+            try (var result = statement.executeQuery("SELECT column_default FROM information_schema.columns WHERE table_name = 'TB_CHECKLIST_CATEGORY' AND column_name = 'MEDIA_ENABLED'")) {
+                result.next();
+                assertThat(result.getString(1)).isEqualTo("FALSE");
+            }
+            try (var result = statement.executeQuery("SELECT media_enabled FROM tb_checklist_category WHERE integration = 'PRODUCTION'")) {
+                result.next();
+                assertThat(result.getBoolean(1)).isTrue();
             }
             try (var result = statement.executeQuery("SELECT parent_url, title_url FROM tb_role WHERE authority = 'ROLE_CHECKLIST'")) {
                 result.next();

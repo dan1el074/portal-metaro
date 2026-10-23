@@ -31,6 +31,7 @@ public class ChecklistRecordDto {
     private Map<String, ChecklistAnswerDto> answers = new HashMap<>();
     private Map<String, String> fields = new HashMap<>();
     private List<String> departments = new ArrayList<>();
+    private List<ChecklistEvidenceDto> media = new ArrayList<>();
     private List<ChecklistCommentDto> comments = new ArrayList<>();
     private List<ChecklistAuditDto> logs = new ArrayList<>();
     private List<ChecklistRevisionDto> revisions = new ArrayList<>();

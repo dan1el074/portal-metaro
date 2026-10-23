@@ -1,10 +1,5 @@
 export type Integration = 'production' | '5s' | 'none';
-export type Status =
-  | 'Rascunho'
-  | 'Em andamento'
-  | 'Pendente'
-  | 'Finalizado'
-  | 'Cancelado';
+export type Status = 'Rascunho'| 'Em andamento'| 'Pendente'| 'Finalizado'| 'Cancelado';
 export interface Field {
   id: string;
   label: string;
@@ -27,6 +22,7 @@ export interface Category {
   departments: boolean;
   serial: boolean;
   erp: boolean;
+  media: boolean;
   fields: Field[];
   operators: number[];
 }
@@ -157,6 +153,7 @@ export interface Checklist {
   answers: Record<string, Answer>;
   fields: Record<string, string>;
   departments: string[];
+  media: Evidence[];
   comments: Comment[];
   logs: Audit[];
   revisions: Revision[];

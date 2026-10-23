@@ -5,11 +5,7 @@ export type SerialPlateDialog = '' | 'new' | 'edit' | 'batch' | 'settings' | 're
 export interface PlateHistory {
   at: string;
   author: string;
-  changes: {
-    field: string;
-    before: string;
-    after: string;
-  }[];
+  changes: { field: string; before: string; after: string; }[];
 }
 
 export interface SerialPlate {
@@ -66,6 +62,8 @@ export interface SerialPlateBatchFields {
   provider: boolean;
   status: boolean;
   manufactured: boolean;
+  weight: boolean;
+  voltage: boolean;
 }
 
 export interface SerialPlateStore {

@@ -1,9 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import {
-  ButtonCloseDirective, ButtonDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent,
-  ModalHeaderComponent, ModalTitleDirective, TooltipDirective,
-} from '@coreui/angular';
+import { ButtonCloseDirective, ButtonDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
 import { Category } from '../../../../app/interface/checklist.interface';
 import { checklistCopy as copy, emptyChecklistCategory as emptyCategory } from '../../../../app/shared/checklist-factory';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
@@ -51,7 +48,7 @@ export class ChecklistCategoryModalComponent {
   protected edit(category: Category): void { this.category = copy(category); this.editing = true; }
   protected cancelEdit(): void { this.editing = false; }
   protected integrationChanged(): void {
-    if (this.category.integration === 'production') { this.category.erp = true; this.category.serial = true; }
+    if (this.category.integration === 'production') { this.category.erp = true; this.category.serial = true; this.category.media = true; }
   }
 
   protected async save(): Promise<void> {

@@ -1,7 +1,7 @@
 import { Subject, Observable, firstValueFrom, forkJoin, switchMap, takeUntil, catchError, EMPTY } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
 import { ButtonDirective, CardBodyComponent, CardComponent, ContainerComponent, DropdownModule, ModalService } from '@coreui/angular';
 import { ISorterValue } from '@coreui/angular-pro';
 import { ChecklistIconComponent } from '../../../../components/icons/checklist-icon/checklist-icon.component';
@@ -37,6 +37,7 @@ import { ReportPreviewData } from '../../../interface/report-preview.interface';
   changeDetection: ChangeDetectionStrategy.Eager
 })
 export class SerialPlatesComponent implements OnDestroy {
+  private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly data = inject(SerialPlatesService);
   private readonly reports = inject(ReportPreviewService);
   private readonly modals = inject(ModalService);
@@ -75,7 +76,7 @@ export class SerialPlatesComponent implements OnDestroy {
   public historyRecord: SerialPlate | null = null;
   public batch: PlatePatch = {};
   public batchOrderItems: ErpOrderItem[] = [];
-  public batchFields: SerialPlateBatchFields = { of: false, order: false, readyStock: false, provider: false, status: false, manufactured: false };
+  public batchFields: SerialPlateBatchFields = { of: false, order: false, readyStock: false, provider: false, status: false, manufactured: false, weight: false, voltage: false };
   private pending: (() => void) | null = null;
   private pendingRollback: (() => void) | null = null;
   private previousDialog: SerialPlateDialog = '';
@@ -97,9 +98,14 @@ export class SerialPlatesComponent implements OnDestroy {
       this.totals = summary;
       this.records.forEach(row => { if (this.selected.has(row.serial)) this.selectedRecords.set(row.serial, row); });
       if (this.page > this.totalPages) { this.page = this.totalPages; this.refresh(); }
+      this.updateView();
     });
-    this.data.settings().pipe(takeUntil(this.destroy)).subscribe({ next: settings => this.settings = settings, error: error => this.showError(error) });
+    this.data.settings().pipe(takeUntil(this.destroy)).subscribe({ next: settings => { this.settings = settings; this.updateView(); }, error: error => this.showError(error) });
     this.refresh();
+  }
+
+  private updateView(): void {
+    if (!this.destroyed) this.changeDetector.markForCheck();
   }
 
   private refresh(): void {
@@ -115,6 +121,7 @@ export class SerialPlatesComponent implements OnDestroy {
     const http = error as HttpErrorResponse;
     this.error = http.error?.message || http.error?.error || (http.status === 409 ? 'Registro alterado por outro usuário. Reabra o registro.' : 'Não foi possível concluir a operação. Tente novamente.');
     this.toaster.warning(this.error);
+    this.updateView();
   }
 
   public canEdit(): boolean {
@@ -229,6 +236,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.selected = selected;
       this.anchor = serial;
     } catch (error) { this.showError(error); }
+    finally { this.updateView(); }
   }
 
   public setReadyStock(checked: boolean): void {
@@ -244,14 +252,17 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public async loadBatchErp(): Promise<void> {
     if (!this.canEdit() || !this.batchFields.order || (this.batchFields.readyStock && this.batch.readyStock)) return;
-    const order = this.batch.order?.trim() ?? '';
+    const batch = this.batch;
+    const order = batch.order?.trim() ?? '';
     if (!order) return;
     this.batchOrderItems = [];
     this.batch.orderItem = '';
     try {
       const result = await this.request(this.data.searchOrder(order));
-      if (this.batch.order?.trim() === order && !this.batch.readyStock) this.batchOrderItems = result.items;
+      if (this.batch === batch && this.batchFields.order && batch.order?.trim() === order
+        && !(this.batchFields.readyStock && batch.readyStock)) this.batchOrderItems = result.items;
     } catch (error) { this.showError(error); }
+    finally { this.updateView(); }
   }
 
   public async loadCreateOrder(): Promise<void> {
@@ -259,6 +270,7 @@ export class SerialPlatesComponent implements OnDestroy {
     if (!this.canEdit() || !order) return;
     try { await this.request(this.data.searchOrder(order)); }
     catch (error) { this.showError(error); }
+    finally { this.updateView(); }
   }
 
   public setBatchReadyStock(checked: boolean): void {
@@ -299,7 +311,7 @@ export class SerialPlatesComponent implements OnDestroy {
     if (dialog === 'batch') {
       this.batch = {};
       this.batchOrderItems = [];
-      this.batchFields = { of: false, order: false, readyStock: false, provider: false, status: false, manufactured: false };
+      this.batchFields = { of: false, order: false, readyStock: false, provider: false, status: false, manufactured: false, weight: false, voltage: false };
     }
 
     if (dialog === 'settings') this.settingsDraft = { ...this.settings };
@@ -315,8 +327,9 @@ export class SerialPlatesComponent implements OnDestroy {
       this.loadedOrder = fresh.order;
       this.loadedOrderItem = fresh.orderItem;
       this.open('edit');
-      if (fresh.order && this.canEdit()) this.data.searchOrder(fresh.order).pipe(takeUntil(this.destroy)).subscribe({ error: () => {} });
+      if (fresh.order && this.canEdit()) this.data.searchOrder(fresh.order).pipe(takeUntil(this.destroy)).subscribe({ next: () => this.updateView(), error: () => {} });
     } catch (error) { this.showError(error); }
+    finally { this.updateView(); }
   }
 
   public openHistory(): void {
@@ -324,7 +337,10 @@ export class SerialPlatesComponent implements OnDestroy {
     this.historyRecord = { ...this.edit, history: [] };
     const record = this.historyRecord;
     this.data.history(record.serial).pipe(takeUntil(this.destroy)).subscribe({
-      next: history => record.history = history, error: error => this.showError(error)
+      next: history => {
+        if (this.historyRecord === record) this.historyRecord = { ...record, history };
+        this.updateView();
+      }, error: error => this.showError(error)
     });
   }
 
@@ -413,7 +429,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.clearFilters();
       this.finish(`${created.length} número(s) de série criado(s).`);
     } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    finally { this.busy = false; this.updateView(); }
   }
 
   public async loadErp(itemId?: string): Promise<void> {
@@ -434,7 +450,7 @@ export class SerialPlatesComponent implements OnDestroy {
       if (this.data.hasEquipmentData(record)) this.confirm(1, apply, rollback);
       else apply();
     } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    finally { this.busy = false; this.updateView(); }
   }
 
   public async saveEdit(): Promise<void> {
@@ -450,7 +466,7 @@ export class SerialPlatesComponent implements OnDestroy {
         if (this.data.hasEquipmentData(patch)) this.confirm(1, () => { void apply(); });
         else { this.busy = false; await apply(); }
       } catch (error) { this.showError(error); }
-      finally { this.busy = false; }
+      finally { this.busy = false; this.updateView(); }
     } else await this.commit([record], patch, false);
   }
 
@@ -465,12 +481,12 @@ export class SerialPlatesComponent implements OnDestroy {
         const values = await this.erp(patch.order, patch.orderItem);
         if (!values) return;
         const rows = await this.request(this.data.selection([...this.selected]));
-        const apply = () => this.commit(rows, { ...patch, ...values }, true);
+        const apply = () => this.commit(rows, { ...patch, ...values, ...(this.batchFields.weight ? { weight: patch.weight } : {}), ...(this.batchFields.voltage ? { voltage: patch.voltage } : {}) }, true);
         const affected = rows.filter(row => this.data.hasEquipmentData(row)).length;
         if (affected) this.confirm(affected, () => { void apply(); });
         else { this.busy = false; await apply(); }
       } catch (error) { this.showError(error); }
-      finally { this.busy = false; }
+      finally { this.busy = false; this.updateView(); }
     } else await this.commit(this.selectedRows(), patch, true);
   }
 
@@ -492,7 +508,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.selected = selected;
       this.finish('Registro(s) atualizado(s).');
     } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    finally { this.busy = false; this.updateView(); }
   }
 
   public async saveSettings(): Promise<void> {
@@ -502,7 +518,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.settings = await this.request(this.data.saveSettings(this.settingsDraft));
       this.finish('Configurações atualizadas.');
     } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    finally { this.busy = false; this.updateView(); }
   }
 
   private async openReport(): Promise<void> {
@@ -516,7 +532,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.dialog = 'report';
       this.modalVisible = true;
     } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    finally { this.busy = false; this.updateView(); }
   }
 
   public async printReport(): Promise<void> {
@@ -530,7 +546,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.settings = report.settings;
       this.reports.open(this.reportData(), preview);
     } catch (error) { preview.close(); this.showError(error); }
-    finally { this.busy = false; }
+    finally { this.busy = false; this.updateView(); }
   }
 
   public ngOnDestroy(): void {

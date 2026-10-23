@@ -21,11 +21,12 @@ export const checklistId = (): string => {
 };
 export const checklistCopy = <T>(value: T): T => structuredClone(value);
 export const checklistNow = (): string => new Date().toISOString();
+export const CHECKLIST_BODY_EVIDENCE_ID = '__checklist_body__';
 
 export const emptyChecklistField = (): Field => ({ id: checklistId(), label: '', type: 'text', options: [], defaultValue: '' });
 export const emptyChecklistQuestion = (): Question => ({ id: checklistId(), label: '', fields: [] });
 export const emptyChecklistSection = (production: boolean): Section => ({ id: checklistId(), name: '', options: production ? ['OK', 'NOK', 'N/A'] : ['OK', 'N/A'], questions: [emptyChecklistQuestion()] });
-export const emptyChecklistCategory = (): Category => ({ id: checklistId(), name: '', integration: 'production', active: true, reason: '', logo: true, re: '', ref: '', documentTitle: 'Checklist de inspeção da qualidade', clientNokHistory: true, dates: false, departments: true, serial: true, erp: true, fields: [], operators: [] });
+export const emptyChecklistCategory = (): Category => ({ id: checklistId(), name: '', integration: 'production', active: true, reason: '', logo: true, re: '', ref: '', documentTitle: 'Checklist de inspeção da qualidade', clientNokHistory: true, dates: false, departments: false, serial: true, erp: true, media: true, fields: [], operators: [] });
 export const defaultChecklistNokFields = (): NokFormField[] => [
   { id: 'nok-item', label: 'Tipo de item', type: 'items', required: true, binding: 'item' },
   { id: 'nok-code', label: 'Código', type: 'text', required: false, binding: 'code' },

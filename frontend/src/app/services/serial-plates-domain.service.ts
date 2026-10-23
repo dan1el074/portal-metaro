@@ -54,7 +54,7 @@ export class SerialPlatesDomainService {
     const patch: PlatePatch = {};
 
     for (const key of Object.keys(fields) as (keyof SerialPlateBatchFields)[]) {
-      if (fields[key]) Object.assign(patch, { [key]: batch[key] ?? (key === 'readyStock' ? false : '') });
+      if (fields[key]) Object.assign(patch, { [key]: batch[key] ?? (key === 'readyStock' ? false : key === 'weight' ? null : '') });
     }
 
     if (fields.order) patch.orderItem = batch.orderItem ?? '';

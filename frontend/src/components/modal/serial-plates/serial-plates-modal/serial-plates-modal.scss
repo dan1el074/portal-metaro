@@ -10,9 +10,17 @@
   gap: 12px;
 }
 
+.item-modal-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
 .item-modal-actions button app-checklist-icon {
-  vertical-align: middle;
-  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .edit-heading button {

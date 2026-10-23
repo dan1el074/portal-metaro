@@ -30,6 +30,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ChecklistEvidenceService {
+    public static final String GENERAL_EVIDENCE_ID = "__checklist_body__";
     private final ChecklistEvidenceRepository evidenceRepository;
     private final ChecklistRecordRepository recordRepository;
     private final br.com.metaro.portal.modules.quality.checklist.repository.ChecklistRevisionRepository revisionRepository;

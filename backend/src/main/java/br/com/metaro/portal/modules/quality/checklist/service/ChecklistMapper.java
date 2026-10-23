@@ -41,6 +41,7 @@ public class ChecklistMapper {
         dto.setDepartments(entity.isDepartments());
         dto.setSerial(entity.isSerialRequired());
         dto.setErp(entity.isErpRequired());
+        dto.setMedia(entity.isMediaEnabled());
         dto.setFields(read(entity.getFieldsJson(), new TypeReference<>() {}));
         dto.setOperators(entity.getOperators().stream().map(User::getId).sorted().toList());
         return dto;
@@ -110,6 +111,7 @@ public class ChecklistMapper {
         evidenceService.findByRecord(entity.getId()).forEach(evidence -> evidenceByProblem
                 .computeIfAbsent(evidence.getProblemId(), ignored -> new ArrayList<>())
                 .add(evidenceService.toDto(evidence)));
+        dto.setMedia(evidenceByProblem.getOrDefault(ChecklistEvidenceService.GENERAL_EVIDENCE_ID, List.of()));
         answers.values().stream()
                 .filter(answer -> answer.getProblems() != null)
                 .flatMap(answer -> answer.getProblems().stream())

@@ -78,6 +78,7 @@ public class ChecklistConfigurationService {
         entity.setDepartments(dto.isDepartments());
         entity.setSerialRequired(entity.getIntegration() == ChecklistIntegration.PRODUCTION || dto.isSerial());
         entity.setErpRequired(entity.getIntegration() == ChecklistIntegration.PRODUCTION || dto.isErp());
+        entity.setMediaEnabled(entity.getIntegration() == ChecklistIntegration.PRODUCTION || dto.isMedia());
         validateFields(dto.getFields());
         entity.setFieldsJson(mapper.write(dto.getFields()));
         entity.setUpdatedAt(now);

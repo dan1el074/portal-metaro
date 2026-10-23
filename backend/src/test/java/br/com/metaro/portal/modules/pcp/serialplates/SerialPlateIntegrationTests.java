@@ -184,6 +184,44 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void displaysErpItemLabelsAndPreservesTheOriginalNameWhenUnlinked() throws Exception {
+        FoccoPlateLineDto line = new FoccoPlateLineDto();
+        line.setOrderNumber(900L); line.setClient("Cliente"); line.setDescription("Mesa");
+        line.setModel("PA MEB"); line.setVoltage("220v TRI"); line.setCapacity("1,5 TON");
+        when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
+        SerialPlateOrderDto order = erp.findOrder("900");
+        SerialPlateCreateDto draft = draft(1); draft.setOrder("900"); draft.setOrderItem(order.getItems().getFirst().getId());
+        SerialPlateDto plate = service.createPlates(draft).getFirst();
+        SerialPlateChangeDto linked = service.getHistory(18918L).getFirst().getChanges().stream()
+                .filter(change -> change.getField().equals("Item do pedido")).findFirst().orElseThrow();
+        assertThat(linked.getAfter()).isEqualTo(order.getItems().getFirst().getLabel());
+        assertThat(mapper.writeValueAsString(service.getHistory(18918L))).doesNotContain(plate.getOrderItem());
+        SerialPlatePatchDto rename = new SerialPlatePatchDto(); rename.setDescription("Modelo ajustado manualmente");
+        SerialPlateDto renamed = service.updatePlates(mutation(List.of(plate), rename, "description")).getFirst();
+        SerialPlatePatchDto unlink = new SerialPlatePatchDto(); unlink.setReadyStock(true);
+        service.updatePlates(mutation(List.of(renamed), unlink, "readyStock"));
+        SerialPlateChangeDto removed = service.getHistory(18918L).getFirst().getChanges().stream()
+                .filter(change -> change.getField().equals("Item do pedido")).findFirst().orElseThrow();
+        assertThat(removed.getBefore()).isEqualTo(order.getItems().getFirst().getLabel());
+        assertThat(removed.getAfter()).isEmpty();
+    }
+
+    @Test
+    void rendersLegacyItemHashesUsingTheModelRecordedInThatEvent() throws Exception {
+        service.createPlates(draft(1));
+        br.com.metaro.portal.modules.pcp.serialplates.entity.SerialPlateLog legacy = new br.com.metaro.portal.modules.pcp.serialplates.entity.SerialPlateLog();
+        legacy.setSerial(18918L); legacy.setAt(java.time.Instant.now());
+        legacy.setUserId(users.findAll().getFirst().getId()); legacy.setAuthor("Operador");
+        legacy.setChangesJson(mapper.writeValueAsString(List.of(
+                new SerialPlateChangeDto("Item do pedido", "", "b0726d58776c57e496dcb3a65c7615b4641ce223318b1a74c397e99d082a44aa"),
+                new SerialPlateChangeDto("Modelo", "", "Modelo antigo")
+        )));
+        logs.saveAndFlush(legacy);
+        SerialPlateChangeDto item = service.getHistory(18918L).getFirst().getChanges().getFirst();
+        assertThat(item.getAfter()).isEqualTo("Modelo antigo");
+    }
+
+    @Test
     @WithMockUser(roles = "SERIAL_PLATES_CONSULTATION")
     void consultationCanReadButCannotModifyOrExport() throws Exception {
         mvc.perform(get("/api/serial-plates")).andExpect(status().isOk());

@@ -1,4 +1,4 @@
-<c-container class="h-auto px-4 administration-page inspection-page memorando-detail-page" fluid>
+<c-container #printArea class="h-auto px-4 administration-page inspection-page memorando-detail-page" fluid>
   @if (record) {
     <nav class="detail-navigation no-print" aria-label="Navegação da inspeção">
       <div class="detail-breadcrumb">
@@ -111,9 +111,16 @@
         </section>
       </div>
 
+      @if (snapshot.category.media && record.media.length) {
+        <section class="detail-card checklist-media-footer checklist-footer-section">
+          <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="file-text" />Fotos e vídeos</h2><p>{{ record.media.length }} arquivo(s) anexado(s)</p></div></header>
+          <div class="card-content"><app-checklist-evidence [media]="record.media" /></div>
+        </section>
+      }
+
       @if (problems.length) {
-        <section class="detail-card problems-card">
-          <header class="section-card-header"><div><h2><app-checklist-icon name="ban" />Não conformidades</h2><p>{{ problems.length }} ocorrência(s) registrada(s)</p></div></header>
+        <section class="detail-card problems-card checklist-footer-section">
+          <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="ban" />Não conformidades</h2><p>{{ problems.length }} ocorrência(s) registrada(s)</p></div></header>
           <div class="card-content">
             @for (problem of problems; track problem.id; let problemIndex = $index) {
               <article [attr.id]="'nonconformity-' + problem.id" [class.has-media]="problem.media.length">
@@ -157,8 +164,8 @@
       </div>
     </main>
 
-    <section class="print-history print-only" [class.print-page-start]="!problems.length">
-      <header><div><strong>HISTÓRICO DO CHECKLIST</strong><span>{{ record.logs.length }} registro(s) de auditoria</span></div></header>
+    <section class="print-history print-only checklist-footer-section">
+      <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="history" />Histórico do checklist</h2><p>{{ record.logs.length }} registro(s) de auditoria</p></div></header>
       <ol>@for (log of record.logs; track log.id) { <li><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p></li> } @empty { <li>Nenhum registro disponível.</li> }</ol>
     </section>
     </div>

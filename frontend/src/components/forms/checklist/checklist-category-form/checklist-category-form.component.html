@@ -9,6 +9,7 @@
   <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.departments" /> Selecionar setores</label>
   <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.serial" [disabled]="category.integration === 'production'" /> Exigir série</label>
   <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.erp" [disabled]="category.integration === 'production'" /> Integração ERP</label>
+  <label><input cFormCheckInput type="checkbox" [(ngModel)]="category.media" [disabled]="category.integration === 'production'" /> Permitir fotos e vídeos</label>
 </div>
 <div class="section-title"><div><h6>Campos obrigatórios do cabeçalho</h6><p>Campos solicitados no início da inspeção.</p></div><button type="button" class="add-field" (click)="addField()"><app-checklist-icon name="plus" /> Adicionar campo</button></div>
 @for (field of category.fields; track field.id; let index = $index) {

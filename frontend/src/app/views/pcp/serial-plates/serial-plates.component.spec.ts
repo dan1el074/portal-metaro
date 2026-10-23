@@ -1,4 +1,5 @@
-import { TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { SerialPlatesComponent } from './serial-plates.component';
@@ -10,6 +11,7 @@ import { ToastrService } from '../../../services/toast.service';
 describe('SerialPlatesComponent API integration', () => {
   let http: HttpTestingController;
   let component: SerialPlatesComponent;
+  let fixture: ComponentFixture<SerialPlatesComponent>;
   let roles: string[];
   const settings = { crea: 'RS 169445', instructions: '', providers: 'Interno' };
   const row: SerialPlate = {
@@ -21,7 +23,7 @@ describe('SerialPlatesComponent API integration', () => {
   beforeEach(() => {
     roles = ['ROLE_SERIAL_PLATES_OPERATOR'];
     TestBed.configureTestingModule({ providers: [
-      provideHttpClient(), provideHttpClientTesting(),
+      provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting(),
       { provide: UserService, useValue: { getCurrentUser: () => ({ id: 1, roles: roles.map(authority => ({ authority })) }) } },
       { provide: ToastrService, useValue: jasmine.createSpyObj('ToastrService', ['warning', 'success']) }
     ] });
@@ -29,26 +31,26 @@ describe('SerialPlatesComponent API integration', () => {
   });
 
   function initialize(): void {
-    component = TestBed.runInInjectionContext(() => new SerialPlatesComponent());
+    fixture = TestBed.createComponent(SerialPlatesComponent);
+    component = fixture.componentInstance;
     http.expectOne(request => request.url.endsWith('/settings')).flush(settings);
     http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [row], totalElements: 31, totalPages: 4 });
     http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 31, Criado: 31 });
   }
 
-  afterEach(() => { component?.ngOnDestroy(); http.verify(); });
+  afterEach(() => { fixture?.destroy(); http.verify(); });
 
   it('renders the server page using the real component templates', async () => {
-    const fixture = TestBed.createComponent(SerialPlatesComponent);
+    fixture = TestBed.createComponent(SerialPlatesComponent);
     component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
     http.expectOne(request => request.url.endsWith('/settings')).flush(settings);
     http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [row], totalElements: 31, totalPages: 4 });
     http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 31, Criado: 31 });
-    fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('18918');
     expect(fixture.nativeElement.textContent).toContain('31');
-    fixture.destroy();
   });
 
   it('loads one server page and uses server totals for cards and pagination', () => {
@@ -100,6 +102,131 @@ describe('SerialPlatesComponent API integration', () => {
     await pending;
     http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 1, totalPages: 1 });
     http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
+  });
+
+  it('opens the edit modal and updates history after responses without another interaction', async () => {
+    initialize();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const pending = component.openEdit(row);
+    http.expectOne(request => request.url.endsWith('/18918')).flush(row);
+    await pending;
+    await fixture.whenStable();
+    const modal = fixture.nativeElement.querySelector('#serialPlateModal');
+    expect(modal.getAttribute('aria-modal')).toBe('true');
+    expect(modal.textContent).toContain('#18918');
+    component.openHistory();
+    await fixture.whenStable();
+    http.expectOne(request => request.url.endsWith('/18918/history')).flush([{ at: row.updated, author: 'Operador API', changes: [{ field: 'Peso', before: '', after: '350' }] }]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#serialPlateHistoryModal').textContent).toContain('Operador API');
+  });
+
+  it('updates creation order items when the ERP lookup completes without a click', async () => {
+    initialize();
+    component.open('new');
+    component.createDraft.order = '900';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const pending = component.loadCreateOrder();
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ id: 'item', description: 'Modelo ERP', capacity: 1.5, voltage: '220v TRI', weight: null }] });
+    await pending;
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#serialPlateModal').textContent).toContain('Modelo ERP');
+  });
+
+  it('sends the checked batch weight and preserves all unmarked fields', async () => {
+    initialize();
+    component.toggleAll(true);
+    component.open('batch');
+    component.batchFields.weight = true;
+    component.batch.weight = 400;
+    const pending = component.saveBatch();
+    const update = http.expectOne(request => request.url.endsWith('/batch'));
+    expect(update.request.body.patch).toEqual({ weight: 400 });
+    expect(update.request.body.fields).toEqual(['weight']);
+    update.flush([{ ...row, weight: 400, version: 1 }]);
+    await pending;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [{ ...row, weight: 400 }], totalElements: 1, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
+  });
+
+  it('keeps the manually entered batch weight when an ERP order is applied together', async () => {
+    initialize();
+    component.toggleAll(true);
+    component.open('batch');
+    component.batchFields.order = true;
+    component.batchFields.weight = true;
+    component.batch = { order: '900', orderItem: 'item', weight: 400 };
+    const item = { id: 'item', description: 'Modelo ERP', capacity: 1.5, voltage: '220v TRI', weight: 300 };
+    component.batchOrderItems = [item];
+    const pending = component.saveBatch();
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [item] });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    http.expectOne(request => request.url.endsWith('/selection')).flush([row]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const update = http.expectOne(request => request.url.endsWith('/batch'));
+    expect(update.request.body.patch.weight).toBe(400);
+    update.flush([{ ...row, order: '900', orderItem: 'item', description: 'Modelo ERP', weight: 400, version: 1 }]);
+    await pending;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 1, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
+  });
+
+  it('searches another ERP order after PE is enabled and its update checkbox is disabled again', async () => {
+    initialize();
+    component.open('batch');
+    component.batchFields.order = true;
+    component.changeBatchOrder('900');
+    const item = { id: 'first', description: 'Primeiro item', capacity: 1, voltage: '220v TRI', weight: 300 };
+    const first = component.loadBatchErp();
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [item] });
+    await first;
+    component.batch.orderItem = 'first';
+    component.batchFields.readyStock = true;
+    component.setBatchReadyStock(true);
+    expect(component.batchFields.order).toBeFalse();
+    component.batchFields.readyStock = false;
+    component.batchFields.order = true;
+    component.changeBatchOrder('901');
+    const second = component.loadBatchErp();
+    http.expectOne(request => request.url.endsWith('/erp/orders/901')).flush({ client: 'Outro cliente', items: [{ ...item, id: 'second' }] });
+    await second;
+    expect(component.batchOrderItems.map(value => value.id)).toEqual(['second']);
+    expect(component.batch.orderItem).toBe('');
+  });
+
+  it('sends only the checked batch voltage', async () => {
+    initialize();
+    component.toggleAll(true);
+    component.open('batch');
+    component.batchFields.voltage = true;
+    component.batch.voltage = '380v BI';
+    const pending = component.saveBatch();
+    const update = http.expectOne(request => request.url.endsWith('/batch'));
+    expect(update.request.body.patch).toEqual({ voltage: '380v BI' });
+    expect(update.request.body.fields).toEqual(['voltage']);
+    update.flush([{ ...row, voltage: '380v BI', version: 1 }]);
+    await pending;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 1, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
+  });
+
+  it('keeps edit and batch unit indicators out of the Tab sequence', async () => {
+    initialize();
+    component.edit = { ...row };
+    component.open('edit');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const editUnits = fixture.nativeElement.querySelectorAll('#serialPlateModal .unit-tooltip');
+    expect(editUnits.length).toBe(2);
+    editUnits.forEach((unit: HTMLElement) => expect(unit.tabIndex).toBe(-1));
+    component.open('batch');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const batchUnits = fixture.nativeElement.querySelectorAll('#serialPlateModal .unit-tooltip');
+    expect(batchUnits.length).toBe(1);
+    batchUnits.forEach((unit: HTMLElement) => expect(unit.tabIndex).toBe(-1));
   });
 
   it('does not grant operator rights through the old Kanban role', () => {
