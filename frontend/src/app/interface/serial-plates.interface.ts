@@ -66,6 +66,7 @@ export interface SerialPlateBatchFields {
   provider: boolean;
   status: boolean;
   manufactured: boolean;
+  weight: boolean;
 }
 
 export interface SerialPlateStore {
