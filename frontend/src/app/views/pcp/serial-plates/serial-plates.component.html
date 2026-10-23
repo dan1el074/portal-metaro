@@ -1,0 +1,69 @@
+<c-container class="h-auto px-4 administration-page checklist-page serial-plates-page" fluid>
+  <header class="page-header">
+    <p class="ops-header"><span class="ops-welcome">Nº Série/Plaquetas</span><span class="ops-access-level">Controle de identificação e gravação dos equipamentos</span></p>
+    @if (operator) {
+      <c-dropdown class="fix-dropdown">
+        <button cDropdownToggle [caret]="false" class="view-mode-btn">
+          <span class="view-mode-icon"><app-checklist-icon [name]="view === 'operator' ? 'user-cog' : 'eye'" /></span>
+          <span class="view-mode-text"><span>Visualizando como</span>{{ view === 'operator' ? 'Operador' : 'Consulta' }}</span>
+          <app-checklist-icon name="chevron-down" />
+        </button>
+        <div cDropdownMenu class="view-menu">
+          <span cDropdownItemPlain class="view-menu-label">Perfil de acesso</span>
+          @for (profile of views; track profile.value) {
+            <button cDropdownItem [class.custom-active]="profile.value === view" (click)="setView(profile.value)">
+              <app-checklist-icon [name]="profile.value === 'operator' ? 'user-cog' : 'eye'" />
+              <span class="view-option-title">{{ profile.label }}</span>@if (profile.value === view) { <app-checklist-icon name="circle-check" /> }
+            </button>
+          }
+        </div>
+      </c-dropdown>
+    } @else { <div class="fixed-view"><app-checklist-icon name="eye" /><div><small>Perfil de acesso</small><strong>Consulta</strong></div></div> }
+  </header>
+  <section class="sfc-resume" [class.consultation-summary]="view === 'consultation'" aria-label="Resumo das plaquetas">
+    <c-card class="step-card pointer total-card" [class.selected]="!status" style="border-left: 4px solid #314158"
+      role="button" tabindex="0" [attr.aria-pressed]="!status" (click)="selectStatus('')" (keydown.enter)="selectStatus('')" (keydown.space)="$event.preventDefault(); selectStatus('')">
+      <c-card-body>
+        <div class="title-container"><h6>Total de registros</h6><div class="icon total-icon"><app-checklist-icon name="archive" /></div></div>
+        <p class="main-value"><strong>{{ countStatus('') }}</strong></p>
+      </c-card-body>
+    </c-card>
+    <c-card class="step-card status-summary-card" aria-label="Resumo por status">
+      <c-card-body>
+        <div class="status-summary-grid" role="group" aria-label="Filtrar por status">
+          @for (summary of summaries; track summary.status) {
+            <button type="button" class="status-summary-item" [class.selected]="status === summary.status" [style.--status-color]="summary.color" [attr.aria-pressed]="status === summary.status" (click)="selectStatus(summary.status)">
+              <strong>{{ countStatus(summary.status) }}</strong>
+              <span class="status-summary-label"><span class="status-dot" aria-hidden="true"></span>{{ summary.title }}</span>
+            </button>
+          }
+        </div>
+      </c-card-body>
+    </c-card>
+  </section>
+  @if (canEdit()) { <div class="secondary-actions"><button cButton color="secondary" variant="ghost" (click)="open('settings')"><app-checklist-icon name="settings" /> Configurações</button></div> }
+  <c-card class="records-card">
+    <div class="records-header"><div><h2>Números de série e plaquetas</h2><p>{{ countStatus('') }} registros · Acompanhe da criação à conclusão do equipamento.</p></div>@if (canEdit()) { <button cButton color="primary" (click)="open('new')"><app-checklist-icon name="plus" /> Novo</button> }</div>
+    <app-serial-plates-table
+      [data]="pageRows()" [selected]="selected" [search]="search" [canEdit]="canEdit()"
+      [page]="page" [pages]="pages()" [perPage]="perPage" [sorter]="sorter"
+      (searchChange)="setSearch($event)" (clearFiltersRequest)="clearFilters()" (clearSelection)="clearSelection()"
+      (batchRequest)="open('batch')" (reportRequest)="open('report')" (recordOpen)="openEdit($event)"
+      (selectionChange)="toggle($event.serial, $event.event)" (selectAllChange)="toggleAll($event)"
+      (sorterChange)="sort($event)" (pageChange)="setPage($event)" (perPageChange)="setPerPage($event)"
+    />
+  </c-card>
+</c-container>
+
+<app-serial-plates-modal
+  [(visible)]="modalVisible" [dialog]="dialog" [title]="dialogTitle()" [error]="error" [canEdit]="canEdit()" [busy]="busy"
+  [createDraft]="createDraft" [edit]="edit" [batch]="batch" [batchFields]="batchFields" [settingsDraft]="settingsDraft"
+  [batchOrderItems]="batchOrderItems" [providers]="providers()" [selectedCount]="selected.size" [report]="reportData()" [missing]="missing()"
+  (closeRequest)="close()" (createRequest)="create()" (saveRequest)="saveEdit()" (batchRequest)="saveBatch()"
+  (settingsRequest)="saveSettings()" (historyRequest)="openHistory()" (exportRequest)="printReport()"
+  (createErpRequest)="loadCreateOrder()" (batchOrderChange)="changeBatchOrder($event)" (batchErpRequest)="loadBatchErp()"
+    (orderChange)="changeEditOrder($event)" (erpRequest)="loadErp($event)"
+  (readyStockChange)="setReadyStock($event)" (batchReadyStockChange)="setBatchReadyStock($event)"
+/>
+<app-serial-plates-history-modal [record]="historyRecord" [events]="historyEvents()" />
+<app-serial-plates-erp-modal [(visible)]="confirmationVisible" [count]="confirmationCount" (cancel)="cancelErp()" (confirm)="confirmErp()" />

@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { CardBodyComponent, CardComponent, CardTitleDirective, ColComponent, RowComponent } from '@coreui/angular';
 import { ToastrService } from '../../../../../services/toast.service';
-import { AuthGuard } from '../../../../../config/authGuard';
+import { AuthGuard } from '../../../../../config/auth.guard';
 import { MemorandoService } from '../../../../../services/memorando.service';
 import { ErrorService } from '../../../../../services/error.service';
 import { Memorando, NewMemorando } from '../../../../../interface/memorando.interface';

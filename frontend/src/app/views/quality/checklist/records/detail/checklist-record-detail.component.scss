@@ -630,6 +630,7 @@
 .history-card .section-card-header h2 app-checklist-icon,
 .problems-card .section-card-header h2 app-checklist-icon {
   font-size: 15px;
+  margin-top: 2px;
 }
 
 .section-card-header p {
@@ -947,6 +948,10 @@
 }
 
 @media print {
+  .document-card .item-description-column {
+    width: 225px;
+  }
+
   .document-card .quality-brand span,
   .document-card .quality-reference span,
   .document-card .metadata-grid strong,

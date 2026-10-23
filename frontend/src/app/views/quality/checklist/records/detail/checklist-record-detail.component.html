@@ -137,7 +137,7 @@
       }
 
       <section class="detail-card comments-card no-print">
-        <header class="section-card-header"><div><h2><app-checklist-icon name="message-square" />Comentários</h2><p>Observações posteriores ao preenchimento ficam registradas aqui.</p></div></header>
+        <header class="section-card-header"><div><h2><app-checklist-icon name="message-square" />Comentários</h2><p>Observações e respostas de não conformidades.</p></div></header>
         <div class="card-content">@for (comment of record.comments; track comment.id) { <article class="comment"><div>@if (problemNumber(comment.problemId); as number) { <span class="comment-problem-reference">Tratamento da não conformidade #{{ number }}</span> }<strong>{{ comment.author }}</strong><small>{{ comment.at | date:'dd/MM/yyyy HH:mm':'-0300' }}</small><p>{{ comment.text }}</p></div>@if (canEditComment(comment)) { <div class="comment-actions"><button type="button" (click)="editComment(comment)" cTooltip="Editar comentário" cTooltipPlacement="top" aria-label="Editar comentário"><app-checklist-icon name="pencil" /></button><button type="button" class="danger" (click)="deleteComment(comment)" cTooltip="Excluir comentário" cTooltipPlacement="top" aria-label="Excluir comentário"><app-checklist-icon name="trash" /></button></div> }</article> } @empty { <p class="empty">Nenhum comentário.</p> }<div class="comment-form"><textarea cFormControl rows="3" [(ngModel)]="commentText" placeholder="Adicionar comentário"></textarea><button class="action-button primary-action" type="button" [disabled]="!commentText.trim()" (click)="addComment()">Comentar</button></div></div>
       </section>
 
