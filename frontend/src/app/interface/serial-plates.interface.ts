@@ -8,6 +8,12 @@ export interface PlateHistory {
   changes: { field: string; before: string; after: string; }[];
 }
 
+export interface SerialPlateRelocation {
+  serial: string;
+  order: string;
+  stepFlows: string[];
+}
+
 export interface SerialPlate {
   serial: string;
   version: number;

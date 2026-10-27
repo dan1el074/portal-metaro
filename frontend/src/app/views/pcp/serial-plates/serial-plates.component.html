@@ -65,5 +65,6 @@
     (orderChange)="changeEditOrder($event)" (erpRequest)="loadErp($event)"
   (readyStockChange)="setReadyStock($event)" (batchReadyStockChange)="setBatchReadyStock($event)"
 />
+<app-checklist-action-modal />
 <app-serial-plates-history-modal [record]="historyRecord" [events]="historyEvents()" />
 <app-serial-plates-erp-modal [(visible)]="confirmationVisible" [count]="confirmationCount" (cancel)="cancelErp()" (confirm)="confirmErp()" />

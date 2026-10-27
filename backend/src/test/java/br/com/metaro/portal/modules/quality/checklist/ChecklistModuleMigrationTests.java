@@ -11,6 +11,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ChecklistModuleMigrationTests {
     @Test
+    void linksOnlyActiveLegacyMatchesAndEnforcesExclusiveReservation() throws Exception {
+        try (var connection = DriverManager.getConnection("jdbc:h2:mem:serial-link-" + UUID.randomUUID());
+             var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE tb_serial_plate (serial BIGINT PRIMARY KEY)");
+            statement.execute("CREATE TABLE tb_checklist_flow (id BIGINT PRIMARY KEY, normalized_serial VARCHAR(120), cancelled BOOLEAN NOT NULL)");
+            statement.execute("INSERT INTO tb_serial_plate VALUES (18918), (18919)");
+            statement.execute("INSERT INTO tb_checklist_flow VALUES (1, '18918', FALSE), (2, NULL, TRUE), (3, 'LEGACY-A', FALSE)");
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V22__link_checklist_serial_plates.sql"));
+            try (var result = statement.executeQuery("SELECT serial_plate_id, ready_stock, serial_waived, erp_data_json FROM tb_checklist_flow ORDER BY id")) {
+                result.next(); assertThat(result.getLong(1)).isEqualTo(18918L);
+                assertThat(result.getBoolean(2)).isFalse(); assertThat(result.getBoolean(3)).isFalse(); assertThat(result.getString(4)).isEqualTo("{}");
+                result.next(); assertThat(result.getObject(1)).isNull();
+                result.next(); assertThat(result.getObject(1)).isNull();
+            }
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> statement.execute("INSERT INTO tb_checklist_flow (id, cancelled, serial_plate_id) VALUES (4, FALSE, 18918)"))
+                    .isInstanceOf(java.sql.SQLException.class);
+            statement.execute("UPDATE tb_checklist_flow SET cancelled = TRUE, normalized_serial = NULL, serial_plate_id = NULL WHERE id = 1");
+            statement.execute("INSERT INTO tb_checklist_flow (id, cancelled, serial_plate_id) VALUES (4, FALSE, 18918)");
+        }
+    }
+
+    @Test
     void createsChecklistSchemaAndSeedsApprovedCatalogs() throws Exception {
         try (var connection = DriverManager.getConnection("jdbc:h2:mem:checklist-module-" + UUID.randomUUID());
             var statement = connection.createStatement()) {

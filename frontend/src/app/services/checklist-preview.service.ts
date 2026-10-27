@@ -507,7 +507,7 @@ export class ChecklistPreviewService {
     await firstValueFrom(this.api.completeVideo(recordId, info.evidence.id));
   }
   private auditAction(action: string): string {
-    return ({ CREATED: 'Criado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Finalizado', FINISHED_INPUT: 'Preenchimento finalizado', CLAIMED: 'Assumido', DELEGATED: 'Delegado', REOPENED: 'Reaberto', CANCELLED: 'Cancelado', TREATED: 'Tratado', PROBLEM_TREATED: 'Problema tratado', TREATMENT_REVERSED: 'Tratamento revertido', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist pulado', GENERATED: 'Gerado automaticamente' } as Record<string, string>)[action] ?? action;
+    return ({ SERIAL_WAIVED: 'Série dispensada pelo administrador', SERIAL_PLATE_UPDATED: 'Dados atualizados pelo PCP', CREATED: 'Criado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Finalizado', FINISHED_INPUT: 'Preenchimento finalizado', CLAIMED: 'Assumido', DELEGATED: 'Delegado', REOPENED: 'Reaberto', CANCELLED: 'Cancelado', TREATED: 'Tratado', PROBLEM_TREATED: 'Problema tratado', TREATMENT_REVERSED: 'Tratamento revertido', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist pulado', GENERATED: 'Gerado automaticamente' } as Record<string, string>)[action] ?? action;
   }
   private nextSnapshot(flow: Flow, templateId: string) {
     let index = flow.plan.findIndex((s) => s.template.id === templateId) + 1;

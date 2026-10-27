@@ -24,6 +24,12 @@ public class SerialPlateController {
         return service.listPlates(pageable, search, status);
     }
 
+    @PostMapping("/relocation-impact")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_SERIAL_PLATES_OPERATOR')")
+    public List<SerialPlateRelocationDto> previewRelocation(@Valid @RequestBody SerialPlateMutationDto dto) {
+        return service.previewRelocation(dto);
+    }
+
     @GetMapping("/summary")
     public Map<String, Long> getSummary() { return service.getSummary(); }
 

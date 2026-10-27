@@ -114,7 +114,7 @@
               <input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
               <span class="produced-item-description">
                 <strong>{{ equipment.item }}</strong>
-                <small>Número de série: {{ equipment.serial }}</small>
+                <small>Número de série: {{ equipment.serial || '-' }}</small>
               </span>
             </label>
           } @empty {

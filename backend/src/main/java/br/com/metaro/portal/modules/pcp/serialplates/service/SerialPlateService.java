@@ -7,6 +7,7 @@ import br.com.metaro.portal.core.services.UserService;
 import br.com.metaro.portal.core.services.exceptions.ResourceNotFoundException;
 import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityException;
 import br.com.metaro.portal.modules.pcp.serialplates.dto.*;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistSerialPlateService;
 import br.com.metaro.portal.modules.pcp.serialplates.entity.*;
 import br.com.metaro.portal.modules.pcp.serialplates.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +40,23 @@ public class SerialPlateService {
     private final SerialPlateErpService erp;
     private final ObjectMapper mapper;
     private final EntityManager entityManager;
+    private final ChecklistSerialPlateService checklistSerialPlateService;
+
+    @Transactional(readOnly = true)
+    public List<SerialPlateRelocationDto> previewRelocation(SerialPlateMutationDto request) {
+        if (!request.getFields().contains("order") && !request.getFields().contains("readyStock")) return List.of();
+        List<SerialPlateRelocationDto> impacts = new ArrayList<>();
+        for (Long serial : serials(request.getVersions().keySet())) {
+            SerialPlate plate = repository.findById(serial).orElseThrow(ResourceNotFoundException::new);
+            String order = request.getFields().contains("order") ? text(request.getPatch().getOrder()) : plate.getOrder();
+            boolean readyStock = request.getFields().contains("readyStock")
+                    ? Boolean.TRUE.equals(request.getPatch().getReadyStock()) : plate.getReadyStock();
+            if (readyStock) order = "";
+            checklistSerialPlateService.relocationImpact(serial, order).ifPresent(impacts::add);
+        }
+        return impacts;
+    }
+
 
     @Transactional(readOnly = true)
     public Page<SerialPlateDto> listPlates(Pageable requested, String search, String status) {
@@ -204,6 +222,7 @@ public class SerialPlateService {
 
             if (!before.equals(after)) {
                 plate.setUpdated(Instant.now());
+                checklistSerialPlateService.synchronizePlate(plate, changedOrder ? item.getLabel() : null, user, request.isConfirmRelocation());
                 audit(serial, user, plate.getUpdated(), List.of(), after, before, changedOrder ? item.getLabel() : null);
             }
             updated.add(plate);

@@ -133,7 +133,7 @@ export function setNokFieldValue(problem: Problem, field: NokFormField, value: s
 
 export function validateRecord(record: Checklist, flow: Flow, nokFields = defaultChecklistNokFields()): string | null {
   const snap = flow.plan.find((s) => s.template.id === record.templateId)!;
-  if (snap.category.serial && !isProductionKit(snap) && !flow.serial.trim()) return 'Informe o número de série.';
+  if (snap.category.serial && !isProductionKit(snap) && !flow.serialWaived && !flow.serial.trim()) return 'Informe o número de série.';
   if (snap.category.departments && !record.departments.length) return 'Selecione pelo menos um setor.';
   if (snap.category.fields.some((f) => !record.fields[f.id]?.trim())) return 'Preencha os campos obrigatórios do cabeçalho.';
 

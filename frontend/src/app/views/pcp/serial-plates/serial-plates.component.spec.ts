@@ -94,6 +94,8 @@ describe('SerialPlatesComponent API integration', () => {
     expect(component.edit.order).toBe('900');
     expect(component.edit.client).toBe('Cliente');
     const pending = component.saveEdit();
+    http.expectOne(request => request.url.endsWith('/relocation-impact')).flush([]);
+    await Promise.resolve();
     const update = http.expectOne(request => request.url.endsWith('/18918'));
     expect(update.request.body.versions).toEqual({ '18918': 0 });
     expect(update.request.body.patch.order).toBe('');
@@ -165,6 +167,8 @@ describe('SerialPlatesComponent API integration', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     http.expectOne(request => request.url.endsWith('/selection')).flush([row]);
     await new Promise(resolve => setTimeout(resolve, 0));
+    http.expectOne(request => request.url.endsWith('/relocation-impact')).flush([]);
+    await new Promise(resolve => setTimeout(resolve, 0));
     const update = http.expectOne(request => request.url.endsWith('/batch'));
     expect(update.request.body.patch.weight).toBe(400);
     update.flush([{ ...row, order: '900', orderItem: 'item', description: 'Modelo ERP', weight: 400, version: 1 }]);
@@ -227,6 +231,33 @@ describe('SerialPlatesComponent API integration', () => {
     const batchUnits = fixture.nativeElement.querySelectorAll('#serialPlateModal .unit-tooltip');
     expect(batchUnits.length).toBe(1);
     batchUnits.forEach((unit: HTMLElement) => expect(unit.tabIndex).toBe(-1));
+  });
+
+  it('requires relocation confirmation and preserves the edit when cancelled', async () => {
+    initialize(); fixture.detectChanges(); await fixture.whenStable();
+    component.edit = { ...row, order: '900', orderItem: 'old', client: 'Cliente' };
+    component.open('edit'); component.setReadyStock(true);
+    const pending = component.saveEdit();
+    http.expectOne(request => request.url.endsWith('/relocation-impact')).flush([{ serial: '18918', order: '', stepFlows: ['900'] }]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('Os demais equipamentos serão preservados');
+    http.expectNone(request => request.method === 'PUT');
+    const action = fixture.nativeElement.querySelector('app-checklist-action-modal');
+    const cancel = Array.from(action.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Cancelar')!;
+    cancel.click(); await pending; await fixture.whenStable();
+    expect(component.modalVisible).toBeTrue(); expect(component.busy).toBeFalse();
+    http.expectNone(request => request.method === 'PUT');
+    const retry = component.saveEdit();
+    http.expectOne(request => request.url.endsWith('/relocation-impact')).flush([{ serial: '18918', order: '', stepFlows: ['900'] }]);
+    await fixture.whenStable();
+    const confirm = Array.from(action.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Confirmar realocação')!;
+    confirm.click(); await new Promise(resolve => setTimeout(resolve, 0));
+    const update = http.expectOne(request => request.url.endsWith('/18918'));
+    expect(update.request.body.confirmRelocation).toBeTrue();
+    expect(update.request.body.versions).toEqual({ '18918': 0 });
+    update.flush({ ...row, readyStock: true, version: 1 }); await retry;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 1, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
   });
 
   it('does not grant operator rights through the old Kanban role', () => {

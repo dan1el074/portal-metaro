@@ -108,9 +108,9 @@
               <div class="linked-checklist-list">
                 @for(equipment of linkedChecklistEquipment;track equipment.flowId){
                   @if (equipment.recordId) {
-                    <a class="linked-checklist-item" [routerLink]="['/qualidade/checklist', equipment.recordId]"><strong>Fluxo de checklist #{{ equipment.flowId }}</strong><span>Número de série: {{ equipment.serial }}</span><small>{{ equipment.item }}</small><em>Acessar checklist</em></a>
+                    <a class="linked-checklist-item" [routerLink]="['/qualidade/checklist', equipment.recordId]"><strong>Fluxo de checklist #{{ equipment.flowId }}</strong><span>Número de série: {{ equipment.serial || '-' }}</span><small>{{ equipment.item }}</small><em>Acessar checklist</em></a>
                   } @else {
-                    <article class="linked-checklist-item"><strong>Fluxo de checklist #{{ equipment.flowId }}</strong><span>Número de série: {{ equipment.serial }}</span><small>{{ equipment.item }}</small></article>
+                    <article class="linked-checklist-item"><strong>Fluxo de checklist #{{ equipment.flowId }}</strong><span>Número de série: {{ equipment.serial || '-' }}</span><small>{{ equipment.item }}</small></article>
                   }
                 } @empty {
                   <p class="empty-checklist-state">{{ checklistEquipmentLoading ? 'Carregando fluxos vinculados...' : 'Nenhum fluxo de checklist vinculado.' }}</p>

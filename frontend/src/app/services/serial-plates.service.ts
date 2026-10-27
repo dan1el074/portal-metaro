@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { SerialPlatesDomainService } from './serial-plates-domain.service';
-import { ErpOrder, PlateHistory, PlatePatch, PlateSettings, SerialPlate, SerialPlateCreateDraft, SerialPlatePage, SerialPlateQuery, SerialPlateReport } from '../interface/serial-plates.interface';
+import { SerialPlateRelocation, ErpOrder, PlateHistory, PlatePatch, PlateSettings, SerialPlate, SerialPlateCreateDraft, SerialPlatePage, SerialPlateQuery, SerialPlateReport } from '../interface/serial-plates.interface';
 
 @Injectable({ providedIn: 'root' })
 export class SerialPlatesService extends SerialPlatesDomainService {
@@ -34,9 +34,15 @@ export class SerialPlatesService extends SerialPlatesDomainService {
     return this.http.post<SerialPlate[]>(this.api, draft);
   }
 
-  public update(records: SerialPlate[], patch: PlatePatch, batch: boolean): Observable<SerialPlate | SerialPlate[]> {
+  public update(records: SerialPlate[], patch: PlatePatch, batch: boolean, confirmRelocation = false): Observable<SerialPlate | SerialPlate[]> {
     const versions = Object.fromEntries(records.map(row => [row.serial, row.version]));
-    return this.http.put<SerialPlate | SerialPlate[]>(this.api + (batch ? '/batch' : '/' + records[0].serial), { patch, fields: Object.keys(patch), versions });
+    return this.http.put<SerialPlate | SerialPlate[]>(this.api + (batch ? '/batch' : '/' + records[0].serial), { patch, fields: Object.keys(patch), versions, confirmRelocation });
+  }
+
+  public relocationImpact(records: SerialPlate[], patch: PlatePatch): Observable<SerialPlateRelocation[]> {
+    return this.http.post<SerialPlateRelocation[]>(this.api + '/relocation-impact', {
+      patch, fields: Object.keys(patch), versions: Object.fromEntries(records.map(row => [row.serial, row.version])),
+    });
   }
 
   public selection(serials: string[]): Observable<SerialPlate[]> {

@@ -10,6 +10,7 @@ import java.util.Map;
 @Getter
 @Setter
 public class SerialPlateMutationDto {
+    private boolean confirmRelocation;
     @NotNull @Valid
     private SerialPlatePatchDto patch;
     @NotEmpty @Size(max = 10000)

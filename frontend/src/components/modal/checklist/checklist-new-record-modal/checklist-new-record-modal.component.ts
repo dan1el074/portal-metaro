@@ -1,21 +1,64 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Output } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Output, ViewChild, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
 import { Checklist, Category, Template } from '../../../../app/interface/checklist.interface';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
 import { ChecklistErpOrder, ChecklistRecordCreate, ChecklistService } from '../../../../app/services/checklist.service';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
+import { Subscription } from 'rxjs';
+import { ChecklistActionModalComponent } from '../checklist-action-modal/checklist-action-modal.component';
 import { isProductionKit } from '../../../../app/shared/checklist-rules';
 
 @Component({
   selector: 'app-checklist-new-record-modal',
-  imports: [CommonModule, FormsModule, ButtonCloseDirective, ButtonDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective, ModalBackNavigationDirective],
+  imports: [ChecklistActionModalComponent, CommonModule, FormsModule, ButtonCloseDirective, ButtonDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective, ModalBackNavigationDirective],
   templateUrl: './checklist-new-record-modal.component.html',
   styleUrl: './checklist-new-record-modal.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChecklistNewRecordModalComponent {
+export class ChecklistNewRecordModalComponent implements OnDestroy {
+  @ViewChild(ChecklistActionModalComponent) private actionModal!: ChecklistActionModalComponent;
+  protected readyStock = false;
+  protected availableSerials: Array<{ serial: string; description: string }> = [];
+  protected loadingSerials = false;
+  protected serialError = '';
+  private serialRequest?: Subscription;
+  private orderRequest?: Subscription;
+
+  protected get production(): boolean { return this.category?.integration === 'production'; }
+  protected get portalAdmin(): boolean { return this.store.user.roles.some(role => role.authority === 'ROLE_ADMIN'); }
+  protected get productionKit(): boolean {
+    const template = this.templates.find(item => item.id === this.templateId);
+    return !!template && !!this.category && isProductionKit({ template, category: this.category, equipment: '' });
+  }
+
+  protected readyStockChanged(): void {
+    this.orderRequest?.unsubscribe();
+    this.loadingOrder = false;
+    this.order = '';
+    this.item = '';
+    this.erpOrder = undefined;
+    this.orderError = '';
+    this.loadSerials();
+  }
+
+  protected loadSerials(): void {
+    this.serialRequest?.unsubscribe();
+    this.serial = '';
+    this.availableSerials = [];
+    this.serialError = '';
+    this.loadingSerials = false;
+    if (!this.production || this.predecessorId || (!this.readyStock && (!this.erpOrder || !this.item))) return;
+    this.loadingSerials = true;
+    this.serialRequest = this.api.availableSerials(this.readyStock ? '' : this.order.trim(), this.readyStock).subscribe({
+      next: options => { this.availableSerials = options; this.loadingSerials = false; this.cdr.markForCheck(); },
+      error: () => { this.serialError = 'Não foi possível consultar os números de série. Tente novamente.'; this.loadingSerials = false; this.cdr.markForCheck(); },
+    });
+  }
+
+  public ngOnDestroy(): void { this.orderRequest?.unsubscribe(); this.serialRequest?.unsubscribe(); }
+
   @Output() createRecord = new EventEmitter<ChecklistRecordCreate>();
 
   protected visible = false;
@@ -44,6 +87,8 @@ export class ChecklistNewRecordModalComponent {
 
   protected close(): void {
     this.visible = false;
+    this.orderRequest?.unsubscribe();
+    this.serialRequest?.unsubscribe();
     this.cdr.detectChanges();
   }
 
@@ -100,16 +145,17 @@ export class ChecklistNewRecordModalComponent {
   }
 
   protected get requiresErp(): boolean {
-    return !this.predecessorId && !!this.category?.erp;
+    return !this.predecessorId && !!this.category?.erp && !this.readyStock;
   }
 
   protected get showsSerial(): boolean {
-    return !this.predecessorId && !!this.category?.serial;
+    return !this.predecessorId && (!!this.category?.serial || this.production);
   }
 
   protected get requiresSerial(): boolean {
     const template = this.templates.find((item) => item.id === this.templateId);
     if (!template || !this.showsSerial) return false;
+    if (this.production && this.portalAdmin) return false;
     return !isProductionKit({
       template,
       category: this.category!,
@@ -122,14 +168,17 @@ export class ChecklistNewRecordModalComponent {
       && (!this.needsPredecessor || !!this.predecessorId)
       && (!this.requiresErp || (!!this.erpOrder && !!this.item && String(this.erpOrder.number) === this.order.trim()))
       && (!this.requiresSerial || !!this.serial.trim())
-      && !this.loadingOrder;
+      && !this.loadingOrder && !this.loadingSerials;
   }
 
   protected orderChanged(): void {
     if (String(this.erpOrder?.number ?? '') === this.order.trim()) return;
+    this.orderRequest?.unsubscribe();
+    this.loadingOrder = false;
     this.erpOrder = undefined;
     this.item = '';
     this.orderError = '';
+    this.loadSerials();
   }
 
   protected searchOrder(): void {
@@ -137,11 +186,13 @@ export class ChecklistNewRecordModalComponent {
     if (!order || this.loadingOrder || String(this.erpOrder?.number ?? '') === order) return;
     this.loadingOrder = true;
     this.orderError = '';
-    this.api.findErpOrder(order).subscribe({
+    this.orderRequest?.unsubscribe();
+    this.orderRequest = this.api.findErpOrder(order).subscribe({
       next: (result) => {
         this.erpOrder = result;
         this.item = result.items.length === 1 ? this.formatItem(result.items[0]) : '';
         this.loadingOrder = false;
+        this.loadSerials();
         this.cdr.detectChanges();
       },
       error: () => {
@@ -149,6 +200,7 @@ export class ChecklistNewRecordModalComponent {
         this.item = '';
         this.orderError = 'Pedido não encontrado no ERP.';
         this.loadingOrder = false;
+        this.loadSerials();
         this.cdr.detectChanges();
       },
     });
@@ -158,13 +210,26 @@ export class ChecklistNewRecordModalComponent {
     return `${item.code} - ${item.description}`;
   }
 
-  protected confirm(): void {
+  protected async confirm(): Promise<void> {
     if (!this.canConfirm) return;
+    const withoutSerial = this.production && !this.predecessorId && !this.productionKit && !this.serial.trim();
+    if (withoutSerial) {
+      if (!this.portalAdmin) return;
+      this.visible = false;
+      const confirmed = await this.actionModal.open({
+        title: 'Criar checklist sem número de série?',
+        message: 'Este checklist será criado sem um número de série vinculado. Deseja continuar?',
+        confirmLabel: 'Criar sem número de série',
+      });
+      if (!confirmed) { this.visible = true; this.cdr.detectChanges(); return; }
+    }
     this.createRecord.emit({
+      readyStock: this.production && this.readyStock,
+      confirmWithoutSerial: withoutSerial,
       templateId: this.templateId,
       predecessorRecordId: this.predecessorId || undefined,
       serial: this.serial.trim() || undefined,
-      order: this.order.trim() || undefined,
+      order: this.readyStock ? undefined : this.order.trim() || undefined,
       clientId: this.erpOrder?.cnpj,
       client: this.erpOrder?.client,
       item: this.item || undefined,
@@ -180,6 +245,12 @@ export class ChecklistNewRecordModalComponent {
   }
 
   private resetIdentification(): void {
+    this.orderRequest?.unsubscribe();
+    this.serialRequest?.unsubscribe();
+    this.readyStock = false;
+    this.availableSerials = [];
+    this.loadingSerials = false;
+    this.serialError = '';
     this.order = '';
     this.item = '';
     this.serial = '';

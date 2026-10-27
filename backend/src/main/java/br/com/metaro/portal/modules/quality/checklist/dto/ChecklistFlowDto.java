@@ -16,6 +16,10 @@ import java.util.Map;
 public class ChecklistFlowDto {
     private Long id;
     private String serial;
+    private Long serialPlateId;
+    private boolean readyStock;
+    private boolean serialWaived;
+    private Map<String, Object> erpData = new HashMap<>();
     private String order;
     private String clientId;
     private String client;

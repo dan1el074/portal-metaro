@@ -1,7 +1,8 @@
+import { ChecklistActionModalComponent } from '../../../../components/modal/checklist/checklist-action-modal/checklist-action-modal.component';
 import { Subject, Observable, firstValueFrom, forkJoin, switchMap, takeUntil, catchError, EMPTY } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, ViewChild, inject } from '@angular/core';
 import { ButtonDirective, CardBodyComponent, CardComponent, ContainerComponent, DropdownModule, ModalService } from '@coreui/angular';
 import { ISorterValue } from '@coreui/angular-pro';
 import { ChecklistIconComponent } from '../../../../components/icons/checklist-icon/checklist-icon.component';
@@ -20,6 +21,7 @@ import { ReportPreviewData } from '../../../interface/report-preview.interface';
 @Component({
   selector: 'app-serial-plates',
   imports: [
+    ChecklistActionModalComponent,
     CommonModule,
     ContainerComponent,
     CardComponent,
@@ -37,6 +39,7 @@ import { ReportPreviewData } from '../../../interface/report-preview.interface';
   changeDetection: ChangeDetectionStrategy.Eager
 })
 export class SerialPlatesComponent implements OnDestroy {
+  @ViewChild(ChecklistActionModalComponent) private relocationModal!: ChecklistActionModalComponent;
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly data = inject(SerialPlatesService);
   private readonly reports = inject(ReportPreviewService);
@@ -494,7 +497,24 @@ export class SerialPlatesComponent implements OnDestroy {
     if (this.busy || !this.canEdit()) return;
     this.busy = true;
     try {
-      const response = await this.request(this.data.update(records, patch, batch));
+      const impacts = 'order' in patch || 'readyStock' in patch
+        ? await this.request(this.data.relocationImpact(records, patch)) : [];
+      let confirmed = false;
+      if (impacts.length) {
+        const modalWasVisible = this.modalVisible;
+        this.modalVisible = false;
+        this.updateView();
+        const details = impacts.map(impact => `Série ${impact.serial} → ${impact.order ? 'pedido ' + impact.order : 'Pronta Entrega'} (fluxo(s) ${impact.stepFlows.join(', ')})`).join('; ');
+        confirmed = !!await this.relocationModal.open({
+          title: 'Confirmar realocação de equipamento',
+          message: `${details}. O equipamento será removido do Fluxo de Etapas antigo. Uma mensagem será registrada na etapa atual. Fluxos abertos serão encaminhados ao PCP; fluxos concluídos continuarão concluídos. Os demais equipamentos serão preservados. Deseja continuar?`,
+          confirmLabel: 'Confirmar realocação',
+        });
+        if (this.destroyed) return;
+        this.modalVisible = modalWasVisible;
+        if (!confirmed) return;
+      }
+      const response = await this.request(this.data.update(records, patch, batch, confirmed));
       const updated = Array.isArray(response) ? response : [response];
       const selected = new Set(this.selected);
       updated.forEach(row => {

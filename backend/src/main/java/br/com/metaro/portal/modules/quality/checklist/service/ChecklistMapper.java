@@ -76,6 +76,10 @@ public class ChecklistMapper {
         ChecklistFlowDto dto = new ChecklistFlowDto();
         dto.setId(entity.getId());
         dto.setSerial(entity.getSerialNumber());
+        dto.setSerialPlateId(entity.getSerialPlateId());
+        dto.setReadyStock(entity.isReadyStock());
+        dto.setSerialWaived(entity.isSerialWaived());
+        dto.setErpData(read(entity.getErpDataJson(), new TypeReference<>() {}));
         dto.setOrder(entity.getOrderNumber());
         dto.setClientId(entity.getClientId());
         dto.setClient(entity.getClientName());

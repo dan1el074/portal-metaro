@@ -124,6 +124,10 @@ export interface Snapshot {
   equipment: string;
 }
 export interface Flow {
+  serialPlateId?: number;
+  readyStock?: boolean;
+  serialWaived?: boolean;
+  erpData?: Record<string, string>;
   id: string;
   serial: string;
   order: string;
