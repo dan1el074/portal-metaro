@@ -8,6 +8,8 @@ import br.com.metaro.portal.modules.general.stepFlow.entities.Order;
 import br.com.metaro.portal.modules.general.stepFlow.entities.OrderStatus;
 import br.com.metaro.portal.modules.general.stepFlow.entities.OrderStep;
 import br.com.metaro.portal.modules.general.stepFlow.entities.StepType;
+import br.com.metaro.portal.modules.general.stepFlow.entities.StepStatus;
+import br.com.metaro.portal.modules.general.stepFlow.entities.StepMessage;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepository;
 import br.com.metaro.portal.modules.quality.checklist.dto.ChecklistSnapshotDto;
 import br.com.metaro.portal.modules.quality.checklist.dto.ChecklistStepBindingDto;
@@ -115,7 +117,6 @@ public class ChecklistStepFlowService {
                 .collect(java.util.stream.Collectors.toSet());
         Map<Long, ChecklistFlow> candidates = new LinkedHashMap<>();
         flowRepository.findByOrderNumberAndCancelledFalseOrderBySerialNumberAsc(String.valueOf(order.getNumber())).stream()
-                .filter(flow -> flow.getSerialNumber() != null && !flow.getSerialNumber().isBlank())
                 .filter(flow -> recordRepository.existsByFlowIdAndStatus(flow.getId(), ChecklistStatus.FINISHED))
                 .filter(flow -> selected.contains(flow.getId())
                         || !bindingRepository.existsByFlowIdAndNonCancelledOrderOtherThan(flow.getId(), orderId))
@@ -149,7 +150,6 @@ public class ChecklistStepFlowService {
     @Transactional(readOnly = true)
     public List<ChecklistStepEquipmentDto> listAvailableEquipment(String orderNumber) {
         return flowRepository.findByOrderNumberAndCancelledFalseOrderBySerialNumberAsc(orderNumber).stream()
-                .filter(flow -> flow.getSerialNumber() != null && !flow.getSerialNumber().isBlank())
                 .filter(flow -> recordRepository.existsByFlowIdAndStatus(flow.getId(), ChecklistStatus.FINISHED))
                 .filter(flow -> !bindingRepository.existsByFlowIdAndNonCancelledOrder(flow.getId()))
                 .map(this::toEquipmentDto)
@@ -159,11 +159,10 @@ public class ChecklistStepFlowService {
     @Transactional(readOnly = true)
     public void assertOrderCanStart(String orderNumber) {
         boolean available = flowRepository.findByOrderNumberAndCancelledFalseOrderBySerialNumberAsc(orderNumber).stream()
-                .anyMatch(flow -> flow.getSerialNumber() != null && !flow.getSerialNumber().isBlank()
-                        && recordRepository.existsByFlowIdAndStatus(flow.getId(), ChecklistStatus.FINISHED)
+                .anyMatch(flow -> recordRepository.existsByFlowIdAndStatus(flow.getId(), ChecklistStatus.FINISHED)
                         && !bindingRepository.existsByFlowIdAndNonCancelledOrder(flow.getId()));
         if (!available) {
-            throw new UnprocessableEntityException("O pedido precisa possuir ao menos um número de série com o primeiro checklist finalizado.");
+            throw new UnprocessableEntityException("O pedido precisa possuir ao menos um equipamento com checklist finalizado.");
         }
     }
 
@@ -189,7 +188,7 @@ public class ChecklistStepFlowService {
             if (current == null || !current.isChecklistPending() || !isStepRequirementSatisfied(order.getId(), order.getCurrentStep())) continue;
             StepType completedType = order.getCurrentStep();
             current.setChecklistPending(false);
-            current.setStatus(br.com.metaro.portal.modules.general.stepFlow.entities.StepStatus.DONE);
+            current.setStatus(StepStatus.DONE);
             current.setFinishedAt(Instant.now());
             current.setFinishedBy(user);
             if (completedType == StepType.SHIPPING) {
@@ -198,7 +197,7 @@ public class ChecklistStepFlowService {
                 StepType nextType = StepType.values()[completedType.ordinal() + 1];
                 OrderStep next = order.getSteps().stream().filter(step -> step.getStep() == nextType).findFirst().orElseThrow(ResourceNotFoundException::new);
                 order.setCurrentStep(nextType);
-                next.setStatus(br.com.metaro.portal.modules.general.stepFlow.entities.StepStatus.ACTIVE);
+                next.setStatus(StepStatus.ACTIVE);
                 next.setStartedAt(Instant.now());
             }
             orderRepository.save(order);
@@ -284,6 +283,50 @@ public class ChecklistStepFlowService {
         dto.setSerial(flow.getSerialNumber());
         dto.setItem(flow.getCommercialItem());
         return dto;
+    }
+
+    @Transactional
+    public void relocateEquipment(ChecklistFlow flow, String newOrder, User actor) {
+        for (ChecklistStepBinding binding : bindingRepository.findByFlowId(flow.getId())) {
+            Order order = orderRepository.findLockedById(binding.getOrder().getId()).orElseThrow(ResourceNotFoundException::new);
+            OrderStep current = order.getSteps().stream()
+                    .filter(step -> step.getStep() == (order.getStatus() == OrderStatus.COMPLETED ? StepType.SHIPPING : order.getCurrentStep()))
+                    .findFirst().orElseThrow(ResourceNotFoundException::new);
+            String destination = newOrder == null || newOrder.isBlank() ? "Pronta Entrega" : "o pedido " + newOrder;
+            current.getMessages().add(new StepMessage(
+                    "O número de série " + flow.getSerialNumber() + " foi realocado para " + destination + " pelo setor PCP.", current, actor));
+            if (order.getStatus() == OrderStatus.IN_PROGRESS || order.getStatus() == OrderStatus.LATE) {
+                StepType previous = order.getCurrentStep();
+                if (previous != StepType.PCP) {
+                    current.getMessages().add(new StepMessage(
+                            "Etapa alterada automaticamente: " + previous.getDescription() + " → PCP após realocação do equipamento.", current, actor));
+                    Instant now = Instant.now();
+                    for (OrderStep step : order.getSteps()) {
+                        step.setChecklistPending(false);
+                        if (step.getStep().ordinal() < StepType.PCP.ordinal()) {
+                            if (step.getStatus() != StepStatus.DONE) {
+                                step.setFinishedAt(now);
+                                step.setFinishedBy(actor);
+                                if (step.getStartedAt() == null) step.setStartedAt(now);
+                            }
+                            step.setStatus(StepStatus.DONE);
+                        } else if (step.getStep() == StepType.PCP) {
+                            step.setStatus(StepStatus.ACTIVE);
+                            step.setStartedAt(now);
+                            step.setFinishedAt(null);
+                            step.setFinishedBy(null);
+                        } else {
+                            step.setStatus(StepStatus.WAITING);
+                        }
+                    }
+                    order.setCurrentStep(StepType.PCP);
+                } else {
+                    current.setChecklistPending(false);
+                }
+            }
+            bindingRepository.delete(binding);
+            orderRepository.save(order);
+        }
     }
 
     private StepType parseStepType(String value) {

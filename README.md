@@ -23,6 +23,8 @@ PDFs, câmera e links externos.
 
 ## Funcionalidades
 
+- [PCP — Nº Série/Plaquetas: especificação funcional, backend e implantação](docs/pcp-serial-plates.md).
+
 - Autenticação por JWT e autorização baseada em perfis.
 - Mural eletrônico para comunicados e avisos internos.
 - Gerenciamento e compartilhamento de arquivos.

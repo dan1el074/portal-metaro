@@ -9,7 +9,7 @@ export interface NavigationTool {
 }
 
 export function getNavigationTools(roles: ReadonlyArray<Role>): NavigationTool[] {
-  return roles
+  const tools = roles
     .filter(role => Boolean(role.title && role.titleUrl))
     .map(role => ({
       id: role.id,
@@ -18,4 +18,6 @@ export function getNavigationTools(roles: ReadonlyArray<Role>): NavigationTool[]
       title: role.title,
       url: role.parentUrl + role.titleUrl
     }));
+
+  return tools;
 }

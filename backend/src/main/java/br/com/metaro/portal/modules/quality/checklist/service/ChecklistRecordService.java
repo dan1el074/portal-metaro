@@ -40,6 +40,7 @@ public class ChecklistRecordService {
     private final ErpOrderQueryService erpOrderQueryService;
     private final ChecklistStepFlowService checklistStepFlowService;
     private final ChecklistEvidenceService checklistEvidenceService;
+    private final ChecklistSerialPlateService serialPlateService;
 
     @Transactional(readOnly = true)
     public Page<ChecklistRecordDto> listRecords(Pageable pageable) {
@@ -99,6 +100,9 @@ public class ChecklistRecordService {
         ChecklistRecord record = createEmptyRecord(flow, template, user, false);
         recordRepository.save(record);
         addAudit(record, user, "CREATED", "Registro de checklist criado manualmente.");
+        if (flow.isSerialWaived() && input.getPredecessorRecordId() == null) {
+            addAudit(record, user, "SERIAL_WAIVED", "Administrador do portal confirmou a criação sem número de série.");
+        }
         return mapper.toDto(record);
     }
 
@@ -244,6 +248,7 @@ public class ChecklistRecordService {
         flow.setCancelled(true);
         flow.setCancellationReason(input.getReason().trim());
         flow.setNormalizedSerial(null);
+        flow.setSerialPlateId(null);
         flow.setUpdatedAt(Instant.now());
         flowRepository.save(flow);
         for (ChecklistRecord flowRecord : recordRepository.findByFlowId(flow.getId())) {
@@ -289,6 +294,9 @@ public class ChecklistRecordService {
         }
         Long flowId = record.getFlow().getId();
         checklistEvidenceService.deleteAll(id);
+        commentRepository.deleteAll(commentRepository.findByRecordId(id));
+        revisionRepository.deleteAll(revisionRepository.findByRecordIdOrderByCreatedAtAsc(id));
+        auditRepository.deleteAll(auditRepository.findByRecordIdOrderByCreatedAtAsc(id));
         recordRepository.delete(record);
         if (recordRepository.findByFlowId(flowId).isEmpty()) flowRepository.deleteById(flowId);
     }
@@ -355,12 +363,17 @@ public class ChecklistRecordService {
         User actor = userService.authenticate();
         assertAdministrator(actor);
         ChecklistFlow flow = findRecord(recordId).getFlow();
+        if (flow.isCancelled()) throw new UnprocessableEntityException("Um fluxo cancelado não pode ser editado.");
+        if (flow.getSerialPlateId() != null) {
+            throw new UnprocessableEntityException("Altere o pedido e o item em Nº Série/Plaquetas para manter os módulos sincronizados.");
+        }
         ErpOrderDto order = findErpOrder(input.getOrder());
         ErpOrderItemDto item = findCommercialItem(order, input.getItem());
         String previousOrder = flow.getOrderNumber();
         String previousClient = flow.getClientName();
         String previousItem = flow.getCommercialItem();
         flow.setOrderNumber(order.getNumber().toString());
+        flow.setReadyStock(false);
         flow.setClientId(order.getCnpj());
         flow.setClientName(order.getClient());
         flow.setSalesperson(order.getSalesperson());
@@ -387,12 +400,15 @@ public class ChecklistRecordService {
             throw new UnprocessableEntityException("É necessário informar o número de série.");
         }
         String normalized = normalizeSerial(serial);
-        if (flowRepository.existsByNormalizedSerialAndIdNot(normalized, flow.getId())) {
+        if (normalized != null && flowRepository.existsByNormalizedSerialAndIdNot(normalized, flow.getId())) {
             throw new UnprocessableEntityException("O número de série já pertence a outro fluxo de checklist.");
         }
         String previous = flow.getSerialNumber();
         flow.setSerialNumber(serial);
         flow.setNormalizedSerial(normalized);
+        boolean production = plan(flow).stream().anyMatch(snapshot -> "production".equals(snapshot.getCategory().getIntegration()));
+        if (production && serial != null) serialPlateService.assignSerial(flow, serial, flow.isReadyStock());
+        else if (serial == null) flow.setSerialPlateId(null);
         flow.setUpdatedAt(Instant.now());
         flowRepository.save(flow);
         for (ChecklistRecord record : recordRepository.findByFlowId(flow.getId())) {
@@ -403,7 +419,16 @@ public class ChecklistRecordService {
 
     private ChecklistFlow createFlow(ChecklistTemplate root, ChecklistRecordCreateDto input) {
         ChecklistFlow flow = new ChecklistFlow();
+        boolean production = root.getCategory().getIntegration() == ChecklistIntegration.PRODUCTION;
+        if (input.isReadyStock() && !production) throw new UnprocessableEntityException("Pronta Entrega é exclusiva da integração Produção.");
+        boolean withoutSerial = production && !isProductionKit(root) && trim(input.getSerial()) == null;
+        if (withoutSerial && (!userService.authenticate().hasRole("ROLE_ADMIN") || !input.isConfirmWithoutSerial())) {
+            throw new ForbiddenException("Somente ROLE_ADMIN pode confirmar a criação sem número de série.");
+        }
+        flow.setSerialWaived(withoutSerial);
+        flow.setReadyStock(production && input.isReadyStock());
         applyCommercialData(flow, root, input);
+        if (production && trim(input.getSerial()) != null) serialPlateService.assignSerial(flow, input.getSerial().trim(), flow.isReadyStock());
         flow.setPlanJson(mapper.write(buildPlan(root)));
         flow.setSkippedJson("{}");
         flow.setCancelled(false);
@@ -478,7 +503,7 @@ public class ChecklistRecordService {
     private void applyCommercialData(ChecklistFlow flow, ChecklistTemplate template, ChecklistRecordCreateDto input) {
         ChecklistCategory category = template.getCategory();
         String serial = trim(input.getSerial());
-        if (category.isSerialRequired() && !isProductionKit(template) && serial == null) {
+        if (category.isSerialRequired() && !isProductionKit(template) && !flow.isSerialWaived() && serial == null) {
             throw new UnprocessableEntityException("É necessário informar o número de série.");
         }
         String normalizedSerial = normalizeSerial(serial);
@@ -487,7 +512,7 @@ public class ChecklistRecordService {
         }
         ErpOrderDto order = null;
         ErpOrderItemDto item = null;
-        if (category.isErpRequired()) {
+        if (category.isErpRequired() && !flow.isReadyStock()) {
             if (trim(input.getOrder()) == null || trim(input.getItem()) == null) {
                 throw new UnprocessableEntityException("É necessário informar o pedido do ERP e o item comercial.");
             }
@@ -501,6 +526,13 @@ public class ChecklistRecordService {
         flow.setClientName(order == null ? trim(input.getClient()) : order.getClient());
         flow.setCommercialItem(item == null ? trim(input.getItem()) : formatItem(item));
         flow.setSalesperson(order == null ? trim(input.getSeller()) : order.getSalesperson());
+        if (flow.isReadyStock()) {
+            flow.setOrderNumber(null);
+            flow.setClientId(null);
+            flow.setClientName(null);
+            flow.setCommercialItem(null);
+            flow.setSalesperson(null);
+        }
     }
 
     private void validateCompletedRecord(ChecklistRecord record) {
@@ -508,7 +540,7 @@ public class ChecklistRecordService {
         Map<String, ChecklistAnswerDto> answers = readAnswers(record);
         Map<String, String> fields = mapper.read(record.getFieldsJson(), new TypeReference<>() {});
         List<String> departments = mapper.read(record.getDepartmentsJson(), new TypeReference<>() {});
-        if (snapshot.getCategory().isSerial() && !isProductionKit(snapshot)
+        if (snapshot.getCategory().isSerial() && !isProductionKit(snapshot) && !record.getFlow().isSerialWaived()
                 && trim(record.getFlow().getSerialNumber()) == null) {
             throw new UnprocessableEntityException("É necessário informar o número de série.");
         }

@@ -2,6 +2,7 @@ package br.com.metaro.portal.modules.quality.checklist.controller;
 
 import br.com.metaro.portal.modules.quality.checklist.dto.*;
 import br.com.metaro.portal.modules.quality.checklist.service.ChecklistRecordService;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistSerialPlateService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +19,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChecklistRecordController {
     private final ChecklistRecordService service;
+    private final ChecklistSerialPlateService serialPlateService;
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
+    @GetMapping("/available-serials")
+    public ResponseEntity<List<ChecklistSerialOptionDto>> listAvailableSerials(
+            @RequestParam(defaultValue = "") String order, @RequestParam(defaultValue = "false") boolean readyStock) {
+        return ResponseEntity.ok(serialPlateService.listAvailable(order, readyStock));
+    }
+
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
     @GetMapping

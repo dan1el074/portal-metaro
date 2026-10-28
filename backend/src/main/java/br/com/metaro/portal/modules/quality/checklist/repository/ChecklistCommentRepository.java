@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ChecklistCommentRepository extends JpaRepository<ChecklistComment, Long> {
+    List<ChecklistComment> findByRecordId(Long recordId);
     List<ChecklistComment> findByRecordIdAndActiveTrueOrderByCreatedAtAsc(Long recordId);
     Optional<ChecklistComment> findByIdAndRecordId(Long id, Long recordId);
     Optional<ChecklistComment> findByRecordIdAndProblemIdAndActiveTrue(Long recordId, String problemId);

@@ -8,6 +8,7 @@ import java.util.List;
 
 public interface ChecklistFlowRepository extends JpaRepository<ChecklistFlow, Long> {
     Optional<ChecklistFlow> findByNormalizedSerial(String normalizedSerial);
+    Optional<ChecklistFlow> findBySerialPlateIdAndCancelledFalse(Long serialPlateId);
     boolean existsByNormalizedSerialAndIdNot(String normalizedSerial, Long id);
     List<ChecklistFlow> findByOrderNumberAndCancelledFalseOrderBySerialNumberAsc(String orderNumber);
 }
