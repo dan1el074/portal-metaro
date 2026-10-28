@@ -1,0 +1,13 @@
+<c-modal id="serialPlateHistoryModal" alignment="center" backdrop="static" size="lg" scrollable [transition]="true" [keyboard]="false">
+  <c-modal-header><h5 cModalTitle>Histórico <strong class="history-serial">#{{ serialLabel(record?.serial || '') }}</strong></h5><button cButtonClose cModalToggle="serialPlateModal" aria-label="Voltar"></button></c-modal-header>
+  <c-modal-body>
+    <div class="history-list">
+      @for (event of events; track $index) {
+        <article><header><span class="history-author">{{ event.author }}</span><time>{{ event.at | date:'dd/MM/yyyy HH:mm:ss':'-0300' }}</time></header>
+          <ul>@for (change of event.changes; track $index) { <li><span class="history-emphasis">{{ change.field }}</span>: <span class="history-before">{{ change.before || '(vazio)' }}</span> → <span class="history-emphasis">{{ change.after || '(vazio)' }}</span></li> }</ul>
+        </article>
+      } @empty { <p class="helper-text">Nenhuma alteração registrada.</p> }
+    </div>
+  </c-modal-body>
+  <c-modal-footer><button cButton color="secondary" cModalToggle="serialPlateModal">Voltar</button></c-modal-footer>
+</c-modal>

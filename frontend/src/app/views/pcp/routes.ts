@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { AuthGuard } from '../../config/authGuard';
+import { AuthGuard } from '../../config/auth.guard';
 
 export const routes: Routes = [
   {
@@ -8,6 +8,15 @@ export const routes: Routes = [
       title: 'PCP'
     },
     children: [
+      {
+        path: 'serial-plates',
+        loadComponent: () => import('./serial-plates/serial-plates.component').then(m => m.SerialPlatesComponent),
+        canActivate: [AuthGuard],
+        data: {
+          title: 'Nº Série/Plaquetas',
+          roles: ['ROLE_ADMIN', 'ROLE_SERIAL_PLATES_OPERATOR', 'ROLE_SERIAL_PLATES_CONSULTATION']
+        }
+      },
       {
         path: '',
         redirectTo: '/',

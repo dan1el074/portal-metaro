@@ -13,12 +13,24 @@
     @if (!predecessorId && (requiresErp || showsSerial)) {
       <section class="identification-section">
         <div class="section-heading"><strong>Identificação</strong><small>Essas informações ficarão bloqueadas durante o preenchimento.</small></div>
+        @if (production) { <label class="mb-3"><input type="checkbox" [(ngModel)]="readyStock" (ngModelChange)="readyStockChanged()" /> Pronta Entrega</label> }
         <div class="form-grid">
-          @if (requiresErp) {
-            <label>Pedido<div class="search-field"><input cFormControl [(ngModel)]="order" (ngModelChange)="orderChanged()" (keyup.enter)="searchOrder()" placeholder="Informe o pedido" /><button cButton type="button" color="secondary" variant="outline" [disabled]="!order.trim() || loadingOrder" (click)="searchOrder()">{{ loadingOrder ? 'Consultando...' : 'Buscar' }}</button></div>@if (orderError) { <small class="text-danger">{{ orderError }}</small> }</label>
-            <label>Item<select cSelect [(ngModel)]="item" [disabled]="!erpOrder"><option value="">Selecione</option>@for (orderItem of erpOrder?.items ?? []; track orderItem.code) { <option [value]="formatItem(orderItem)">{{ formatItem(orderItem) }}</option> }</select></label>
+          @if (requiresErp || (production && readyStock)) {
+            <label>Pedido<div class="search-field"><input cFormControl [(ngModel)]="order" [disabled]="readyStock" (ngModelChange)="orderChanged()" (keyup.enter)="searchOrder()" placeholder="Informe o pedido" /><button cButton type="button" color="secondary" variant="outline" [disabled]="readyStock || !order.trim() || loadingOrder" (click)="searchOrder()">{{ loadingOrder ? 'Consultando...' : 'Buscar' }}</button></div>@if (orderError) { <small class="text-danger">{{ orderError }}</small> }</label>
+            <label>Item<select cSelect [(ngModel)]="item" (ngModelChange)="loadSerials()" [disabled]="readyStock || !erpOrder"><option value="">Selecione</option>@for (orderItem of erpOrder?.items ?? []; track orderItem.code) { <option [value]="formatItem(orderItem)">{{ formatItem(orderItem) }}</option> }</select></label>
           }
-          @if (showsSerial) { <label>Número de série{{ requiresSerial ? '' : ' (opcional)' }}<input cFormControl [(ngModel)]="serial" /></label> }
+          @if (showsSerial) {
+            <label>Número de série{{ requiresSerial ? '' : ' (opcional)' }}
+              @if (production) {
+                <select cSelect [(ngModel)]="serial" [disabled]="loadingSerials || (!readyStock && !item)">
+                  <option value="">{{ loadingSerials ? 'Consultando...' : 'Selecione' }}</option>
+                  @for (option of availableSerials; track option.serial) { <option [value]="option.serial">{{ option.serial }}{{ option.description ? ' — ' + option.description : '' }}</option> }
+                </select>
+                @if (serialError) { <small class="text-danger">{{ serialError }}</small><button cButton type="button" variant="outline" color="secondary" (click)="loadSerials()">Tentar novamente</button> }
+                @else if (!loadingSerials && (readyStock || item) && !availableSerials.length) { <small>Nenhum número de série disponível.</small> }
+              } @else { <input cFormControl [(ngModel)]="serial" /> }
+            </label>
+          }
         </div>
         @if (erpOrder) { <div class="erp-summary"><span>Cliente</span><strong>{{ erpOrder.client }}</strong><span>Vendedor</span><strong>{{ erpOrder.salesperson || '—' }}</strong></div> }
       </section>
@@ -26,3 +38,4 @@
   </c-modal-body>
   <c-modal-footer><button cButton type="button" color="secondary" variant="outline" (click)="close()">Cancelar</button><button cButton type="button" color="primary" [disabled]="!canConfirm" (click)="confirm()">Criar checklist</button></c-modal-footer>
 </c-modal>
+<app-checklist-action-modal />

@@ -21,6 +21,8 @@ export interface ChecklistCatalogEntry {
 export interface ChecklistRecordCreate {
   templateId: string;
   predecessorRecordId?: string;
+  readyStock?: boolean;
+  confirmWithoutSerial?: boolean;
   serial?: string;
   order?: string;
   clientId?: string;
@@ -105,6 +107,11 @@ export class ChecklistService {
   listFlows(): Observable<Flow[]> { return this.http.get<Flow[]>(`${this.api}/records/flows`); }
   findErpOrder(orderNumber: string): Observable<ChecklistErpOrder> {
     return this.http.get<ChecklistErpOrder>(`${this.api}/erp/orders/${encodeURIComponent(orderNumber)}`);
+  }
+  availableSerials(order: string, readyStock: boolean): Observable<Array<{ serial: string; description: string }>> {
+    return this.http.get<Array<{ serial: string; description: string }>>(`${this.api}/records/available-serials`, {
+      params: new HttpParams().set('order', order).set('readyStock', readyStock),
+    });
   }
   getRecord(id: string): Observable<Checklist> { return this.http.get<Checklist>(`${this.api}/records/${id}`); }
   getFlow(recordId: string): Observable<Flow> { return this.http.get<Flow>(`${this.api}/records/${recordId}/flow`); }

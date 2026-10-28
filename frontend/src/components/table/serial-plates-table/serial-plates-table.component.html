@@ -1,0 +1,44 @@
+    <div class="content-panel">
+      <div class="serial-table-toolbar">
+        <div class="search-group">
+          <span class="selection-count">{{ selected.size }} selecionado(s)</span>
+          <div class="search-controls"><input cFormControl type="search" aria-label="Buscar" placeholder="Buscar" [ngModel]="search" (ngModelChange)="searchChange.emit($event)">
+            <button type="button" class="clear-filter" title="Limpar filtros" aria-label="Limpar filtros" (click)="clearFiltersRequest.emit()"><app-checklist-icon name="filter-x" /></button>
+          </div>
+        </div>
+        <div class="selection-actions">
+          @if (selected.size) {
+            <button cButton color="secondary" variant="ghost" (click)="clearSelection.emit()">Limpar seleção</button>
+            @if (canEdit) { <button cButton color="primary" variant="outline" (click)="batchRequest.emit()"><app-checklist-icon name="pencil" /> Atualizar em lote</button> }
+            @if (canEdit) { <button cButton color="primary" (click)="reportRequest.emit()"><app-checklist-icon name="file-text" /> Gerar relatório</button> }
+          }
+        </div>
+      </div>
+      <c-smart-table (click)="onHeaderSelectionClick($event)" [items]="displayRows" [columns]="columns" [pagination]="false"
+        [clickableRows]="true" (rowClick)="onRowClick($event)"
+        [columnSorter]="true" [sorterValue]="sorter" (sorterValueChange)="sorterChange.emit($event)"
+        [itemsPerPage]="perPage" [itemsPerPageSelect]="false" [itemsPerPageOptions]="pageSizes" (itemsPerPageChange)="perPageChange.emit($event)"
+        [tableProps]="{ hover: true, responsive: true }" [tableBodyProps]="{ align: 'middle' }"
+        tableFilterLabel="" tableFilterPlaceholder="Buscar" itemsPerPageLabel="Itens por página" noItemsLabel="Nenhum número de série encontrado." header
+        class="step-flow-table administration-smart-table administration-wide-search search-cleaner-inline checklist-smart-table">
+        <ng-template cTemplateId="columnLabel_selection"><input #selectAll class="select-all-checkbox" type="checkbox" aria-label="Selecionar todos desta página" [checked]="allSelected" [indeterminate]="someSelected" (change)="selectAllChange.emit(selectAll.checked)"></ng-template>
+        <ng-template cTemplateId="columnLabel_all" let-column><span class="custom-header">{{ column.label }}</span></ng-template>
+        <ng-template cTemplateId="tableData" let-columnName="columnName" let-item="item" let-tdContent="tdContent">
+          <td class="custom-td" [class.description-cell]="columnName === 'description'" [class.client-cell]="columnName === 'client'" [class.selected-cell]="selected.has(item.serial)" [class.selection-cell]="columnName === 'selection'" [class.has-notes]="item.notes.trim()" [attr.title]="item.notes.trim() || null" (click)="onCellClick(columnName, item, $event)" (mousedown)="columnName === 'selection' && $event.shiftKey && $event.preventDefault()">
+            @switch (columnName) {
+              @case ('selection') { <input type="checkbox" [attr.aria-label]="'Selecionar ' + item.serial" [checked]="selected.has(item.serial)"> }
+              @case ('serial') { <button type="button" class="serial-link" (click)="$event.stopPropagation(); recordOpen.emit(item)">{{ serialLabel(item.serial) }}</button> }
+              @case ('order') { {{ item.readyStock ? 'PE' : (item.order || '-') }} }
+              @case ('of') { {{ numericOf(item.of) || '-' }} }
+              @case ('status') { <span [class]="'status-badge ' + statusClass(item.status)"><i></i>{{ item.status }}</span> }
+              @case ('updated') { <span class="date-field">{{ item.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</span> }
+              @default { {{ tdContent || '-' }} }
+            }
+          </td>
+        </ng-template>
+      </c-smart-table>
+      <div class="table-footer">
+          <label class="page-size">Itens por página<select class="form-select" [ngModel]="perPage" (ngModelChange)="perPageChange.emit($event)">@for (size of pageSizes; track size) { <option [ngValue]="size">{{ size }}</option> }</select></label>
+        @if (pages > 1) { <div class="pagination-wrap"><c-smart-pagination [activePage]="page" [pages]="pages" (activePageChange)="pageChange.emit($event)" /></div> }
+      </div>
+    </div>

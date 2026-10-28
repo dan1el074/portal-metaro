@@ -14,6 +14,8 @@ public class ChecklistRecordCreateDto {
     private Long templateId;
     private Long predecessorRecordId;
     private String serial;
+    private boolean readyStock;
+    private boolean confirmWithoutSerial;
     private String order;
     private String clientId;
     private String client;

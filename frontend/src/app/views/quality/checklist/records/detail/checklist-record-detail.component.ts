@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ContainerComponent, FormControlDirective, TooltipDirective } from '@coreui/angular';
@@ -16,6 +16,7 @@ import { ChecklistEvidenceComponent } from '../../../../../../components/cards/c
 import { ChecklistDelegateModalComponent } from '../../../../../../components/modal/checklist/checklist-delegate-modal/checklist-delegate-modal.component';
 import { ChecklistLinkedStepFlow, ChecklistService } from '../../../../../services/checklist.service';
 import { isProductionKit } from '../../../../../shared/checklist-rules';
+import { ReportPreviewService } from '../../../../../services/report-preview.service';
 
 @Component({
   selector: 'app-checklist-record-detail',
@@ -45,7 +46,8 @@ export class ChecklistRecordDetailComponent implements OnInit {
   private history!: ChecklistClientHistoryComponent;
   @ViewChild(ChecklistDelegateModalComponent)
   private delegateModal!: ChecklistDelegateModalComponent;
-
+  @ViewChild('printArea', { read: ElementRef })
+  private printArea!: ElementRef<HTMLElement>;
   protected readonly store = inject(ChecklistPreviewService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -53,6 +55,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly checklistApi = inject(ChecklistService);
+  private readonly reportPreview = inject(ReportPreviewService);
   private recordId = '';
   protected record!: Checklist;
   protected commentText = '';
@@ -165,11 +168,13 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected print(): void {
-    document.body.classList.add('printing-quality-checklist');
-    setTimeout(() => {
-      window.print();
-      document.body.classList.remove('printing-quality-checklist');
-    });
+    try {
+      const opened = this.reportPreview.openElement(this.printArea.nativeElement, `Checklist · ${this.store.title(this.record)}`);
+      if (!opened) this.toaster.warning('Permita a abertura da aba de visualização no navegador.');
+    } catch (error) {
+      console.error('Falha ao gerar a prévia do checklist', error);
+      this.toaster.warning('Não foi possível gerar a prévia do checklist.');
+    }
   }
 
   protected async treat(problem: Problem): Promise<void> {

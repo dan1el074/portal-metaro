@@ -1,4 +1,4 @@
-<c-container class="h-auto px-4 administration-page inspection-page memorando-detail-page" fluid>
+<c-container #printArea class="h-auto px-4 administration-page inspection-page memorando-detail-page" fluid>
   @if (record) {
     <nav class="detail-navigation no-print" aria-label="Navegação da inspeção">
       <div class="detail-breadcrumb">
@@ -111,9 +111,16 @@
         </section>
       </div>
 
+      @if (snapshot.category.media && record.media.length) {
+        <section class="detail-card checklist-media-footer checklist-footer-section">
+          <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="file-text" />Fotos e vídeos</h2><p>{{ record.media.length }} arquivo(s) anexado(s)</p></div></header>
+          <div class="card-content"><app-checklist-evidence [media]="record.media" /></div>
+        </section>
+      }
+
       @if (problems.length) {
-        <section class="detail-card problems-card">
-          <header class="section-card-header"><div><h2><app-checklist-icon name="ban" />Não conformidades</h2><p>{{ problems.length }} ocorrência(s) registrada(s)</p></div></header>
+        <section class="detail-card problems-card checklist-footer-section">
+          <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="ban" />Não conformidades</h2><p>{{ problems.length }} ocorrência(s) registrada(s)</p></div></header>
           <div class="card-content">
             @for (problem of problems; track problem.id; let problemIndex = $index) {
               <article [attr.id]="'nonconformity-' + problem.id" [class.has-media]="problem.media.length">
@@ -137,7 +144,7 @@
       }
 
       <section class="detail-card comments-card no-print">
-        <header class="section-card-header"><div><h2><app-checklist-icon name="message-square" />Comentários</h2><p>Observações posteriores ao preenchimento ficam registradas aqui.</p></div></header>
+        <header class="section-card-header"><div><h2><app-checklist-icon name="message-square" />Comentários</h2><p>Observações e respostas de não conformidades.</p></div></header>
         <div class="card-content">@for (comment of record.comments; track comment.id) { <article class="comment"><div>@if (problemNumber(comment.problemId); as number) { <span class="comment-problem-reference">Tratamento da não conformidade #{{ number }}</span> }<strong>{{ comment.author }}</strong><small>{{ comment.at | date:'dd/MM/yyyy HH:mm':'-0300' }}</small><p>{{ comment.text }}</p></div>@if (canEditComment(comment)) { <div class="comment-actions"><button type="button" (click)="editComment(comment)" cTooltip="Editar comentário" cTooltipPlacement="top" aria-label="Editar comentário"><app-checklist-icon name="pencil" /></button><button type="button" class="danger" (click)="deleteComment(comment)" cTooltip="Excluir comentário" cTooltipPlacement="top" aria-label="Excluir comentário"><app-checklist-icon name="trash" /></button></div> }</article> } @empty { <p class="empty">Nenhum comentário.</p> }<div class="comment-form"><textarea cFormControl rows="3" [(ngModel)]="commentText" placeholder="Adicionar comentário"></textarea><button class="action-button primary-action" type="button" [disabled]="!commentText.trim()" (click)="addComment()">Comentar</button></div></div>
       </section>
 
@@ -150,15 +157,15 @@
         @if (store.admin && !flow.cancelled && ['Rascunho', 'Em andamento', 'Pendente'].includes(record.status)) { <button type="button" class="action-button danger-action" (click)="skipChecklist()"><app-checklist-icon name="chevron-right" /> Pular checklist</button> }
         @if (record.status === 'Rascunho' && (store.admin || record.creatorId === store.user.id)) { <button type="button" class="action-button danger-action" (click)="deleteDraft()"><app-checklist-icon name="trash" /> Excluir rascunho</button> }
         @if (store.admin && (record.status === 'Rascunho' || record.status === 'Em andamento')) { <button type="button" class="action-button neutral-action" (click)="delegate()"><app-checklist-icon name="user-cog" /> Delegar</button> }
-        @if (store.admin && snapshot.category.erp && flow.order) { <button type="button" class="action-button neutral-action" (click)="updateOrder.open(flow.id)"><app-checklist-icon name="history" /> Atualizar pedido/item</button> }
+        @if (store.admin && snapshot.category.erp && flow.order && !flow.serialPlateId) { <button type="button" class="action-button neutral-action" (click)="updateOrder.open(flow.id)"><app-checklist-icon name="history" /> Atualizar pedido/item</button> }
         @if (store.admin && snapshot.category.serial && !flow.cancelled) { <button type="button" class="action-button neutral-action" (click)="updateSerial()"><app-checklist-icon name="pencil" /> Corrigir série</button> }
         @if (store.admin && record.status === 'Finalizado') { <button type="button" class="action-button neutral-action" (click)="reopen()"><app-checklist-icon name="pencil" /> Voltar para edição</button> }
         @if (store.admin && !flow.cancelled) { <button type="button" class="action-button danger-action" (click)="cancelFlow()"><app-checklist-icon name="ban" /> Cancelar fluxo</button> }
       </div>
     </main>
 
-    <section class="print-history print-only" [class.print-page-start]="!problems.length">
-      <header><div><strong>HISTÓRICO DO CHECKLIST</strong><span>{{ record.logs.length }} registro(s) de auditoria</span></div></header>
+    <section class="print-history print-only checklist-footer-section">
+      <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="history" />Histórico do checklist</h2><p>{{ record.logs.length }} registro(s) de auditoria</p></div></header>
       <ol>@for (log of record.logs; track log.id) { <li><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p></li> } @empty { <li>Nenhum registro disponível.</li> }</ol>
     </section>
     </div>

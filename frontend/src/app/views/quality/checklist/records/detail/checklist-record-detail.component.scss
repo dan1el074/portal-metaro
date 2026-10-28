@@ -6,6 +6,32 @@
   padding-bottom: 32px;
 }
 
+.print-preview-mode {
+  --cui-body-bg: #fff;
+  --cui-body-color: #252a36;
+  --cui-border-color: #d8dbe0;
+  --cui-secondary-color: #697586;
+  --cui-tertiary-bg: #f5f6f8;
+
+  padding: 0 !important;
+  color: #252a36;
+}
+
+.print-preview-mode .checklist-print-area {
+  width: 210mm;
+  max-width: 100%;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 10mm;
+  border: 1px solid #dce2ea;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(38, 52, 73, 0.09);
+}
+
+.print-preview-mode .detail-content {
+  max-width: none;
+}
+
 .detail-navigation {
   display: flex;
   align-items: center;
@@ -630,6 +656,7 @@
 .history-card .section-card-header h2 app-checklist-icon,
 .problems-card .section-card-header h2 app-checklist-icon {
   font-size: 15px;
+  margin-top: 2px;
 }
 
 .section-card-header p {
@@ -640,6 +667,10 @@
 
 .card-content {
   padding: 0 20px 18px;
+}
+
+.checklist-media-footer .card-content {
+  padding-top: 18px;
 }
 
 .problems-card article {
@@ -947,6 +978,10 @@
 }
 
 @media print {
+  .document-card .item-description-column {
+    width: 225px;
+  }
+
   .document-card .quality-brand span,
   .document-card .quality-reference span,
   .document-card .metadata-grid strong,
@@ -994,8 +1029,6 @@
     border-radius: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
-    break-before: page !important;
-    page-break-before: always !important;
   }
 
   .problems-card article {
@@ -1023,10 +1056,6 @@
     border-bottom: 2px solid #252a36 !important;
     break-after: avoid-page;
     page-break-after: avoid;
-  }
-
-  .problems-card .section-card-header h2 app-checklist-icon {
-    display: none !important;
   }
 
   .problems-card .section-card-header h2,

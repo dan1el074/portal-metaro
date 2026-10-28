@@ -34,6 +34,7 @@ public class ChecklistCategory {
     private boolean departments;
     private boolean serialRequired;
     private boolean erpRequired;
+    private boolean mediaEnabled;
     @Column(name = "fields_json", columnDefinition = "TEXT")
     private String fieldsJson;
     private Instant createdAt;

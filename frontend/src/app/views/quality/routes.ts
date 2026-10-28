@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { AuthGuard } from '../../config/authGuard';
+import { AuthGuard } from '../../config/auth.guard';
 import { checklistLeaveGuard } from '../../config/checklist-leave.guard';
 
 const checklistRoles = [

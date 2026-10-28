@@ -30,6 +30,7 @@ public class ChecklistCategoryDto {
     private boolean departments = true;
     private boolean serial = true;
     private boolean erp = true;
+    private boolean media;
     private List<ChecklistFieldDto> fields = new ArrayList<>();
     private List<Long> operators = new ArrayList<>();
 }
