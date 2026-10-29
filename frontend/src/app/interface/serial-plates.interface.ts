@@ -42,6 +42,7 @@ export interface PlateSettings {
 }
 
 export interface ErpOrderItem {
+  orderDescription?: string;
   id: string;
   label?: string;
   description: string;

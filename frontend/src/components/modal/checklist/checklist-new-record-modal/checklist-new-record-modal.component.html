@@ -36,6 +36,6 @@
       </section>
     }
   </c-modal-body>
-  <c-modal-footer><button cButton type="button" color="secondary" variant="outline" (click)="close()">Cancelar</button><button cButton type="button" color="primary" [disabled]="!canConfirm" (click)="confirm()">Criar checklist</button></c-modal-footer>
+  <c-modal-footer><button cButton type="button" color="secondary" variant="outline" [disabled]="confirming" (click)="close()">Cancelar</button><button cButton type="button" color="primary" [disabled]="!canConfirm || confirming" (click)="confirm()">Criar checklist</button></c-modal-footer>
 </c-modal>
 <app-checklist-action-modal />

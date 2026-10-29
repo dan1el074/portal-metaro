@@ -25,8 +25,8 @@ describe('Checklist flow justification label', () => {
     return fixture.nativeElement.querySelector('.flow-step small').textContent.trim();
   }
 
-  it('displays Justificado with the skip reason while preserving the underlying cancelled status', async () => {
-    expect(await render([record], { '2': 'Não se aplica a este equipamento' })).toBe('Justificado');
+  it('displays the persisted justified status with its skip reason', async () => {
+    expect(await render([{ ...record, status: 'Justificado' }], { '2': 'Não se aplica a este equipamento' })).toBe('Justificado');
     expect(fixture.nativeElement.querySelector('.skip-reason').textContent).toBe('Não se aplica a este equipamento');
     expect(record.status).toBe('Cancelado');
   });

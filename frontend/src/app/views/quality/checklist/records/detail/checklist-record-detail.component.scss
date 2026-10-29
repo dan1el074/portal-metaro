@@ -1264,3 +1264,7 @@
     display: none;
   }
 }
+
+.checklist-loading { display: flex; min-height: 240px; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+.history-details { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--cui-secondary-color); }
+.status-badge.justified { color: #9a6500; background: #d9900018; }

@@ -223,6 +223,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected toggleChecklistEquipment(flowId: string, selected: boolean): void {
+    if (this.order?.currentStep !== 'Montagem Final') return;
     if (selected && this.selectedChecklistEquipmentCount >= this.checklistEquipmentLimit) return;
     this.checklistEquipment = this.checklistEquipment.map((item) => item.flowId === flowId ? { ...item, selected } : item);
   }
@@ -373,7 +374,7 @@ export class StepFlowInputOffcanvasComponent {
 
   private buildFormData(): FormData {
     const formData = new FormData();
-    if (this.haveChecklistSelectionChanges()) {
+    if (this.order?.currentStep === 'Montagem Final' && this.haveChecklistSelectionChanges()) {
       formData.append('checklistFlowIdsJson', JSON.stringify(this.getSelectedChecklistFlowIds()));
     }
     const { carrier, shippment, comment } = this.form.value;

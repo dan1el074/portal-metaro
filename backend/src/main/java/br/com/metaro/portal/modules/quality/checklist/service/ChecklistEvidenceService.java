@@ -96,6 +96,13 @@ public class ChecklistEvidenceService {
         }
     }
 
+    @Transactional
+    public void archiveCurrentEvidence(Long recordId) {
+        // Revision snapshots keep the media URLs; remove only the current associations.
+        evidenceRepository.deleteAll(evidenceRepository.findByRecordIdOrderByCreatedAtAsc(recordId));
+        evidenceRepository.flush();
+    }
+
     @Transactional(readOnly = true)
     public List<ChecklistEvidence> findByRecord(Long recordId) {
         return evidenceRepository.findByRecordIdOrderByCreatedAtAsc(recordId);

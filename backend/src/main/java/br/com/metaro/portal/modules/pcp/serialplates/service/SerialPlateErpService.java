@@ -30,6 +30,7 @@ public class SerialPlateErpService {
             }
             SerialPlateOrderItemDto item = new SerialPlateOrderItemDto();
             item.setDescription(text(line.getModel()));
+            item.setOrderDescription(text(line.getDescription()));
             item.setLabel(text(line.getDescription()) + " — " + item.getDescription());
             item.setVoltage(text(line.getVoltage()));
             item.setCapacity(decimal(line.getCapacity(), "TON"));

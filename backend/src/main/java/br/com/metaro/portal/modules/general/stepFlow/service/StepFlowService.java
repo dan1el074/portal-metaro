@@ -205,11 +205,24 @@ public class StepFlowService {
     public OrderDto update(Long id, OrderInputDto dto) throws IOException {
         if (dto.getChecklistFlowIds() != null) checklistStepFlowService.lockFlows(dto.getChecklistFlowIds());
         Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
-        rulesForUpdate(dto, order);
+        if (dto.getChecklistFlowIds() != null) checklistStepFlowService.assertBindingManagementAllowed(order);
+        Integer newStepId = dto.getNewStepId();
+        // Save production data and bindings while still at Final Assembly, then change stage.
+        if (dto.getChecklistFlowIds() != null) dto.setNewStepId(null);
+        try {
+            rulesForUpdate(dto, order);
+        } finally {
+            dto.setNewStepId(newStepId);
+        }
         if (dto.getChecklistFlowIds() != null) {
             ChecklistStepBindingDto bindings = new ChecklistStepBindingDto();
             bindings.setFlowIds(dto.getChecklistFlowIds());
             checklistStepFlowService.replaceBindings(id, bindings);
+            if (newStepId != null) {
+                OrderInputDto stageUpdate = new OrderInputDto();
+                stageUpdate.setNewStepId(newStepId);
+                rulesForUpdate(stageUpdate, order);
+            }
         } else if (dto.getItems() != null && !dto.getItems().isEmpty()) {
             checklistStepFlowService.assertEquipmentCapacity(order);
         }

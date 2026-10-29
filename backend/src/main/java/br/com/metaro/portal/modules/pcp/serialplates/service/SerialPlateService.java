@@ -85,6 +85,7 @@ public class SerialPlateService {
         Collections.reverse(events);
         List<SerialPlateHistoryDto> history = new ArrayList<>();
         Map<String, String> state = new HashMap<>();
+        Map<String, String> itemModels = new HashMap<>();
 
         for (SerialPlateLog event : events) {
             List<SerialPlateChangeDto> changes = readChanges(event);
@@ -95,9 +96,12 @@ public class SerialPlateService {
 
             for (SerialPlateChangeDto change : changes) {
                 if (change.getField().equals(LABELS.get("orderItem"))) {
+                    String previousItemModel = itemModels.getOrDefault(change.getBefore(), beforeModel);
+                    String nextItemModel = itemModels.getOrDefault(change.getAfter(), afterModel);
                     displayed.add(new SerialPlateChangeDto(change.getField(),
-                            itemHistoryLabel(change.getBefore(), change.getBeforeLabel(), beforeModel),
-                            itemHistoryLabel(change.getAfter(), change.getAfterLabel(), afterModel)));
+                            orderItemHistoryDescription(change.getBefore(), change.getBeforeLabel(), previousItemModel),
+                            orderItemHistoryDescription(change.getAfter(), change.getAfterLabel(), nextItemModel)));
+                    if (!text(change.getAfter()).isEmpty()) itemModels.put(change.getAfter(), nextItemModel);
                 } else {
                     displayed.add(new SerialPlateChangeDto(change.getField(), change.getBefore(), change.getAfter()));
                 }
@@ -403,6 +407,17 @@ public class SerialPlateService {
         }
 
         logs.save(log);
+    }
+
+    private String orderItemHistoryDescription(String reference, String label, String model) {
+        String description = itemHistoryLabel(reference, label, model);
+        if (!text(model).isEmpty()) {
+            for (String separator : List.of(" - ", " — ", " – ")) {
+                String suffix = separator + model;
+                if (description.endsWith(suffix)) return description.substring(0, description.length() - suffix.length());
+            }
+        }
+        return description;
     }
 
     private String previousItemLabel(Long serial, String reference, String model) {

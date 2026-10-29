@@ -159,6 +159,103 @@ class ChecklistSerialPlateIntegrationTests {
     }
 
     @Test
+    void justifiedChecklistHasBlankFormKeepsRevisionAndCanBeReopened() {
+        template.setSectionsJson("[{\"id\":\"s\",\"name\":\"Inspeção\",\"options\":[\"OK\",\"NOK\"],\"questions\":[{\"id\":\"q\",\"label\":\"Conferir\",\"fields\":[{\"id\":\"extra\",\"label\":\"Campo\",\"type\":\"text\",\"defaultValue\":\"Padrão\",\"options\":[]}]}]}]");
+        templates.saveAndFlush(template);
+        ChecklistTemplate successor = new ChecklistTemplate(); successor.setName("Próximo"); successor.setCategory(template.getCategory());
+        successor.setTitleExpression("Próximo"); successor.setSectionsJson("[]"); successor.setPredecessor(template);
+        successor.setCreatedAt(Instant.now()); successor.setUpdatedAt(Instant.now()); templates.saveAndFlush(successor);
+        plate(900001, true);
+        ChecklistRecordDto record = records.createRecord(input("900001", true));
+        var entity = recordRepository.findById(record.getId()).orElseThrow();
+        entity.setAnswersJson("{\"q\":{\"value\":\"OK\",\"description\":\"Preenchido antes\",\"fields\":{\"extra\":\"Valor anterior\"},\"problems\":[]}}");
+        entity.setDepartmentsJson("[\"PCP\"]"); recordRepository.saveAndFlush(entity);
+        ChecklistReasonDto reason = new ChecklistReasonDto(); reason.setReason("Não se aplica");
+        records.skipChecklist(record.getId(), reason);
+        ChecklistRecordDto justified = records.getRecord(record.getId());
+        assertThat(justified.getStatus()).isEqualTo("JUSTIFIED");
+        assertThat(justified.getAnswers().get("q").getValue()).isNull();
+        assertThat(justified.getAnswers().get("q").getFields()).containsEntry("extra", "");
+        assertThat(justified.getAnswers().get("q").getProblems()).isEmpty();
+        assertThat(justified.getDepartments()).isEmpty();
+        assertThat(justified.getRevisions()).hasSize(1);
+        assertThat(justified.getRevisions().getFirst().getRecord().toString()).contains("Valor anterior");
+        assertThat(records.getFlow(record.getFlowId()).getSkipped()).containsEntry(template.getId().toString(), "Não se aplica");
+        ChecklistRecord next = recordRepository.findByFlowIdAndTemplateId(record.getFlowId(), successor.getId()).orElseThrow();
+        reason.setReason("Revisar a necessidade");
+        ChecklistRecordDto reopened = records.reopenRecord(record.getId(), reason);
+        assertThat(reopened.getStatus()).isEqualTo("IN_PROGRESS");
+        assertThat(reopened.getAnswers().get("q").getFields()).containsEntry("extra", "");
+        assertThat(records.getFlow(record.getFlowId()).getSkipped()).doesNotContainKey(template.getId().toString());
+        assertThatThrownBy(() -> records.saveRecord(next.getId(), records.getRecord(next.getId()), true)).hasMessageContaining("checklist anterior");
+        assertThat(reopened.getLogs()).anyMatch(log -> log.getAction().equals("REOPENED") && log.getDetails().contains("Revisar a necessidade"));
+    }
+
+    @Test
+    void skippedLegacyDataIsHiddenAndRetainedInRevisionWhenReopening() {
+        plate(900001, true); ChecklistRecordDto record = records.createRecord(input("900001", true));
+        ChecklistRecord entity = recordRepository.findById(record.getId()).orElseThrow();
+        entity.setStatus(ChecklistStatus.JUSTIFIED); entity.setFieldsJson("{\"old\":\"Valor legado\"}"); recordRepository.saveAndFlush(entity);
+        assertThat(records.getRecord(record.getId()).getFields()).doesNotContainKey("old");
+        ChecklistReasonDto reason = new ChecklistReasonDto(); reason.setReason("Reabrir legado");
+        ChecklistRecordDto reopened = records.reopenRecord(record.getId(), reason);
+        assertThat(reopened.getFields()).doesNotContainKey("old");
+        assertThat(reopened.getRevisions().getFirst().getRecord().toString()).contains("Valor legado");
+    }
+
+    @Test
+    void justifyingArchivesEvidenceAssociationsWhileKeepingRevisionMedia() {
+        plate(900001, true); ChecklistRecordDto record = records.createRecord(input("900001", true));
+        var picture = new br.com.metaro.portal.util.picture.Picture(); picture.setName("Antes"); entityManager.persist(picture);
+        ChecklistEvidence evidence = new ChecklistEvidence(); evidence.setRecord(recordRepository.findById(record.getId()).orElseThrow());
+        evidence.setProblemId(ChecklistEvidenceService.GENERAL_EVIDENCE_ID); evidence.setPicture(picture);
+        evidence.setOriginalName("Antes.png"); evidence.setContentType("image/png"); evidence.setCreatedBy(actor); evidence.setCreatedAt(Instant.now());
+        entityManager.persist(evidence); entityManager.flush();
+        assertThat(records.getRecord(record.getId()).getMedia()).hasSize(1);
+        ChecklistReasonDto reason = new ChecklistReasonDto(); reason.setReason("Dispensa de inspeção"); records.skipChecklist(record.getId(), reason);
+        ChecklistRecordDto justified = records.getRecord(record.getId());
+        assertThat(justified.getMedia()).isEmpty();
+        assertThat(justified.getRevisions().getFirst().getRecord().toString()).contains("Antes.png");
+        assertThat(entityManager.find(br.com.metaro.portal.util.picture.Picture.class, picture.getId())).isNotNull();
+        reason.setReason("Nova inspeção");
+        assertThat(records.reopenRecord(record.getId(), reason).getMedia()).isEmpty();
+    }
+
+    @Test
+    void pcpOrderChangesAreAuditedInEveryExistingChecklistOfTheFlow() {
+        ChecklistTemplate successor = new ChecklistTemplate(); successor.setName("Inspeção seguinte"); successor.setCategory(template.getCategory());
+        successor.setTitleExpression("Seguinte"); successor.setSectionsJson("[]"); successor.setPredecessor(template); successor.setAutomatic(true);
+        successor.setCreatedAt(Instant.now()); successor.setUpdatedAt(Instant.now()); templates.saveAndFlush(successor);
+        SerialPlate plate = plate(900001, false); ChecklistRecordDto root = finish(records.createRecord(input("900001", false)));
+        assertThat(recordRepository.findByFlowId(root.getFlowId())).hasSize(2);
+        plates.updatePlates(relocation(plate, true)); entityManager.flush();
+        for (ChecklistRecord record : recordRepository.findByFlowId(root.getFlowId())) {
+            assertThat(records.getRecord(record.getId()).getLogs()).anyMatch(log -> log.getAction().equals("SERIAL_PLATE_UPDATED")
+                    && log.getDetails().contains("900 → 901") && log.getDetails().contains("PCP"));
+        }
+    }
+
+    @Test
+    void historicalStepFlowLinksRemainAfterRelocationAndRebinding() {
+        SerialPlate plate = plate(900001, false); ChecklistRecordDto record = finish(records.createRecord(input("900001", false)));
+        Order previous = bind(record, OrderStatus.COMPLETED, StepType.SHIPPING);
+        plates.updatePlates(relocation(plate, true)); entityManager.flush();
+        var history = steps.listLinkedStepFlows(record.getFlowId());
+        assertThat(history).hasSize(1); assertThat(history.getFirst().getId()).isEqualTo(previous.getId());
+        assertThat(history.getFirst().isLinked()).isFalse();
+        Order current = emptyOrder(); current.setNumber(901); orders.saveAndFlush(current);
+        steps.createBindings(current, List.of(record.getFlowId()));
+        history = steps.listLinkedStepFlows(record.getFlowId());
+        assertThat(history).hasSize(2);
+        assertThat(history).anyMatch(item -> item.getId().equals(previous.getId()) && !item.isLinked());
+        assertThat(history).anyMatch(item -> item.getId().equals(current.getId()) && item.isLinked());
+        ChecklistStepBindingDto selection = new ChecklistStepBindingDto(); selection.setFlowIds(List.of());
+        steps.replaceBindings(current.getId(), selection);
+        assertThat(steps.listLinkedStepFlows(record.getFlowId())).hasSize(2).allMatch(item -> !item.isLinked());
+        assertThat(bindings.findByFlowId(record.getFlowId())).isEmpty();
+    }
+
+    @Test
     void rejectsSeriesFromAnotherModeOrAlreadyReserved() {
         plate(900001, true);
         assertThatThrownBy(() -> records.createRecord(input("900001", false))).hasMessageContaining("não está disponível");
@@ -434,6 +531,35 @@ class ChecklistSerialPlateIntegrationTests {
             }
             for (long serial = 900020; serial < 900023; serial++) plateRepository.deleteById(serial);
             templates.deleteById(template.getId()); categories.deleteById(template.getCategory().getId());
+        }
+    }
+
+    @Test
+    void administratorCanSaveBindingsAndAdvanceFromFinalAssemblyAtomically() throws Exception {
+        actor.setRoles(new HashSet<>(roles.findAll().stream().filter(role -> role.getAuthority().equals("ROLE_ADMIN")).toList()));
+        plate(900020, false); ChecklistRecordDto record = finish(records.createRecord(input("900020", false)));
+        Order order = bind(record, OrderStatus.IN_PROGRESS, StepType.FINAL_ASSEMBLY);
+        plate(900021, false); ChecklistRecordDto other = finish(records.createRecord(input("900021", false)));
+        var update = new br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto();
+        update.setChecklistFlowIds(List.of(record.getFlowId(), other.getFlowId())); update.setNewStepId(StepType.PCP.ordinal());
+        stepFlowService.update(order.getId(), update);
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+        assertThat(bindings.findByOrderId(order.getId())).extracting(binding -> binding.getFlow().getId()).containsExactlyInAnyOrder(record.getFlowId(), other.getFlowId());
+    }
+
+    @Test
+    void checklistBindingsCanOnlyBeManagedDuringFinalAssembly() {
+        plate(900020, false); ChecklistRecordDto record = finish(records.createRecord(input("900020", false)));
+        Order order = bind(record, OrderStatus.IN_PROGRESS, StepType.PCP);
+        for (StepType stage : List.of(StepType.PCP, StepType.FREIGHT, StepType.BILLING, StepType.SHIPPING)) {
+            order.setCurrentStep(stage); orders.saveAndFlush(order);
+            ChecklistStepBindingDto remove = new ChecklistStepBindingDto(); remove.setFlowIds(List.of());
+            assertThatThrownBy(() -> steps.replaceBindings(order.getId(), remove)).hasMessageContaining("Montagem Final");
+            var update = new br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto();
+            update.setChecklistFlowIds(List.of()); update.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+            assertThatThrownBy(() -> stepFlowService.update(order.getId(), update)).hasMessageContaining("Montagem Final");
+            assertThat(order.getCurrentStep()).isEqualTo(stage);
+            assertThat(bindings.findByOrderId(order.getId())).hasSize(1);
         }
     }
 

@@ -73,6 +73,19 @@ describe('SerialPlatesComponent API integration', () => {
     expect(Array.from(status.querySelectorAll('option')).map(option => option.textContent?.trim())).toEqual(['Criado', 'Programado', 'Recebido', 'Devolvido', 'Finalizado']);
   });
 
+  it('shows only the order item description while preserving the selected model data', async () => {
+    initialize(); fixture.detectChanges(); await fixture.whenStable();
+    const open = component.openEdit({ ...row, order: '900', orderItem: 'erp-item' });
+    http.expectOne(request => request.url.endsWith('/18918')).flush({ ...row, order: '900', orderItem: 'erp-item', description: 'Modelo A' });
+    await open;
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ id: 'erp-item', orderDescription: 'Mesa elevatória', label: 'Mesa elevatória - Modelo A', description: 'Modelo A' }] });
+    await fixture.whenStable();
+    const label = Array.from(fixture.nativeElement.querySelectorAll('label')).find((label: any) => label.textContent?.startsWith('Item do pedido')) as HTMLLabelElement;
+    expect(label.querySelector('option[value="erp-item"]')?.textContent?.trim()).toBe('Mesa elevatória');
+    expect(component.edit?.description).toBe('Modelo A');
+    expect(component.edit?.orderItem).toBe('erp-item');
+  });
+
   it('loads one server page and uses server totals for cards and pagination', () => {
     initialize();
     expect(component.records.length).toBe(1);

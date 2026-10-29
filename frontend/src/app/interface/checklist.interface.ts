@@ -1,5 +1,5 @@
 export type Integration = 'production' | '5s' | 'none';
-export type Status = 'Rascunho'| 'Em andamento'| 'Pendente'| 'Finalizado'| 'Cancelado';
+export type Status = 'Rascunho'| 'Em andamento'| 'Pendente'| 'Finalizado'| 'Justificado'| 'Cancelado';
 export interface Field {
   id: string;
   label: string;
@@ -105,6 +105,8 @@ export interface Answer {
   problems: Problem[];
 }
 export interface Audit {
+  details?: string;
+  displayDetails?: string;
   id: string;
   at: string;
   actor: string;

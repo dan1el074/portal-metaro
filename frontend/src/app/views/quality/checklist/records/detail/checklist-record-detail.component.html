@@ -1,5 +1,9 @@
 <c-container #printArea class="h-auto px-4 administration-page inspection-page memorando-detail-page" fluid>
-  @if (record) {
+  @if (loading) {
+    <div class="checklist-loading no-print" role="status" aria-live="polite"><c-spinner /><span>Carregando checklist...</span></div>
+  } @else if (loadError) {
+    <div class="checklist-loading no-print" role="alert"><p>{{ loadError }}</p><button type="button" class="action-button primary-action" (click)="retryLoad()">Tentar novamente</button><a routerLink="/qualidade/checklist">Voltar à lista</a></div>
+  } @else if (record) {
     <nav class="detail-navigation no-print" aria-label="Navegação da inspeção">
       <div class="detail-breadcrumb">
         <a routerLink="/qualidade/checklist" class="back-link"><app-checklist-icon name="arrow-left" /> Voltar à lista</a>
@@ -22,7 +26,7 @@
       @if (flow.plan.length > 1) { <app-checklist-flow class="no-print" [flow]="flow" [records]="store.state().records" [currentId]="record.id" (openRecord)="open($event)" /> }
 
       <div>
-        @if (linkedStepFlows.length) { <aside class="context-alert no-print"><app-checklist-icon name="history" /><div><strong>Fluxo de etapas vinculado</strong><div class="linked-step-flow-list">@for (stepFlow of linkedStepFlows; track stepFlow.id) { <p><span>Pedido #{{ stepFlow.order }} · {{ stepFlow.status }}@if (stepFlow.currentStep) { · Etapa {{ stepFlow.currentStep }} }</span><a [routerLink]="['/general/step-flow']" [queryParams]="{ orderId: stepFlow.id }">Acessar fluxo de etapas</a></p> }</div></div></aside> }
+        @if (linkedStepFlows.length) { <aside class="context-alert no-print"><app-checklist-icon name="history" /><div><strong>Fluxos de etapas vinculados</strong><div class="linked-step-flow-list">@for (stepFlow of linkedStepFlows; track stepFlow.id) { <p><span>{{ stepFlow.linked === false ? 'Vínculo anterior' : 'Vínculo atual' }} · Pedido #{{ stepFlow.order }} · {{ stepFlow.status }}@if (stepFlow.currentStep) { · Etapa {{ stepFlow.currentStep }} }</span><a [routerLink]="['/general/step-flow']" [queryParams]="{ orderId: stepFlow.id }">Acessar fluxo de etapas</a></p> }</div></div></aside> }
         @if (flow.clientId && store.clientNokHistoryEnabled(snapshot.category.id)) { <div class="outside-actions no-print"><button class="catalog-style-button" type="button" (click)="history.open(flow.clientId)"><app-checklist-icon name="history" /> Ver histórico de NOKs do cliente</button></div> }
 
         <section class="detail-card document-card">
@@ -150,23 +154,23 @@
 
       <section class="detail-card history-card no-print">
         <header class="section-card-header"><div><h2><app-checklist-icon name="clock" />Histórico do documento</h2></div></header>
-        <ol class="history-timeline">@for (log of record.logs; track log.id) { <li><i></i><div><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p></div></li> } @empty { <li class="empty-history">Nenhum registro disponível.</li> }</ol>
+        <ol class="history-timeline">@for (log of record.logs; track log.id) { <li><i></i><div><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p>@if (log.displayDetails) { <p class="history-details">{{ log.displayDetails }}</p> }</div></li> } @empty { <li class="empty-history">Nenhum registro disponível.</li> }</ol>
       </section>
 
       <div class="document-actions no-print">
         @if (store.admin && !flow.cancelled && ['Rascunho', 'Em andamento', 'Pendente'].includes(record.status)) { <button type="button" class="action-button danger-action" (click)="skipChecklist()"><app-checklist-icon name="chevron-right" /> Pular checklist</button> }
-        @if (record.status === 'Rascunho' && (store.admin || record.creatorId === store.user.id)) { <button type="button" class="action-button danger-action" (click)="deleteDraft()"><app-checklist-icon name="trash" /> Excluir rascunho</button> }
+        @if (record.status === 'Rascunho' && (store.admin || record.creatorId === store.user.id)) { <button type="button" class="action-button danger-action" [disabled]="deleting" [attr.aria-busy]="deleting" (click)="deleteDraft()">@if (deleting) { <c-spinner size="sm" /> } @else { <app-checklist-icon name="trash" /> } Excluir rascunho</button> }
         @if (store.admin && (record.status === 'Rascunho' || record.status === 'Em andamento')) { <button type="button" class="action-button neutral-action" (click)="delegate()"><app-checklist-icon name="user-cog" /> Delegar</button> }
         @if (store.admin && snapshot.category.erp && flow.order && !flow.serialPlateId) { <button type="button" class="action-button neutral-action" (click)="updateOrder.open(flow.id)"><app-checklist-icon name="history" /> Atualizar pedido/item</button> }
         @if (store.admin && snapshot.category.serial && !flow.cancelled) { <button type="button" class="action-button neutral-action" (click)="updateSerial()"><app-checklist-icon name="pencil" /> Corrigir série</button> }
-        @if (store.admin && record.status === 'Finalizado') { <button type="button" class="action-button neutral-action" (click)="reopen()"><app-checklist-icon name="pencil" /> Voltar para edição</button> }
+        @if (store.admin && !flow.cancelled && (record.status === 'Finalizado' || record.status === 'Justificado')) { <button type="button" class="action-button neutral-action" (click)="reopen()"><app-checklist-icon name="pencil" /> Voltar para edição</button> }
         @if (store.admin && !flow.cancelled) { <button type="button" class="action-button danger-action" (click)="cancelFlow()"><app-checklist-icon name="ban" /> Cancelar fluxo</button> }
       </div>
     </main>
 
     <section class="print-history print-only checklist-footer-section">
       <header class="section-card-header checklist-footer-header"><div><h2><app-checklist-icon name="history" />Histórico do checklist</h2><p>{{ record.logs.length }} registro(s) de auditoria</p></div></header>
-      <ol>@for (log of record.logs; track log.id) { <li><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p></li> } @empty { <li>Nenhum registro disponível.</li> }</ol>
+      <ol>@for (log of record.logs; track log.id) { <li><span>{{ log.at | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.actor }}:</strong> {{ log.action }}</p>@if (log.displayDetails) { <p class="history-details">{{ log.displayDetails }}</p> }</li> } @empty { <li>Nenhum registro disponível.</li> }</ol>
     </section>
     </div>
 

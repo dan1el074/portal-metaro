@@ -182,9 +182,14 @@
       }
 
       .admin-stage-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 4px 12px;
         margin-top: 24px;
 
         .custom-label {
+          grid-column: 1 / -1;
           display: block;
           margin-bottom: 4px;
           color: var(--cui-medium-emphasis);
@@ -196,7 +201,7 @@
         .stage-actions {
           display: flex;
           justify-content: flex-end;
-          margin-top: 16px;
+          margin-top: 0;
 
           button {
             display: flex;

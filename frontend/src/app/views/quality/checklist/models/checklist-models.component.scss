@@ -214,3 +214,11 @@
     display: none;
   }
 }
+
+:host-context(html:not([data-coreui-theme="dark"])) ::ng-deep .category-accordion .accordion-button:not(.collapsed)::after {
+  background-image: var(--cui-accordion-btn-icon);
+}
+
+:host ::ng-deep .category-accordion .accordion-button:not(.collapsed) {
+  background-color: rgba(var(--cui-primary-rgb), 0.05);
+}

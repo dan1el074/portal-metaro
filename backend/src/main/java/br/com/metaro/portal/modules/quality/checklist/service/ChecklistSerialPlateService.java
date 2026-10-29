@@ -124,6 +124,8 @@ public class ChecklistSerialPlateService {
             flow.setUpdatedAt(Instant.now());
             flowRepository.save(flow);
             for (ChecklistRecord record : recordRepository.findByFlowId(flow.getId())) {
+                record.setUpdatedAt(flow.getUpdatedAt());
+                recordRepository.save(record);
                 ChecklistAudit audit = new ChecklistAudit();
                 audit.setRecord(record);
                 audit.setActor(actor);

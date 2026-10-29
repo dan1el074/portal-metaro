@@ -94,7 +94,7 @@ export class ChecklistRecordFormComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     for (const file of Array.from(input.files ?? [])) {
       const id = uid();
-      this.record.media.push({ id, name: file.name, type: file.type, size: file.size });
+      this.record.media = [...this.record.media, { id, name: file.name, type: file.type, size: file.size }];
       this.mediaPreview.register(id, file);
     }
     input.value = '';
@@ -102,11 +102,15 @@ export class ChecklistRecordFormComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
+  protected removeEvidence(id: string): void {
+    this.removeMedia(this.record.media.findIndex(item => item.id === id));
+  }
+
   protected removeMedia(index: number): void {
     const evidence: Evidence | undefined = this.record.media[index];
     if (!evidence) return;
     this.mediaPreview.remove(evidence.id);
-    this.record.media.splice(index, 1);
+    this.record.media = this.record.media.filter(item => item.id !== evidence.id);
     this.changed.emit();
     this.cdr.detectChanges();
   }

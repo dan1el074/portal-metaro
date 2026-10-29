@@ -59,6 +59,16 @@ export class SerialPlatesModalComponent {
     return this.data.orderItems(orderNumber);
   }
 
+  public orderItemDescription(item: ErpOrderItem): string {
+    if (item.orderDescription) return item.orderDescription;
+    const label = item.label || item.description;
+    for (const separator of [' - ', ' — ', ' – ']) {
+      const suffix = separator + item.description;
+      if (label.endsWith(suffix)) return label.slice(0, -suffix.length);
+    }
+    return label;
+  }
+
   public serialLabel(value: string): string {
     return value.replace(/^0+(?=\d)/, '');
   }

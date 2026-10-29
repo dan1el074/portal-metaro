@@ -141,6 +141,8 @@ describe('Step flow quantities remain independent when editing linked checklists
     http.expectOne(request => request.url.endsWith('/step-flow/1')).flush(pcpOrder);
     http.expectOne(request => request.url.endsWith('/orders/1/equipment')).flush([checklist]);
     await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.checklist-equipment-box')).toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('.linked-checklist-box .linked-checklist-item').length).toBe(1);
     const reload = spyOn(fixture.componentInstance.reloadOrders, 'emit');
     const comment = fixture.nativeElement.querySelector('#comment') as HTMLTextAreaElement;
     comment.value = 'Ajustar montagem'; comment.dispatchEvent(new Event('input')); await fixture.whenStable();

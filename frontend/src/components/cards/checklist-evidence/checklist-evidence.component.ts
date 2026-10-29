@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnChanges, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, OnChanges, inject } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import QRCode from 'qrcode';
 import { Evidence } from '../../../app/interface/checklist.interface';
@@ -21,6 +21,8 @@ interface PresentedEvidence extends Evidence {
 })
 export class ChecklistEvidenceComponent implements OnChanges {
   @Input() media: Evidence[] = [];
+  @Input() editable = false;
+  @Output() removeEvidence = new EventEmitter<string>();
   protected presented: PresentedEvidence[] = [];
   protected selectedVideo: { name: string; safeUrl: SafeResourceUrl } | null = null;
   private readonly previews = inject(ChecklistMediaPreviewService);

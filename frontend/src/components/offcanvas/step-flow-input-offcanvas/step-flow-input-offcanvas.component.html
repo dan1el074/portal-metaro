@@ -38,16 +38,6 @@
     </div>
 
     <div class="sof-custom-body">
-      <div class="sofd-box client-info">
-        <div class="sofd-box-info">
-          <span class="sofd-box-info-label">Cliente</span>
-          <span>{{ order.client }}</span>
-        </div>
-        <div class="sofd-box-info">
-          <span class="sofd-box-info-label">CNPJ</span>
-          <span>{{ order.cnpj }}</span>
-        </div>
-      </div>
       <app-step-flow-history [order]="order" />
       @if(linkedChecklistEquipment.length){
         <div class="sofd-box linked-checklist-box">
@@ -107,7 +97,11 @@
                     </button>
                     <button type="button" class="volume-action delete" (click)="deleteVolume(i)" [disabled]="volumeMutationLoading" aria-label="Excluir volume">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/>
+                        <path d="M10 11v6"/>
+                          <path d="M14 11v6"/>
+                          <path d="M3 6h18"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                       </svg>
                     </button>
                   </div>
@@ -134,7 +128,7 @@
 
             <div class="sof-file-container">
               @for (itemGroup of itemsFormControls; track itemGroup.get('id')?.value; let i = $index) {
-                <div class="sof-file-item" [formGroup]="itemGroup">
+                <div class="sof-file-item production-item-row" [formGroup]="itemGroup">
                   <div class="produced-item-box">
                     <span class="produced-item-description">
                       <strong>{{ itemGroup.get('code')?.value }}</strong> - {{ itemGroup.get('description')?.value }}
@@ -163,6 +157,7 @@
           </div>
         }
 
+        @if (order.currentStep == "Montagem Final") {
         <div class="mb-3 checklist-equipment-box">
           <label class="custom-label">Checklists vinculados</label>
           <div class="checklist-count" aria-live="polite" [class.text-danger]="selectedChecklistEquipmentCount > checklistEquipmentLimit">
@@ -193,6 +188,7 @@
             <button cButton type="button" color="secondary" variant="outline" (click)="loadChecklistEquipment()">Tentar novamente</button>
           }
         </div>
+        }
         @if (order.currentStep == "Frete") {
           <div class="mb-3">
             <label cLabel for="carrier" class="custom-label">Transportadora</label>

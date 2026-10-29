@@ -188,6 +188,8 @@ class SerialPlateIntegrationTests {
         when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
         SerialPlateOrderDto order = erp.findOrder("900");
         assertThat(order.getItems().getFirst().getCapacity()).isEqualByComparingTo(new BigDecimal("1.5"));
+        assertThat(order.getItems().getFirst().getOrderDescription()).isEqualTo("PA MESA");
+        assertThat(order.getItems().getFirst().getDescription()).isEqualTo("PA MEB MODELO E 101513");
         assertThat(order.getItems().getFirst().getWeight()).isNull();
         assertThat(order.getItems().getFirst().getDescription()).isEqualTo(line.getModel());
         SerialPlateCreateDto dto = draft(1); dto.setOrder("900"); dto.setOrderItem(order.getItems().getFirst().getId());
@@ -237,7 +239,7 @@ class SerialPlateIntegrationTests {
         SerialPlateDto plate = service.createPlates(draft).getFirst();
         SerialPlateChangeDto linked = service.getHistory(18918L).getFirst().getChanges().stream()
                 .filter(change -> change.getField().equals("Item do pedido")).findFirst().orElseThrow();
-        assertThat(linked.getAfter()).isEqualTo(order.getItems().getFirst().getLabel());
+        assertThat(linked.getAfter()).isEqualTo("Mesa");
         assertThat(mapper.writeValueAsString(service.getHistory(18918L))).doesNotContain(plate.getOrderItem());
         SerialPlatePatchDto rename = new SerialPlatePatchDto(); rename.setDescription("Modelo ajustado manualmente");
         SerialPlateDto renamed = service.updatePlates(mutation(List.of(plate), rename, "description")).getFirst();
@@ -245,7 +247,7 @@ class SerialPlateIntegrationTests {
         service.updatePlates(mutation(List.of(renamed), unlink, "readyStock"));
         SerialPlateChangeDto removed = service.getHistory(18918L).getFirst().getChanges().stream()
                 .filter(change -> change.getField().equals("Item do pedido")).findFirst().orElseThrow();
-        assertThat(removed.getBefore()).isEqualTo(order.getItems().getFirst().getLabel());
+        assertThat(removed.getBefore()).isEqualTo("Mesa");
         assertThat(removed.getAfter()).isEmpty();
     }
 

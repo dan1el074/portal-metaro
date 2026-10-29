@@ -32,6 +32,7 @@ import java.util.*;
 public class ChecklistStepFlowService {
     private final ChecklistStepRequirementRepository requirementRepository;
     private final ChecklistStepBindingRepository bindingRepository;
+    private final ChecklistStepBindingHistoryRepository bindingHistoryRepository;
     private final ChecklistCategoryRepository categoryRepository;
     private final ChecklistFlowRepository flowRepository;
     private final ChecklistRecordRepository recordRepository;
@@ -79,9 +80,10 @@ public class ChecklistStepFlowService {
             lockedFlows.put(flowId, flowRepository.findLockedById(flowId).orElseThrow(ResourceNotFoundException::new));
         }
         Order order = orderRepository.findLockedById(orderId).orElseThrow(ResourceNotFoundException::new);
+        assertBindingManagementAllowed(order);
         assertEquipmentCapacity(order, requested.size());
         List<ChecklistStepBinding> current = bindingRepository.findByOrderId(orderId);
-        current.stream().filter(binding -> !requested.contains(binding.getFlow().getId())).forEach(bindingRepository::delete);
+        current.stream().filter(binding -> !requested.contains(binding.getFlow().getId())).forEach(this::removeBinding);
         for (Long flowId : requested) {
             if (bindingRepository.existsByOrderIdAndFlowId(orderId, flowId)) continue;
             ChecklistFlow flow = lockedFlows.get(flowId);
@@ -92,6 +94,7 @@ public class ChecklistStepFlowService {
             binding.setCreatedBy(user);
             binding.setCreatedAt(Instant.now());
             bindingRepository.save(binding);
+            rememberBinding(binding);
         }
     }
 
@@ -110,6 +113,7 @@ public class ChecklistStepFlowService {
             binding.setCreatedBy(user);
             binding.setCreatedAt(Instant.now());
             bindingRepository.save(binding);
+            rememberBinding(binding);
         }
         assertEquipmentCapacity(order);
     }
@@ -140,17 +144,14 @@ public class ChecklistStepFlowService {
     @Transactional(readOnly = true)
     public List<ChecklistLinkedStepFlowDto> listLinkedStepFlows(Long flowId) {
         if (!flowRepository.existsById(flowId)) throw new ResourceNotFoundException();
-        return bindingRepository.findByFlowId(flowId).stream()
-                .sorted(Comparator.comparing(binding -> binding.getOrder().getId()))
-                .map(binding -> {
-                    Order order = binding.getOrder();
-                    ChecklistLinkedStepFlowDto dto = new ChecklistLinkedStepFlowDto();
-                    dto.setId(order.getId());
-                    dto.setOrder(order.getDisplayNumber());
-                    dto.setStatus(order.getStatus().toString());
-                    dto.setCurrentStep(order.getCurrentStep() == null ? null : order.getCurrentStep().toString());
-                    return dto;
-                }).toList();
+        Map<Long, ChecklistLinkedStepFlowDto> result = new LinkedHashMap<>();
+        for (ChecklistStepBindingHistory history : bindingHistoryRepository.findByFlowIdOrderByIdAsc(flowId)) {
+            result.put(history.getOrder().getId(), linkedStepDto(history.getOrder(), history.getOrderNumber(), false));
+        }
+        for (ChecklistStepBinding binding : bindingRepository.findByFlowId(flowId)) {
+            result.put(binding.getOrder().getId(), linkedStepDto(binding.getOrder(), binding.getOrder().getDisplayNumber(), binding.getOrder().getStatus() != OrderStatus.CANCELLED));
+        }
+        return result.values().stream().sorted(Comparator.comparing(ChecklistLinkedStepFlowDto::getId)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -272,6 +273,12 @@ public class ChecklistStepFlowService {
         }
     }
 
+    public void assertBindingManagementAllowed(Order order) {
+        if (order.getCurrentStep() != StepType.FINAL_ASSEMBLY || order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.COMPLETED) {
+            throw new UnprocessableEntityException("Os checklists vinculados só podem ser gerenciados na etapa Montagem Final de um fluxo aberto.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public void assertEquipmentCapacity(Order order) {
         assertEquipmentCapacity(order, bindingRepository.countByOrderId(order.getId()));
@@ -318,9 +325,40 @@ public class ChecklistStepFlowService {
             String destination = newOrder == null || newOrder.isBlank() ? "Pronta Entrega" : "o pedido " + newOrder;
             current.getMessages().add(new StepMessage(
                     "O número de série " + flow.getSerialNumber() + " foi realocado para " + destination + " pelo setor PCP.", current, actor));
-            bindingRepository.delete(binding);
+            removeBinding(binding);
             orderRepository.save(order);
         }
+    }
+
+    private ChecklistLinkedStepFlowDto linkedStepDto(Order order, String number, boolean linked) {
+        ChecklistLinkedStepFlowDto dto = new ChecklistLinkedStepFlowDto();
+        dto.setId(order.getId());
+        dto.setOrder(number);
+        dto.setStatus(order.getStatus().toString());
+        dto.setCurrentStep(order.getCurrentStep() == null ? null : order.getCurrentStep().toString());
+        dto.setLinked(linked);
+        return dto;
+    }
+
+    private void rememberBinding(ChecklistStepBinding binding) {
+        ChecklistStepBindingHistory history = new ChecklistStepBindingHistory();
+        history.setOrder(binding.getOrder());
+        history.setFlow(binding.getFlow());
+        history.setOrderNumber(binding.getOrder().getDisplayNumber());
+        history.setLinkedAt(binding.getCreatedAt());
+        bindingHistoryRepository.save(history);
+    }
+
+    private void removeBinding(ChecklistStepBinding binding) {
+        List<ChecklistStepBindingHistory> history = bindingHistoryRepository.findByOrderIdAndFlowIdAndUnlinkedAtIsNull(binding.getOrder().getId(), binding.getFlow().getId());
+        if (history.isEmpty()) {
+            rememberBinding(binding);
+            history = bindingHistoryRepository.findByOrderIdAndFlowIdAndUnlinkedAtIsNull(binding.getOrder().getId(), binding.getFlow().getId());
+        }
+        Instant now = Instant.now();
+        history.forEach(item -> item.setUnlinkedAt(now));
+        bindingHistoryRepository.saveAll(history);
+        bindingRepository.delete(binding);
     }
 
     private StepType parseStepType(String value) {
