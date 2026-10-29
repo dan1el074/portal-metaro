@@ -72,10 +72,12 @@ public class StepFlowController {
             @PathVariable Long id,
             @ModelAttribute OrderInputDto dto,
             @RequestParam(value = "itemsJson", required = false) String itemsJson,
+            @RequestParam(value = "checklistFlowIdsJson", required = false) String checklistFlowIdsJson,
             @RequestParam(value = "setStage", required = false) String stepId
     ) throws IOException {
         if (stepId != null) dto.setNewStepId(Integer.parseInt(stepId));
         dto.setItems(stepFlowService.parseItems(itemsJson));
+        dto.setChecklistFlowIds(stepFlowService.parseChecklistFlowIds(checklistFlowIdsJson));
         OrderDto newDto = stepFlowService.update(id, dto);
         return ResponseEntity.ok(newDto);
     }

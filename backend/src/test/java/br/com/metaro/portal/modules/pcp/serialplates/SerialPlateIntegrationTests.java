@@ -70,6 +70,49 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void returnedStatusIsPersistedAuditedAndIncludedInFiltersAndSummary() {
+        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        SerialPlatePatchDto patch = new SerialPlatePatchDto();
+        patch.setStatus("Devolvido");
+        assertThatThrownBy(() -> service.updatePlates(mutation(rows, patch, "status")))
+                .hasMessageContaining("prestador");
+        patch.setProvider("Interno");
+        List<SerialPlateDto> returned = service.updatePlates(mutation(rows, patch, "status", "provider"));
+        assertThat(returned).allMatch(row -> row.getStatus().equals("Devolvido"));
+        assertThat(service.listPlates(PageRequest.of(0, 10), "", "Devolvido").getTotalElements()).isEqualTo(2);
+        assertThat(service.getSummary().keySet()).containsExactly("Criado", "Programado", "Recebido", "Devolvido", "Finalizado", "total");
+        assertThat(service.getSummary().get("Devolvido")).isEqualTo(2L);
+        assertThat(service.getHistory(18918L)).hasSize(2);
+    }
+
+    @Test
+    void retiredStatusCannotBeAssignedToAnyPlate() {
+        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        SerialPlatePatchDto patch = new SerialPlatePatchDto();
+        patch.setProvider("Interno"); patch.setStatus("Terceiro");
+        assertThatThrownBy(() -> service.updatePlates(mutation(rows, patch, "status", "provider")))
+                .hasMessageContaining("Status inválido");
+        assertThat(repository.findAll()).allMatch(plate -> plate.getStatus().equals("Criado"));
+    }
+
+    @Test
+    void legacyStatusSurvivesUnrelatedEditsButCannotBeSelectedAgainAfterChangingIt() {
+        SerialPlateDto row = service.createPlates(draft(1)).getFirst();
+        var plate = repository.findById(Long.valueOf(row.getSerial())).orElseThrow();
+        plate.setStatus("Terceiro"); plate.setProvider("Interno"); repository.saveAndFlush(plate);
+        row = service.getPlate(plate.getSerial());
+        SerialPlatePatchDto patch = new SerialPlatePatchDto(); patch.setOf("999"); patch.setStatus("Terceiro");
+        row = service.updatePlates(mutation(List.of(row), patch, "of", "status")).getFirst();
+        assertThat(row.getOf()).isEqualTo("999"); assertThat(row.getStatus()).isEqualTo("Terceiro");
+        patch.setStatus("Devolvido");
+        row = service.updatePlates(mutation(List.of(row), patch, "status")).getFirst();
+        patch.setStatus("Terceiro");
+        SerialPlateMutationDto request = mutation(List.of(row), patch, "status");
+        assertThatThrownBy(() -> service.updatePlates(request)).hasMessageContaining("Status inválido");
+        assertThat(service.getPlate(plate.getSerial()).getStatus()).isEqualTo("Devolvido");
+    }
+
+    @Test
     void allocatesGlobalNumbersAndRejectsCounterRewind() {
         assertThat(repository.count()).isZero();
         List<SerialPlateDto> rows = service.createPlates(draft(2));

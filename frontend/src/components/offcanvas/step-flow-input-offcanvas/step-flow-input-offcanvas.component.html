@@ -63,17 +63,6 @@
           </div>
         </div>
       }
-      @if(!order.checklistIntegration && (checklistEquipment.length || checklistEquipmentLoading)){
-        <div class="sofd-box checklist-equipment-box">
-          <div class="sofd-box-info"><span class="sofd-box-info-label">Equipamentos do checklist</span><span>Selecione pelos números de série</span></div>
-          <div class="sof-file-container">
-            @for(equipment of checklistEquipment;track equipment.flowId){
-              <label class="sof-file-item"><input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId,$any($event.target).checked)" /><span><strong>{{ equipment.serial || '-' }}</strong> · {{ equipment.item }}</span></label>
-            }
-          </div>
-          <div class="buttons-container"><span>{{ selectedChecklistEquipmentCount }} equipamento(s) selecionado(s)</span><button cButton type="button" color="secondary" [disabled]="checklistEquipmentLoading" (click)="saveChecklistEquipment()">Salvar equipamentos</button></div>
-        </div>
-      }
       <app-step-flow-editable-media
         #filesSection
         [order]="order"
@@ -144,18 +133,6 @@
             <label class="custom-label">Itens a produzir</label>
 
             <div class="sof-file-container">
-              @if (order.checklistIntegration) {
-                @for (equipment of checklistEquipment; track equipment.flowId) {
-                  <label class="sof-file-item integrated-checklist-item">
-                    <span class="produced-item-box">
-                      <input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
-                      <span class="produced-item-description"><strong>{{ equipment.item }}</strong><small>Número de série: {{ equipment.serial || '-' }}</small></span>
-                    </span>
-                  </label>
-                } @empty {
-                  <i class="custom-error">Nenhum item com o primeiro checklist finalizado.</i>
-                }
-              } @else {
               @for (itemGroup of itemsFormControls; track itemGroup.get('id')?.value; let i = $index) {
                 <div class="sof-file-item" [formGroup]="itemGroup">
                   <div class="produced-item-box">
@@ -182,14 +159,40 @@
               } @empty {
                 <i class="custom-error">Nenhum item disponível para produção.</i>
               }
-              }
             </div>
-            @if (order.checklistIntegration) {
-              <div class="work-items-summary">{{ selectedChecklistEquipmentCount }} item(ns) selecionado(s)</div>
-            }
           </div>
         }
 
+        <div class="mb-3 checklist-equipment-box">
+          <label class="custom-label">Checklists vinculados</label>
+          <div class="checklist-count" aria-live="polite" [class.text-danger]="selectedChecklistEquipmentCount > checklistEquipmentLimit">
+            {{ selectedChecklistEquipmentCount }} de {{ checklistEquipmentLimit }} equipamento(s) vinculado(s)
+          </div>
+          <div class="sof-file-container">
+            @for (equipment of checklistEquipment; track equipment.flowId) {
+              <label class="sof-file-item integrated-checklist-item">
+                <span class="produced-item-box">
+                  <input type="checkbox" [checked]="equipment.selected"
+                    [disabled]="checklistEquipmentLoading || saveLoading || (!equipment.selected && selectedChecklistEquipmentCount >= checklistEquipmentLimit)"
+                    (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
+                  <span class="produced-item-description">
+                    <strong>{{ equipment.item }}</strong>
+                    <small>Número de série: {{ equipment.serial || '-' }}</small>
+                  </span>
+                </span>
+              </label>
+            } @empty {
+              <i class="custom-error">{{ checklistEquipmentLoading ? 'Carregando checklists...' : 'Nenhum checklist disponível para vincular.' }}</i>
+            }
+          </div>
+          @if (selectedChecklistEquipmentCount > checklistEquipmentLimit) {
+            <small class="text-danger">Remova vínculos ou ajuste a quantidade de itens a produzir antes de salvar.</small>
+          }
+          @if (checklistEquipmentError) {
+            <small class="text-danger">Não foi possível carregar os checklists.</small>
+            <button cButton type="button" color="secondary" variant="outline" (click)="loadChecklistEquipment()">Tentar novamente</button>
+          }
+        </div>
         @if (order.currentStep == "Frete") {
           <div class="mb-3">
             <label cLabel for="carrier" class="custom-label">Transportadora</label>
@@ -256,7 +259,17 @@
 
         <div class="buttons-container">
           @if (order.currentStep == "PCP") {
-            <button cButton color="danger" class="sofd-action-btn danger" (click)="toggleCancelModel(true)">
+            <button cButton color="secondary" variant="outline" type="button" class="sofd-action-btn return-to-assembly"
+              (click)="onReturnToFinalAssembly()"
+              [disabled]="saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: rotate(180deg)">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 12h8"></path>
+                <path d="m12 16 4-4-4-4"></path>
+              </svg>
+              Voltar Etapa
+            </button>
+            <button cButton color="danger" type="button" class="sofd-action-btn danger" (click)="toggleCancelModel(true)">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18"/>
                 <path d="m6 6 12 12"/>
@@ -265,7 +278,7 @@
             </button>
           }
 
-          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="saveLoading || volumeMutationLoading">
+          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
             @if (!saveLoading) {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="save-icon">
                 <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>

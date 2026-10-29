@@ -181,6 +181,37 @@
         overflow: hidden;
       }
 
+      .admin-stage-form {
+        margin-top: 24px;
+
+        .custom-label {
+          display: block;
+          margin-bottom: 4px;
+          color: var(--cui-medium-emphasis);
+          font-size: 13px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+
+        .stage-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 16px;
+
+          button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            height: 34px;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+
+            svg { width: 20px; height: 20px; }
+          }
+        }
+      }
+
       .tab-count {
         display: inline-grid;
         min-width: 20px;

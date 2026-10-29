@@ -11,6 +11,7 @@ import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepositor
 import br.com.metaro.portal.modules.general.stepFlow.repositories.projections.StatusCountsProjection;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.projections.StepCountProjection;
 import br.com.metaro.portal.modules.quality.checklist.service.ChecklistStepFlowService;
+import br.com.metaro.portal.modules.quality.checklist.dto.ChecklistStepBindingDto;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
 import br.com.metaro.portal.util.erp.dto.ErpOrderItemDto;
 import br.com.metaro.portal.util.others.StringUtils;
@@ -175,10 +176,8 @@ public class StepFlowService {
         if (legacy) {
             User user = userService.authenticate();
             if (!user.hasRole("ROLE_ADMIN")) {
-                throw new ForbiddenException("Somente administradores podem criar um Fluxo de etapas sem checklist.");
+                throw new ForbiddenException("Somente administradores podem criar um Fluxo de etapas na versão legado.");
             }
-        } else {
-            checklistStepFlowService.assertOrderCanStart(erpOrder.getNumber().toString());
         }
         Order entity = new Order();
         entity.setChecklistIntegration(!legacy);
@@ -204,8 +203,16 @@ public class StepFlowService {
 
     @Transactional
     public OrderDto update(Long id, OrderInputDto dto) throws IOException {
-        Order order = orderRepository.getReferenceById(id);
+        if (dto.getChecklistFlowIds() != null) checklistStepFlowService.lockFlows(dto.getChecklistFlowIds());
+        Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
         rulesForUpdate(dto, order);
+        if (dto.getChecklistFlowIds() != null) {
+            ChecklistStepBindingDto bindings = new ChecklistStepBindingDto();
+            bindings.setFlowIds(dto.getChecklistFlowIds());
+            checklistStepFlowService.replaceBindings(id, bindings);
+        } else if (dto.getItems() != null && !dto.getItems().isEmpty()) {
+            checklistStepFlowService.assertEquipmentCapacity(order);
+        }
         return new OrderDto(order);
     }
 
@@ -358,7 +365,8 @@ public class StepFlowService {
                 boolean isAdmin = me.getAuthorities().stream().anyMatch(a -> a
                         .getAuthority().equals("ROLE_ADMIN"));
 
-                if (!isAdmin) {
+                boolean isPcpReturn = order.getCurrentStep() == StepType.PCP && newStep == StepType.FINAL_ASSEMBLY;
+                if (!isAdmin && !isPcpReturn) {
                     throw new ForbiddenException("Apenas administradores podem alterar etapas!");
                 }
 
@@ -383,7 +391,7 @@ public class StepFlowService {
                     }
                     if (step.getStep().ordinal() == dto.getNewStepId()) {
                         step.setStatus(StepStatus.ACTIVE);
-                        if (movingForward) {
+                        if (movingForward || isPcpReturn) {
                             step.setStartedAt(transitionAt);
                             step.setFinishedAt(null);
                             step.setFinishedBy(null);
@@ -500,6 +508,13 @@ public class StepFlowService {
             case BILLING -> user.getPosition().getName().equals("Financeiro");
             case SHIPPING -> user.getPosition().getName().equals("Almoxarifado");
         };
+    }
+
+    public List<Long> parseChecklistFlowIds(String value) throws IOException {
+        if (value == null) return null;
+        List<Long> ids = objectMapper.readValue(value, new TypeReference<>() {});
+        if (ids == null || ids.contains(null)) throw new UnprocessableEntityException("Informe uma lista válida de checklists.");
+        return ids;
     }
 
     public List<OrderItemInputDto> parseItems(String itemsJson) throws IOException {

@@ -87,7 +87,33 @@
         <c-tabs-content>
           <c-tab-panel [itemKey]="0">
             <div class="sof-tab-panel timeline-panel">
-              <app-step-flow-timeline [order]="order" />
+              <app-step-flow-timeline [order]="order">
+                @if (isAdmin && order.status !== 'Cancelado' && order.status !== 'Concluído') {
+                  <form class="admin-stage-form" (ngSubmit)="saveStage()">
+                    <label cLabel for="viewSetStage" class="custom-label">Escolher etapa</label>
+                    <select cSelect id="viewSetStage" [formControl]="adminStepControl">
+                      @for (step of steps; track step.id) {
+                        @if (step.id > 0) {
+                          <option [value]="step.id">{{ step.title }}</option>
+                        }
+                      }
+                    </select>
+                    <div class="stage-actions">
+                      <button cButton color="primary" type="submit" [disabled]="stageSaveLoading || !adminStepControl.dirty">
+                        @if (stageSaveLoading) {
+                          <c-spinner size="sm" aria-hidden="true" />
+                        } @else {
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+                            <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7" />
+                          </svg>
+                        }
+                        Salvar
+                      </button>
+                    </div>
+                  </form>
+                }
+              </app-step-flow-timeline>
             </div>
           </c-tab-panel>
 
@@ -135,7 +161,7 @@
           <strong>{{ order.currentStep }}</strong>
         </div>
       }
-      <button cButton color="primary" (click)="getData()" class="refresh-btn">
+      <button cButton color="primary" (click)="getData()" class="refresh-btn" [disabled]="stageSaveLoading">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
           <path d="M21 3v5h-5"/>

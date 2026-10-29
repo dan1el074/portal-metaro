@@ -9,7 +9,7 @@
       >
         <span class="paper"><app-checklist-icon name="file-text" /></span>
         <strong>{{ step.category.name }}</strong>
-        <small>{{ record(step.template.id)?.status ?? (flow.skipped[step.template.id] ? "Etapa pulada" : "Ainda não gerado") }}</small>
+        <small>{{ flow.skipped[step.template.id] && record(step.template.id)?.status === "Cancelado" ? "Justificado" : (record(step.template.id)?.status ?? (flow.skipped[step.template.id] ? "Etapa pulada" : "Ainda não gerado")) }}</small>
         @if (flow.skipped[step.template.id]) {
           <span class="skip-reason" [title]="flow.skipped[step.template.id]">{{ flow.skipped[step.template.id] }}</span>
         }

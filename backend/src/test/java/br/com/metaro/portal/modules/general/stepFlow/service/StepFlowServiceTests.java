@@ -4,6 +4,8 @@ import br.com.metaro.portal.modules.general.stepFlow.dto.OrderDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderMinDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderVolumeInputDto;
+import br.com.metaro.portal.core.entities.Position;
+import br.com.metaro.portal.core.services.exceptions.ForbiddenException;
 import br.com.metaro.portal.core.entities.Role;
 import br.com.metaro.portal.core.entities.User;
 import br.com.metaro.portal.core.services.UserService;
@@ -246,6 +248,98 @@ class StepFlowServiceTests {
         assertThat(billing.getFinishedAt()).isNull();
         assertThat(billing.getFinishedBy()).isNull();
         assertThat(order.getSteps().get(4).getStatus()).isEqualTo(StepStatus.WAITING);
+    }
+
+    @Test
+    void pcpOperatorCanReturnToFinalAssemblyWithAuditAndPreservedOrderData() {
+        UserService userService = mock(UserService.class);
+        StepFlowService service = serviceWith(mock(OrderRepository.class), userService);
+        User operator = operatorFrom("PCP");
+        when(userService.authenticate()).thenReturn(operator);
+        Order order = orderWithAllSteps(Instant.parse("2026-10-14T10:00:00Z"));
+        order.setCurrentStep(StepType.PCP);
+        OrderStep assembly = order.getSteps().getFirst();
+        assembly.setStatus(StepStatus.DONE);
+        assembly.setFinishedAt(Instant.parse("2026-10-14T11:00:00Z"));
+        assembly.setFinishedBy(operator);
+        OrderStep pcp = order.getSteps().get(1);
+        pcp.setStatus(StepStatus.ACTIVE);
+        pcp.getMessages().add(new StepMessage("Histórico anterior", pcp, operator));
+        OrderInputDto input = new OrderInputDto();
+        input.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+        input.setComment("Ajustar montagem");
+
+        ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order);
+
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.FINAL_ASSEMBLY);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.IN_PROGRESS);
+        assertThat(assembly.getStatus()).isEqualTo(StepStatus.ACTIVE);
+        assertThat(assembly.getFinishedAt()).isNull();
+        assertThat(assembly.getFinishedBy()).isNull();
+        assertThat(assembly.getStartedAt()).isAfter(Instant.parse("2026-10-14T11:00:00Z"));
+        assertThat(pcp.getStatus()).isEqualTo(StepStatus.WAITING);
+        assertThat(pcp.getMessages()).hasSize(3);
+        assertThat(pcp.getMessages().getLast().getMessage()).contains("PCP -> Montagem Final");
+        assertThat(pcp.getMessages().getLast().getCreatedBy()).isSameAs(operator);
+        assertThat(order.getSteps().subList(2, 5)).allMatch(step -> step.getStatus() == StepStatus.WAITING);
+    }
+
+    @Test
+    void operatorsCannotManuallyChangeAnyOtherStageTransition() {
+        for (StepType source : StepType.values()) {
+            for (StepType target : StepType.values()) {
+                if (source == target || (source == StepType.PCP && target == StepType.FINAL_ASSEMBLY)) continue;
+                UserService userService = mock(UserService.class);
+                StepFlowService service = serviceWith(mock(OrderRepository.class), userService);
+                String department = switch (source) {
+                    case FINAL_ASSEMBLY -> "Montagem Final";
+                    case PCP -> "PCP";
+                    case FREIGHT -> "Comercial";
+                    case BILLING -> "Financeiro";
+                    case SHIPPING -> "Almoxarifado";
+                };
+                when(userService.authenticate()).thenReturn(operatorFrom(department));
+                Order order = orderWithAllSteps(Instant.now());
+                order.setCurrentStep(source);
+                OrderInputDto input = new OrderInputDto();
+                input.setNewStepId(target.ordinal());
+
+                assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order))
+                        .isInstanceOf(ForbiddenException.class);
+                assertThat(order.getCurrentStep()).isEqualTo(source);
+            }
+        }
+    }
+
+    @Test
+    void returnFromPcpStillRequiresTheResponsibleDepartmentAndAnOpenOrder() {
+        UserService userService = mock(UserService.class);
+        StepFlowService service = serviceWith(mock(OrderRepository.class), userService);
+        Order order = orderWithAllSteps(Instant.now());
+        order.setCurrentStep(StepType.PCP);
+        OrderInputDto input = new OrderInputDto();
+        input.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+        when(userService.authenticate()).thenReturn(operatorFrom("Montagem Final"));
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order))
+                .isInstanceOf(ForbiddenException.class);
+        when(userService.authenticate()).thenReturn(operatorFrom("PCP"));
+        for (OrderStatus status : List.of(OrderStatus.CANCELLED, OrderStatus.COMPLETED)) {
+            order.setStatus(status);
+            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order))
+                    .isInstanceOf(UnprocessableEntityException.class);
+        }
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+    }
+
+    private User operatorFrom(String department) {
+        User operator = new User();
+        Position position = new Position();
+        position.setName(department);
+        operator.setPosition(position);
+        Role role = new Role();
+        role.setAuthority("ROLE_STEP_FLOW_OPERATOR");
+        operator.addRole(role);
+        return operator;
     }
 
     private StepFlowService serviceWith(OrderRepository orderRepository, UserService userService) {

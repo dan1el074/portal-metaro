@@ -239,30 +239,6 @@
       color: var(--cui-medium-emphasis);
     }
 
-    .custom-hr {
-      padding: 0 16px;
-    }
-
-    .sofd-title-custom-container {
-      position: relative;
-      width: 100%;
-      margin-top: 30px;
-
-      .sofd-title-custom {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 0 12px;
-        background-color: var(--cui-body-bg);
-        font-weight: 600;
-        font-size: 13px;
-        text-align: center;
-        text-transform: uppercase;
-        color: var(--cui-medium-emphasis);
-      }
-    }
-
     .custom-label {
       color: var(--cui-medium-emphasis);
       font-size: 13px;
@@ -536,6 +512,7 @@
 
     .buttons-container {
       display: flex;
+      flex-wrap: wrap;
       justify-content: end;
       align-items: center;
       gap: 8px;
@@ -676,4 +653,10 @@
   color: var(--cui-secondary-color);
   font-size: 11px;
   text-align: right;
+}
+
+.checklist-count {
+  margin-bottom: 8px;
+  color: var(--cui-secondary-color);
+  font-size: 12px;
 }

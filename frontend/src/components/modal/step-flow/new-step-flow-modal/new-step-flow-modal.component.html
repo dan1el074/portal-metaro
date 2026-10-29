@@ -65,7 +65,7 @@
             <strong>Integrar com a ferramenta de checklist</strong>
             <small>
               {{ useChecklistIntegration
-                ? 'O registro seguirá o fluxo integrado aos checklists.'
+                ? 'Os checklists selecionados serão vinculados sem alterar as quantidades informadas.'
                 : 'O registro continuará na versão legado, sem integração com checklists.' }}
             </small>
           </span>
@@ -105,59 +105,60 @@
         </div>
       </div>
 
-      @if (useChecklistIntegration) {
-        <span class="sub-title">Itens a produzir</span>
+      <span class="sub-title">Itens do pedido<span class="text-danger">*</span></span>
 
-        <div class="items-container">
-          @for (equipment of checklistEquipment; track equipment.flowId) {
-            <label class="search-item checklist-item">
-              <input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
-              <span class="produced-item-description">
-                <strong>{{ equipment.item }}</strong>
-                <small>Número de série: {{ equipment.serial || '-' }}</small>
-              </span>
-            </label>
-          } @empty {
-            <i class="custom-error">Nenhum item disponível com o primeiro checklist finalizado.</i>
-          }
-        </div>
-        <div class="work-items-summary">{{ selectedChecklistEquipmentCount }} item(ns) selecionado(s)</div>
-      } @else {
-        <span class="sub-title">Itens</span>
+      <div class="items-container">
+        @for (itemGroup of itemsFormControls; track itemGroup.get('code')?.value) {
+          <div class="search-item" [formGroup]="itemGroup">
+            <span class="search-item-code">{{ itemGroup.get('code')?.value }}</span>
+            <span class="search-item-description">{{ itemGroup.get('description')?.value }}</span>
 
-        <div class="items-container">
-          @for (itemGroup of itemsFormControls; track itemGroup.get('code')?.value) {
-            <div class="search-item" [formGroup]="itemGroup">
-              <span class="search-item-code">{{ itemGroup.get('code')?.value }}</span>
-              <span class="search-item-description">{{ itemGroup.get('description')?.value }}</span>
-
-              <div class="search-item-quantity">
-                <input
-                  cFormControl
-                  type="number"
-                  formControlName="producedQuantity"
-                  [min]="0"
-                  [max]="itemGroup.get('maxQuantity')?.value"
-                  [class.invalid]="itemGroup.get('producedQuantity')?.invalid"
-                  class="custom-form"
-                />
-                <span class="quantity-limit">/ {{ itemGroup.get('quantity')?.value }}</span>
-              </div>
+            <div class="search-item-quantity">
+              <input
+                cFormControl
+                type="number"
+                formControlName="producedQuantity"
+                [min]="0"
+                [max]="itemGroup.get('maxQuantity')?.value"
+                [class.invalid]="itemGroup.get('producedQuantity')?.invalid"
+                class="custom-form"
+              />
+              <span class="quantity-limit">/ {{ itemGroup.get('quantity')?.value }}</span>
             </div>
+          </div>
 
-            @if (itemGroup.get('producedQuantity')?.invalid && itemGroup.get('producedQuantity')?.touched) {
-              <small class="text-danger">
-                @if (itemGroup.get('maxQuantity')?.value) {
-                  Quantidade deve ser entre 0 e {{ itemGroup.get('maxQuantity')?.value }}.
-                } @else {
-                  Esse item já foi produzido!
-                }
-              </small>
-            }
-          } @empty {
-            <i class="custom-error">Erro ao carregar itens do pedido</i>
+          @if (itemGroup.get('producedQuantity')?.invalid && itemGroup.get('producedQuantity')?.touched) {
+            <small class="text-danger">
+              @if (itemGroup.get('maxQuantity')?.value) {
+                Quantidade deve ser entre 0 e {{ itemGroup.get('maxQuantity')?.value }}.
+              } @else {
+                Esse item já foi produzido!
+              }
+            </small>
           }
-        </div>
+        } @empty {
+          <i class="custom-error">Erro ao carregar itens do pedido</i>
+        }
+      </div>
+      @if (useChecklistIntegration) {
+        <section class="checklist-section">
+          <span class="sub-title">Checklists vinculados</span>
+
+          <div class="items-container">
+            @for (equipment of checklistEquipment; track equipment.flowId) {
+              <label class="search-item checklist-item">
+                <input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
+                <span class="produced-item-description">
+                  <strong>{{ equipment.item }}</strong>
+                  <small>Número de série: {{ equipment.serial || '-' }}</small>
+                </span>
+              </label>
+            } @empty {
+              <i class="custom-error">Nenhum checklist finalizado disponível para este pedido.</i>
+            }
+          </div>
+          <div class="work-items-summary">{{ selectedChecklistEquipmentCount }} checklist(s) selecionado(s)</div>
+        </section>
       }
     }
   </c-modal-body>

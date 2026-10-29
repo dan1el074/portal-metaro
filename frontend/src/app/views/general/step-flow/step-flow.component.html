@@ -329,5 +329,5 @@
     </c-card-body>
   </c-card>
 
-  <app-step-flow-offcanvas #stepFlowOffcanvas [isAdmin]="isAdmin" [showMoney]="showMoney"></app-step-flow-offcanvas>
+  <app-step-flow-offcanvas #stepFlowOffcanvas [isAdmin]="isAdmin" [showMoney]="showMoney" [steps]="steps" (reloadOrders)="reloadOrders()"></app-step-flow-offcanvas>
 </c-container>

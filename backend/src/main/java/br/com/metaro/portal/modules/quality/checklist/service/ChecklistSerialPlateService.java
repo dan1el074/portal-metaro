@@ -85,6 +85,7 @@ public class ChecklistSerialPlateService {
     public void synchronizePlate(SerialPlate plate, String itemLabel, User actor, boolean confirmed) {
         ChecklistFlow flow = findActiveFlow(plate.getSerial()).orElse(null);
         if (flow == null) return;
+        flow = flowRepository.findLockedById(flow.getId()).orElseThrow();
         String newOrder = plate.getReadyStock() ? "" : canonicalOrder(plate.getOrder());
         boolean orderChanged = !canonicalOrder(flow.getOrderNumber()).equals(newOrder);
         if (!plate.getReadyStock() && (newOrder.isBlank() || plate.getOrderItem().isBlank() || plate.getClient().isBlank())) {
@@ -92,7 +93,7 @@ public class ChecklistSerialPlateService {
         }
         if (orderChanged && !bindingRepository.findByFlowId(flow.getId()).isEmpty()) {
             if (!confirmed) throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Confirme a realocação: o equipamento será removido do Fluxo de Etapas antigo e os fluxos abertos serão encaminhados ao PCP.");
+                    "Confirme a realocação: o vínculo com o Fluxo de Etapas antigo será removido, com registro nos comentários, preservando etapa, status e quantidades.");
             stepFlowService.relocateEquipment(flow, newOrder, actor);
         }
         Map<String, String> before = identification(flow);
@@ -150,7 +151,9 @@ public class ChecklistSerialPlateService {
                 || label.equalsIgnoreCase(item.getDescription() + " - " + plate.getDescription())
                 || plate.getDescription().equalsIgnoreCase(item.getDescription())).toList();
         if (matches.isEmpty() && order.getItems().size() == 1) matches = order.getItems();
-        if (matches.size() != 1) throw invalid("Não foi possível identificar unicamente o item comercial do checklist no ERP. Verifique as descrições do pedido e da plaqueta.");
+        // The plate export has no commercial code. Preserve its selected label when
+        // the two ERP exports cannot be matched uniquely; quantities are independent.
+        if (matches.size() != 1) return label;
         var item = matches.getFirst();
         return item.getCode() + " - " + item.getDescription();
     }

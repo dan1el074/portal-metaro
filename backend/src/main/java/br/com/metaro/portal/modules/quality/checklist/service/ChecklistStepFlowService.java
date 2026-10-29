@@ -72,13 +72,19 @@ public class ChecklistStepFlowService {
     @Transactional
     public void replaceBindings(Long orderId, ChecklistStepBindingDto dto) {
         User user = userService.authenticate();
-        Order order = orderRepository.findById(orderId).orElseThrow(ResourceNotFoundException::new);
-        Set<Long> requested = new LinkedHashSet<>(dto.getFlowIds());
+        Set<Long> requested = new TreeSet<>(dto.getFlowIds());
+        Map<Long, ChecklistFlow> lockedFlows = new LinkedHashMap<>();
+        // Use the same lock order as plate relocation: checklist first, then order.
+        for (Long flowId : requested) {
+            lockedFlows.put(flowId, flowRepository.findLockedById(flowId).orElseThrow(ResourceNotFoundException::new));
+        }
+        Order order = orderRepository.findLockedById(orderId).orElseThrow(ResourceNotFoundException::new);
+        assertEquipmentCapacity(order, requested.size());
         List<ChecklistStepBinding> current = bindingRepository.findByOrderId(orderId);
         current.stream().filter(binding -> !requested.contains(binding.getFlow().getId())).forEach(bindingRepository::delete);
         for (Long flowId : requested) {
             if (bindingRepository.existsByOrderIdAndFlowId(orderId, flowId)) continue;
-            ChecklistFlow flow = flowRepository.findById(flowId).orElseThrow(ResourceNotFoundException::new);
+            ChecklistFlow flow = lockedFlows.get(flowId);
             validateBinding(order, flow);
             ChecklistStepBinding binding = new ChecklistStepBinding();
             binding.setOrder(order);
@@ -91,13 +97,12 @@ public class ChecklistStepFlowService {
 
     @Transactional
     public void createBindings(Order order, List<Long> flowIds) {
-        if (flowIds == null || flowIds.isEmpty()) {
-            throw new UnprocessableEntityException("Selecione ao menos um item de checklist para criar o Fluxo de etapas.");
-        }
+        if (flowIds == null || flowIds.isEmpty()) return;
+        assertEquipmentCapacity(order, new HashSet<>(flowIds).size());
 
         User user = userService.authenticate();
-        for (Long flowId : new LinkedHashSet<>(flowIds)) {
-            ChecklistFlow flow = flowRepository.findById(flowId).orElseThrow(ResourceNotFoundException::new);
+        for (Long flowId : new TreeSet<>(flowIds)) {
+            ChecklistFlow flow = flowRepository.findLockedById(flowId).orElseThrow(ResourceNotFoundException::new);
             validateBinding(order, flow);
             ChecklistStepBinding binding = new ChecklistStepBinding();
             binding.setOrder(order);
@@ -106,6 +111,7 @@ public class ChecklistStepFlowService {
             binding.setCreatedAt(Instant.now());
             bindingRepository.save(binding);
         }
+        assertEquipmentCapacity(order);
     }
 
     @Transactional(readOnly = true)
@@ -171,9 +177,7 @@ public class ChecklistStepFlowService {
         ChecklistStepRequirement requirement = requirementRepository.findByStepType(stepType).orElse(null);
         if (requirement == null) return true;
         List<ChecklistStepBinding> bindings = bindingRepository.findByOrderId(orderId);
-        if (bindings.isEmpty()) {
-            throw new UnprocessableEntityException("Selecione os números de série dos equipamentos exigidos por esta etapa antes de finalizá-la.");
-        }
+        if (bindings.isEmpty()) return true;
         return bindings.stream().allMatch(binding -> isCategoryFinished(binding.getFlow(), requirement.getCategory().getId()));
     }
 
@@ -233,9 +237,7 @@ public class ChecklistStepFlowService {
         ChecklistStepRequirement requirement = requirementRepository.findByStepType(stepType).orElse(null);
         if (requirement == null) return;
         List<ChecklistStepBinding> bindings = bindingRepository.findByOrderId(orderId);
-        if (bindings.isEmpty()) {
-            throw new UnprocessableEntityException("Selecione os números de série dos equipamentos exigidos por esta etapa antes de finalizá-la.");
-        }
+        if (bindings.isEmpty()) return;
         for (ChecklistStepBinding binding : bindings) {
             if (!isCategoryFinished(binding.getFlow(), requirement.getCategory().getId())) {
                 throw new UnprocessableEntityException("Todos os equipamentos selecionados devem finalizar a categoria de checklist exigida antes que esta etapa possa avançar.");
@@ -261,6 +263,27 @@ public class ChecklistStepFlowService {
         if (skipped.containsKey(required.getTemplate().getId().toString())) return !flow.isCancelled();
         ChecklistRecord record = recordRepository.findByFlowIdAndTemplateId(flow.getId(), required.getTemplate().getId()).orElse(null);
         return !flow.isCancelled() && record != null && record.getStatus() == ChecklistStatus.FINISHED;
+    }
+
+    @Transactional
+    public void lockFlows(List<Long> flowIds) {
+        for (Long flowId : new TreeSet<>(flowIds)) {
+            flowRepository.findLockedById(flowId).orElseThrow(ResourceNotFoundException::new);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void assertEquipmentCapacity(Order order) {
+        assertEquipmentCapacity(order, bindingRepository.countByOrderId(order.getId()));
+    }
+
+    private void assertEquipmentCapacity(Order order, long selectedCount) {
+        long productionQuantity = order.getItems().stream()
+                .mapToLong(item -> item.getProducedQuantity() == null ? 0 : Math.max(0, item.getProducedQuantity()))
+                .sum();
+        if (selectedCount > productionQuantity) {
+            throw new UnprocessableEntityException("A quantidade de equipamentos vinculados não pode ultrapassar a quantidade de itens a produzir (" + productionQuantity + ").");
+        }
     }
 
     private void validateBinding(Order order, ChecklistFlow flow) {
@@ -295,35 +318,6 @@ public class ChecklistStepFlowService {
             String destination = newOrder == null || newOrder.isBlank() ? "Pronta Entrega" : "o pedido " + newOrder;
             current.getMessages().add(new StepMessage(
                     "O número de série " + flow.getSerialNumber() + " foi realocado para " + destination + " pelo setor PCP.", current, actor));
-            if (order.getStatus() == OrderStatus.IN_PROGRESS || order.getStatus() == OrderStatus.LATE) {
-                StepType previous = order.getCurrentStep();
-                if (previous != StepType.PCP) {
-                    current.getMessages().add(new StepMessage(
-                            "Etapa alterada automaticamente: " + previous.getDescription() + " → PCP após realocação do equipamento.", current, actor));
-                    Instant now = Instant.now();
-                    for (OrderStep step : order.getSteps()) {
-                        step.setChecklistPending(false);
-                        if (step.getStep().ordinal() < StepType.PCP.ordinal()) {
-                            if (step.getStatus() != StepStatus.DONE) {
-                                step.setFinishedAt(now);
-                                step.setFinishedBy(actor);
-                                if (step.getStartedAt() == null) step.setStartedAt(now);
-                            }
-                            step.setStatus(StepStatus.DONE);
-                        } else if (step.getStep() == StepType.PCP) {
-                            step.setStatus(StepStatus.ACTIVE);
-                            step.setStartedAt(now);
-                            step.setFinishedAt(null);
-                            step.setFinishedBy(null);
-                        } else {
-                            step.setStatus(StepStatus.WAITING);
-                        }
-                    }
-                    order.setCurrentStep(StepType.PCP);
-                } else {
-                    current.setChecklistPending(false);
-                }
-            }
             bindingRepository.delete(binding);
             orderRepository.save(order);
         }

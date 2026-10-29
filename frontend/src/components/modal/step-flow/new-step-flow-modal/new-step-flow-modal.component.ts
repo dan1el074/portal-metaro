@@ -6,7 +6,7 @@ import { StepFlowService } from '../../../../app/services/step-flow.service';
 import { StepFlowChecklistEquipment, StepFlowOrderInfo, StepFlowOrderItem } from '../../../../app/interface/step-flow.interface';
 import { CommonModule } from '@angular/common';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
-import { map, switchMap } from 'rxjs';
+import { catchError, map, of, switchMap } from 'rxjs';
 
 @Component({
   selector: 'app-new-step-flow-modal',
@@ -115,7 +115,13 @@ export class NewStepFlowModalComponent {
     ).pipe(
       switchMap((data: StepFlowOrderInfo) =>
         this.stepFlowService.listAvailableChecklistEquipment(data.number)
-          .pipe(map(checklistEquipment => ({ data, checklistEquipment })))
+          .pipe(
+            catchError(() => {
+              this.toaster.warning('Não foi possível carregar os checklists disponíveis. As quantidades do pedido continuam disponíveis.');
+              return of([] as StepFlowChecklistEquipment[]);
+            }),
+            map(checklistEquipment => ({ data, checklistEquipment }))
+          )
       )
     ).subscribe({
       next: ({ data, checklistEquipment }) => {
@@ -187,33 +193,16 @@ export class NewStepFlowModalComponent {
 
     const legacy = !this.useChecklistIntegration;
     const selectedEquipment = legacy ? [] : this.checklistEquipment.filter(item => item.selected);
-    if (!legacy && this.checklistEquipment.length === 0) {
-      this.toaster.error(
-        this.isAdmin
-          ? 'Nenhum checklist válido foi encontrado. Desmarque a integração para criar o registro na versão legado.'
-          : 'Nenhum checklist válido foi encontrado para este pedido.'
-      );
-      return;
-    }
-    if (!legacy && this.checklistEquipment.length > 0 && selectedEquipment.length === 0) {
-      this.toaster.error('Selecione ao menos um item para continuar.');
-      return;
-    }
-
-    const unmatchedEquipment = selectedEquipment.find(equipment =>
-      !this.searchResult!.items.some(item => this.equipmentBelongsToItem(equipment, item))
-    );
-    if (unmatchedEquipment) {
-      this.toaster.error(`O item ${unmatchedEquipment.item} não foi encontrado no pedido consultado.`);
-      return;
-    }
-
     const updatedItems: StepFlowOrderItem[] = this.searchResult!.items.map((item, index) => ({
       ...item,
-      producedQuantity: selectedEquipment.length > 0
-        ? selectedEquipment.filter(equipment => this.equipmentBelongsToItem(equipment, item)).length
-        : this.itemsForm.at(index).get('producedQuantity')?.value,
+      producedQuantity: this.itemsForm.at(index).get('producedQuantity')?.value,
     }));
+
+    const productionQuantity = updatedItems.reduce((total, item) => total + Number(item.producedQuantity), 0);
+    if (selectedEquipment.length > productionQuantity) {
+      this.toaster.error('A quantidade de equipamentos vinculados não pode ultrapassar a quantidade de itens a produzir.');
+      return;
+    }
 
     const exceedsAvailableQuantity = updatedItems.some((item, index) =>
       item.producedQuantity > Number(this.itemsForm.at(index).get('maxQuantity')?.value)
@@ -283,9 +272,4 @@ export class NewStepFlowModalComponent {
     );
   }
 
-  private equipmentBelongsToItem(equipment: StepFlowChecklistEquipment, item: StepFlowOrderItem): boolean {
-    const equipmentItem = equipment.item.trim().toLocaleLowerCase();
-    const itemCode = String(item.code).trim().toLocaleLowerCase();
-    return equipmentItem === itemCode || equipmentItem.startsWith(`${itemCode} -`);
-  }
 }

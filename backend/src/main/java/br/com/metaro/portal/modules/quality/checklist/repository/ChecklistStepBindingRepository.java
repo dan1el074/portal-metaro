@@ -9,6 +9,7 @@ import java.util.List;
 
 public interface ChecklistStepBindingRepository extends JpaRepository<ChecklistStepBinding, Long> {
     List<ChecklistStepBinding> findByOrderId(Long orderId);
+    long countByOrderId(Long orderId);
     List<ChecklistStepBinding> findByFlowId(Long flowId);
     List<ChecklistStepBinding> findByOrderStatusNot(OrderStatus status);
     boolean existsByOrderIdAndFlowId(Long orderId, Long flowId);
