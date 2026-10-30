@@ -2,13 +2,12 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ContainerComponent, FormControlDirective, SpinnerComponent, TooltipDirective } from '@coreui/angular';
+import { ContainerComponent, FormControlDirective, SpinnerComponent, TabDirective, TabsComponent, TabsListComponent, TooltipDirective } from '@coreui/angular';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Checklist, Comment, Problem } from '../../../../../interface/checklist.interface';
+import { Checklist, Comment, Problem, Status } from '../../../../../interface/checklist.interface';
 import { ChecklistPreviewService } from '../../../../../services/checklist-preview.service';
 import { ToastrService } from '../../../../../services/toast.service';
 import { ChecklistIconComponent } from '../../../../../../components/icons/checklist-icon/checklist-icon.component';
-import { ChecklistFlowComponent } from '../../../../../../components/cards/checklist-flow/checklist-flow.component';
 import { ChecklistActionModalComponent } from '../../../../../../components/modal/checklist/checklist-action-modal/checklist-action-modal.component';
 import { ChecklistClientHistoryComponent } from '../../../../../../components/offcanvas/checklist-client-history/checklist-client-history.component';
 import { ChecklistUpdateOrderModalComponent } from '../../../../../../components/modal/checklist/checklist-update-order-modal/checklist-update-order-modal.component';
@@ -30,8 +29,10 @@ import { BackNavigationService } from '../../../../../services/back-navigation.s
     FormControlDirective,
     SpinnerComponent,
     TooltipDirective,
+    TabsComponent,
+    TabsListComponent,
+    TabDirective,
     ChecklistIconComponent,
-    ChecklistFlowComponent,
     ChecklistActionModalComponent,
     ChecklistClientHistoryComponent,
     ChecklistUpdateOrderModalComponent,
@@ -187,21 +188,50 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected get statusClass(): string {
-    return this.record.status === 'Rascunho'
+    return this.statusTone(this.record.status);
+  }
+
+  private statusTone(status: Status | undefined): string {
+    return status === 'Rascunho'
       ? 'draft'
-      : this.record.status === 'Finalizado'
+      : status === 'Finalizado'
         ? 'approved'
-        : this.record.status === 'Pendente'
+        : status === 'Pendente'
           ? 'pending'
-          : this.record.status === 'Justificado'
+          : status === 'Justificado'
             ? 'justified'
-          : this.record.status === 'Cancelado'
+          : status === 'Cancelado'
             ? 'canceled'
             : 'active';
   }
 
+  protected get skipReason(): string {
+    return this.flow.skipped[this.record.templateId] ?? '';
+  }
+
+  protected get navigationSteps() {
+    return this.flow.plan.map(step => {
+      const record = this.store.state().records.find(item => item.flowId === this.flow.id && item.templateId === step.template.id);
+      const skipped = this.flow.skipped[step.template.id];
+      return {
+        templateId: step.template.id,
+        label: step.category.name,
+        title: step.template.name,
+        recordId: record && this.store.visible(record) ? record.id : '',
+        current: record?.id === this.record.id,
+        status: record?.status ?? (skipped ? 'Etapa pulada' : 'Ainda não gerado'),
+        tone: record ? this.statusTone(record.status) : skipped ? 'justified' : 'draft',
+      };
+    });
+  }
+
   protected open(id: string): void {
     void this.router.navigate(['/qualidade/checklist', id]);
+  }
+
+  protected selectStep(key: string | number | undefined): void {
+    const step = this.navigationSteps.find(item => item.templateId === key);
+    if (step?.recordId && !step.current) this.open(step.recordId);
   }
 
   protected edit(): void {

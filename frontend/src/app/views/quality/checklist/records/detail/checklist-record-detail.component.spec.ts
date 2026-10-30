@@ -8,6 +8,7 @@ import { ChecklistPreviewService } from '../../../../../services/checklist-previ
 import { ChecklistService } from '../../../../../services/checklist.service';
 import { ToastrService } from '../../../../../services/toast.service';
 import { BackNavigationService } from '../../../../../services/back-navigation.service';
+import { ReportPreviewService } from '../../../../../services/report-preview.service';
 import { emptyChecklistCategory } from '../../../../../shared/checklist-factory';
 
 function deferred<T>() {
@@ -79,19 +80,21 @@ describe('Checklist detail loading, history and deletion', () => {
     expect(text).toContain('Pedido: 900 → 901');
   });
 
-  it('keeps the document hidden until both record context and linked flows finish loading', async () => {
+  it('keeps the previous document visible without a spinner until the next context is complete', async () => {
     const context = deferred<any>(); const links = new Subject<any[]>();
     store.loadRecordContext.and.returnValue(context.promise); api.listLinkedStepFlows.and.returnValue(links);
     params.next(convertToParamMap({ id: '2' })); await settle();
-    expect(fixture.nativeElement.querySelector('.checklist-loading c-spinner')).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('.document-card')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.checklist-loading c-spinner')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 1');
+    expect(fixture.nativeElement.querySelector('.checklist-print-area').hasAttribute('inert')).toBeTrue();
     context.resolve(records[1]); await settle();
-    expect(fixture.nativeElement.querySelector('.document-card')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 1');
     links.next([]); links.complete(); await settle();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 2');
-    expect(fixture.nativeElement.querySelector('.status-badge').textContent).toContain('Justificado');
+    expect(fixture.nativeElement.querySelector('.viewer-document-tab.selected .status-badge').textContent).toContain('Justificado');
     expect(fixture.nativeElement.querySelectorAll('.answer-checkbox.checked').length).toBe(0);
     expect(fixture.nativeElement.textContent).toContain('Voltar para edição');
+    expect(fixture.nativeElement.querySelector('.checklist-print-area').hasAttribute('inert')).toBeFalse();
   });
 
   it('ignores a slower response after navigation to a different checklist', async () => {
@@ -113,6 +116,54 @@ describe('Checklist detail loading, history and deletion', () => {
     (fixture.nativeElement.querySelector('.checklist-loading button') as HTMLButtonElement).click();
     await settle();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 2');
+  });
+
+  it('shows the skip justification in the header and keeps the paper separate from the other cards', async () => {
+    params.next(convertToParamMap({ id: '2' })); await settle();
+    const notice = fixture.nativeElement.querySelector('.viewer-status-message');
+    expect(notice.textContent).toContain('Checklist pulado:');
+    expect(notice.textContent).toContain('Não se aplica');
+    expect(fixture.nativeElement.querySelectorAll('.viewer-document-tab.selected').length).toBe(1);
+    const paper = fixture.nativeElement.querySelector('.detail-content > .document-card');
+    expect(fixture.nativeElement.querySelector('.document-workspace')).toBeNull();
+    expect(paper.querySelector('.document-header')).not.toBeNull();
+    expect(paper.querySelector('.document-section')).not.toBeNull();
+    expect(paper.querySelector('.comments-card')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.comments-card')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.history-card')).not.toBeNull();
+  });
+
+  it('uses CoreUI tabs and keeps previous/next navigation beside the back link', async () => {
+    expect(fixture.nativeElement.querySelector('.viewer-toolbar select')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.viewer-file-title').textContent).toBe('Checklist 1');
+    expect(fixture.nativeElement.querySelector('.viewer-document-tabs c-tabs-list')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.viewer-tab-number')).toBeNull();
+    const next = fixture.nativeElement.querySelector('.viewer-back-row .record-navigation button:last-child');
+    next.click(); await settle();
+    expect(navigate).toHaveBeenCalledWith(['/qualidade/checklist', '2']);
+    navigate.calls.reset();
+    fixture.nativeElement.querySelectorAll('.viewer-document-tab')[1].click(); await settle();
+    expect(navigate).toHaveBeenCalledWith(['/qualidade/checklist', '2']);
+  });
+
+  it('limits the paper styling to the screen document and preserves the PDF preview', () => {
+    const paper = fixture.nativeElement.querySelector('.document-card') as HTMLElement;
+    expect(getComputedStyle(paper).backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(getComputedStyle(paper).borderRadius).toBe('0px');
+    expect(getComputedStyle(fixture.nativeElement.querySelector('.comments-card')).borderRadius).toBe('12px');
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    try {
+      const preview = frame.contentWindow!;
+      TestBed.inject(ReportPreviewService).openElement(fixture.nativeElement.querySelector('.inspection-page'), 'Checklist', preview);
+      expect(preview.document.querySelector('.document-viewer-header')).toBeNull();
+      expect(preview.document.querySelector('.comments-card')).toBeNull();
+      expect(preview.document.querySelector('.document-header h1')?.textContent).toContain('Modelo 1');
+      expect(preview.getComputedStyle(preview.document.querySelector('.document-card')!).padding).toBe('0px');
+      expect(preview.document.querySelector('.document-workspace')).toBeNull();
+    } finally {
+      frame.remove();
+    }
   });
 
   async function confirmDeletion(): Promise<HTMLButtonElement> {
