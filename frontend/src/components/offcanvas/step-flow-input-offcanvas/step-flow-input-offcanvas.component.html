@@ -6,7 +6,7 @@
       <div class="sfo-info">
         <div class="sfo-status">
           <span class="sof-order">#{{ order.number }}</span>
-          <span class="badge sof-badge" [class.late]="order.status == 'Atrasado'" [class.cancel]="order.status == 'Cancelado'" [class.complete]="order.status == 'Concluído'">
+          <span class="badge sof-badge" [class.pending]="order.status === 'Pendente'" [class.late]="order.status == 'Atrasado'" [class.cancel]="order.status == 'Cancelado'" [class.complete]="order.status == 'Concluído'">
             <span class="bullet"></span>
             {{ order.status }}
           </span>

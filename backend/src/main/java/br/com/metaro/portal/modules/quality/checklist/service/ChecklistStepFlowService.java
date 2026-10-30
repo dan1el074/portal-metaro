@@ -183,6 +183,16 @@ public class ChecklistStepFlowService {
     }
 
     @Transactional
+    public Order lockForReopening(Long orderId) {
+        List<ChecklistStepBinding> bindings = bindingRepository.findByOrderId(orderId);
+        lockFlows(bindings.stream().map(binding -> binding.getFlow().getId()).sorted().toList());
+        Order order = orderRepository.findLockedById(orderId).orElseThrow(ResourceNotFoundException::new);
+        for (ChecklistStepBinding binding : bindings) validateBinding(order, binding.getFlow());
+        assertEquipmentCapacity(order, bindings.size());
+        return order;
+    }
+
+    @Transactional
     public void completeWaitingSteps(Long flowId, User user) {
         for (ChecklistStepBinding binding : bindingRepository.findByFlowId(flowId)) {
             Order order = binding.getOrder();

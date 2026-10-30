@@ -690,3 +690,9 @@
   color: var(--cui-secondary-color);
   font-size: 12px;
 }
+
+.sof-badge.pending {
+  color: #8a6400 !important;
+  background-color: rgba(255, 193, 7, .18) !important;
+  .bullet { background-color: #d49b00; }
+}

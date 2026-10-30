@@ -32,13 +32,9 @@ public class OrderMinDto {
         dueDate = entity.getDueDate() != null ? entity.getDueDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-";
         currentStep = entity.getCurrentStep().toString();
         progress = entity.getProgress();
-        status = entity.getStatus().toString();
+        status = entity.getDisplayStatus();
 
-        if (entity.getStatus().equals(OrderStatus.IN_PROGRESS)
-                && entity.getDueDate() != null
-                && entity.getDueDate().isBefore(LocalDate.now())) {
-            status = OrderStatus.LATE.toString();
-        }
+
 
         Integer producedQuantity = 0;
         Integer allQuantity = 0;

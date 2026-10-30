@@ -140,6 +140,28 @@ export class StepFlowOffcanvasComponent {
       });
   }
 
+  protected reopen(): void {
+    if (!this.isAdmin || !this.order || this.stageSaveLoading
+      || !['Concluído', 'Cancelado'].includes(this.order.status)) return;
+    const id = this.order.id;
+    this.stageSaveLoading = true;
+    this.stepFlowService.reopen(id).pipe(finalize(() => {
+      this.stageSaveLoading = false;
+      this.cdf.detectChanges();
+    })).subscribe({
+      next: order => {
+        if (this.orderId === id) {
+          this.order = order;
+          this.resetStageSelection(order);
+          this.loadChecklistEquipment();
+        }
+        this.toasterService.success('Fluxo de etapas reaberto com sucesso.');
+        this.reloadOrders.emit();
+      },
+      error: error => this.toasterService.error(error.error?.error || error.error?.message || 'Erro ao reabrir o fluxo de etapas.'),
+    });
+  }
+
   private loadChecklistEquipment(): void {
     if (!this.orderId) return;
     this.checklistEquipmentLoading = true;

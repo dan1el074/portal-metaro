@@ -77,7 +77,7 @@
         }
         @case ('status') {
           <div
-            [class.late]="item[columnName] == 'Atrasado' || item[columnName] == 'Cancelado'"
+            [class.pending]="item[columnName] === 'Pendente'" [class.late]="item[columnName] == 'Atrasado' || item[columnName] == 'Cancelado'"
             [class.inProgress]="item[columnName] == 'Andamento'"
             [class.complete]="item[columnName] == 'Concluído'"
             class="badge"

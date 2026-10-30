@@ -37,10 +37,25 @@ describe('Checklist server context and audit normalization', () => {
       'Tratou uma não conformidade (NOK)', 'Checklist gerado automaticamente pelo fluxo', 'Checklist reaberto para edição',
       'Delegou o checklist para outro operador', 'Reverteu o tratamento de uma não conformidade', 'Cancelou o fluxo de checklist', 'Dados atualizados pelo PCP']);
     expect(record.logs[9].details).toBe('Detalhes do evento SERIAL_PLATE_UPDATED');
-    expect(record.logs[9].displayDetails).toBe(record.logs[9].details);
+    expect(record.logs[9].displayDetails).toBeUndefined();
     expect(record.logs[0].displayDetails).toBeUndefined();
     expect(store.state().records[0]).toBe(record);
     expect(store.state().flows[0].id).toBe('1');
+  });
+
+  it('shows only the previous and new order in PCP relocation messages while preserving the full audit', async () => {
+    const loaded = store.loadRecordContext('1');
+    const details = 'Atualização por Nº Série/Plaquetas (PCP), série 18918. Pedido: 246 → 244; Cliente: Antigo → Novo; Item: A → B';
+    http.expectOne(request => request.url.endsWith('/records/1')).flush({ id: '1', flowId: '1', templateId: 't', status: 'IN_PROGRESS',
+      logs: [{ id: 1, action: 'SERIAL_PLATE_UPDATED', actor: 'Daniel Vargas', details }],
+    });
+    http.expectOne(request => request.url.endsWith('/records/1/flow')).flush({ id: '1', plan: [], skipped: {} });
+    http.expectOne(request => request.url.endsWith('/records')).flush({ content: [] });
+    const record = await loaded;
+    expect(record.logs[0].actor).toBe('Daniel Vargas');
+    expect(record.logs[0].action).toBe('Pedido atualizado pelo PCP: 246 → 244.');
+    expect(record.logs[0].displayDetails).toBeUndefined();
+    expect(record.logs[0].details).toBe(details);
   });
 
   it('identifies the NOK in historical treatment events that stored only its internal ID', async () => {

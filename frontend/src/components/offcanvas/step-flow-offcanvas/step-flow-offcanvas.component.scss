@@ -409,3 +409,11 @@
     }
   }
 }
+
+.sof-badge.pending {
+  color: #8a6400 !important;
+  background-color: rgba(255, 193, 7, .18) !important;
+  .bullet { background-color: #d49b00; }
+}
+
+.timeline-footer:has(.reopen-btn) { .reopen-btn { margin-left: auto; } .refresh-btn { margin-left: 0 !important; } }

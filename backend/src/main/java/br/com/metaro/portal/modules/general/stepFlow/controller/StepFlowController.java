@@ -25,6 +25,12 @@ public class StepFlowController {
     @Autowired
     private StepFlowService stepFlowService;
 
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PutMapping("/{id}/reopen")
+    public ResponseEntity<OrderDto> reopen(@PathVariable Long id) {
+        return ResponseEntity.ok(stepFlowService.reopen(id));
+    }
+
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW')")
     @GetMapping
     public ResponseEntity<Page<OrderMinDto>> listOrders(

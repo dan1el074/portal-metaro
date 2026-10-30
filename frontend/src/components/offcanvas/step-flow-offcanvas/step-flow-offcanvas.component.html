@@ -7,7 +7,7 @@
         <div class="flex">
           <div class="sfo-status">
             <span class="sof-order">#{{ order.number }}</span>
-            <span class="badge sof-badge" [class.late]="order.status == 'Atrasado'" [class.cancel]="order.status == 'Cancelado'" [class.complete]="order.status == 'Concluído'">
+            <span class="badge sof-badge" [class.pending]="order.status === 'Pendente'" [class.late]="order.status == 'Atrasado'" [class.cancel]="order.status == 'Cancelado'" [class.complete]="order.status == 'Concluído'">
               <div class="bullet"></div>
               {{ order.status }}
             </span>
@@ -160,6 +160,12 @@
           <span class="current-step-label">Etapa atual:</span>
           <strong>{{ order.currentStep }}</strong>
         </div>
+      }
+      @if (isAdmin && order && (order.status === 'Conclu�do' || order.status === 'Cancelado')) {
+        <button cButton color="secondary" variant="outline" class="reopen-btn" (click)="reopen()" [disabled]="stageSaveLoading">
+          @if (stageSaveLoading) { <c-spinner size="sm" aria-hidden="true" /> }
+          Reabrir fluxo
+        </button>
       }
       <button cButton color="primary" (click)="getData()" class="refresh-btn" [disabled]="stageSaveLoading">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

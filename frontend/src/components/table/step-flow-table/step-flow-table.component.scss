@@ -184,3 +184,9 @@
     margin-left: 0;
   }
 }
+
+.pending {
+  color: #8a6400;
+  background-color: rgba(255, 193, 7, .18);
+  .bullet { background-color: #d49b00; }
+}

@@ -43,7 +43,7 @@ public class OrderDto {
     public OrderDto(Order entity) {
         id = entity.getId();
         number = entity.getDisplayNumber();
-        status = entity.getStatus().toString();
+        status = entity.getDisplayStatus();
         client = entity.getClient();
         cnpj = entity.getCnpj();
         phone = entity.getPhone();
@@ -65,11 +65,7 @@ public class OrderDto {
         nextStep = "";
         checklistIntegration = entity.isChecklistIntegration();
 
-        if (entity.getStatus().equals(OrderStatus.IN_PROGRESS)
-                && entity.getDueDate() != null
-                && entity.getDueDate().isBefore(LocalDate.now())) {
-            status = OrderStatus.LATE.toString();
-        }
+
 
         if (!entity.getCurrentStep().equals(StepType.SHIPPING)) {
             nextStep = StepType.values()[entity.getCurrentStep().ordinal() + 1].toString();

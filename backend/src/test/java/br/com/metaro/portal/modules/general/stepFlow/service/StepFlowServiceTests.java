@@ -39,6 +39,52 @@ import static org.mockito.Mockito.when;
 class StepFlowServiceTests {
 
     @Test
+    void displaysPendingWhileWaitingForChecklistEvenWhenOverdue() {
+        Order order = finalAssemblyOrder();
+        order.setNumber(900);
+        order.setItems(new ArrayList<>());
+        order.setDueDate(java.time.LocalDate.now().minusDays(1));
+        order.getSteps().getFirst().setChecklistPending(true);
+        assertThat(new OrderMinDto(order).getStatus()).isEqualTo("Pendente");
+        assertThat(new OrderDto(order).getStatus()).isEqualTo("Pendente");
+        order.getSteps().getFirst().setChecklistPending(false);
+        assertThat(new OrderMinDto(order).getStatus()).isEqualTo("Atrasado");
+    }
+
+    @Test
+    void reopensClosedFlowsInTheirCurrentStage() {
+        for (OrderStatus status : List.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
+            Order order = finalAssemblyOrder();
+            order.setNumber(900);
+            order.setItems(new ArrayList<>());
+            order.setStatus(status);
+            OrderRepository repository = mock(OrderRepository.class);
+            UserService users = mock(UserService.class);
+            User admin = new User();
+            Role role = new Role(); role.setAuthority("ROLE_ADMIN"); admin.addRole(role);
+            when(users.authenticate()).thenReturn(admin);
+            ChecklistStepFlowService checklists = mock(ChecklistStepFlowService.class);
+            when(checklists.lockForReopening(1L)).thenReturn(order);
+            when(repository.save(order)).thenReturn(order);
+            StepFlowService service = serviceWith(repository, users);
+            ReflectionTestUtils.setField(service, "checklistStepFlowService", checklists);
+            service.reopen(1L);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.IN_PROGRESS);
+            assertThat(order.getCurrentStep()).isEqualTo(StepType.FINAL_ASSEMBLY);
+            assertThat(order.getSteps().getFirst().getStatus()).isEqualTo(StepStatus.ACTIVE);
+            assertThat(order.getSteps().getFirst().getMessages()).hasSize(1);
+        }
+    }
+
+    @Test
+    void preventsOperatorsFromReopeningFlows() {
+        UserService users = mock(UserService.class);
+        when(users.authenticate()).thenReturn(operatorFrom("PCP"));
+        StepFlowService service = serviceWith(mock(OrderRepository.class), users);
+        assertThatThrownBy(() -> service.reopen(1L)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
     void addsOccurrenceSuffixFromSecondRegistrationOnwards() {
         OrderRepository orderRepository = mock(OrderRepository.class);
         StepFlowService service = new StepFlowService();

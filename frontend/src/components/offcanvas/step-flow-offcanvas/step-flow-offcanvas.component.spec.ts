@@ -47,6 +47,28 @@ describe('Step flow viewing offcanvas administrator stage selection', () => {
     select.dispatchEvent(new Event('change'));
   }
 
+  it('reopens a closed flow for administrators and refreshes its displayed data', async () => {
+    await open('Concluído');
+    const reload = spyOn(fixture.componentInstance.reloadOrders, 'emit');
+    const button = fixture.nativeElement.querySelector('.reopen-btn') as HTMLButtonElement;
+    expect(button.nextElementSibling?.textContent).toContain('Atualizar');
+    button.click(); await fixture.whenStable();
+    expect(button.disabled).toBeTrue();
+    http.expectOne(request => request.method === 'PUT' && request.url.endsWith('/step-flow/1/reopen')).flush(order);
+    http.expectOne(request => request.url.endsWith('/orders/1/equipment')).flush([]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.reopen-btn')).toBeNull();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides reopening from operators even for cancelled flows', async () => {
+    fixture.componentRef.setInput('isAdmin', false);
+    await open('Cancelado');
+    expect(fixture.nativeElement.querySelector('.reopen-btn')).toBeNull();
+    (fixture.componentInstance as any).reopen();
+    http.expectNone(request => request.method === 'PUT');
+  });
+
   it('shows all five production stages at the end of the Timeline for the portal administrator', () => {
     const form = fixture.nativeElement.querySelector('.admin-stage-form') as HTMLFormElement;
     const scroll = form.closest('.sof-scroll');

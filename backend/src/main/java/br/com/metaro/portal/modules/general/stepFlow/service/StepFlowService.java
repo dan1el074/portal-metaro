@@ -230,6 +230,28 @@ public class StepFlowService {
     }
 
     @Transactional
+    public OrderDto reopen(Long id) {
+        User me = userService.authenticate();
+        if (me.getAuthorities().stream().noneMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"))) {
+            throw new ForbiddenException("Apenas administradores podem reabrir fluxos de etapas!");
+        }
+        Order order = checklistStepFlowService.lockForReopening(id);
+        if (order.getStatus() != OrderStatus.COMPLETED && order.getStatus() != OrderStatus.CANCELLED) {
+            throw new UnprocessableEntityException("Somente fluxos finalizados ou cancelados podem ser reabertos!");
+        }
+        OrderStep current = order.getSteps().stream().filter(step -> step.getStep() == order.getCurrentStep())
+                .findFirst().orElseThrow(ResourceNotFoundException::new);
+        current.getMessages().add(new StepMessage("Fluxo de etapas reaberto pelo administrador. Status anterior: "
+                + order.getStatus() + ".", current, me));
+        current.setStatus(StepStatus.ACTIVE);
+        current.setChecklistPending(false);
+        current.setFinishedAt(null);
+        current.setFinishedBy(null);
+        order.setStatus(OrderStatus.IN_PROGRESS);
+        return new OrderDto(orderRepository.save(order));
+    }
+
+    @Transactional
     public void goToNextStep(Long id) {
         Order order = this.orderRepository.findById(id).orElseThrow(ResourceNotFoundException::new);
 

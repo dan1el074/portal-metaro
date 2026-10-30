@@ -103,7 +103,15 @@ export class ChecklistPreviewService {
       log.displayDetails = ['SERIAL_PLATE_UPDATED', 'ORDER_UPDATED', 'SERIAL_UPDATED', 'REOPENED', 'CANCELLED',
         'DELEGATED', 'TREATED', 'PROBLEM_TREATED', 'TREATMENT_REVERSED', 'CATEGORY_SKIPPED', 'CHECKLIST_SKIPPED', 'SERIAL_WAIVED']
         .includes(log.action) ? log.details : undefined;
-      log.action = this.auditAction(log.action);
+      if (log.action === 'SERIAL_PLATE_UPDATED') {
+        const orderChange = log.details?.match(/(?:^|[.;]\s*)Pedido: ([^;]+) → ([^;]+)/);
+        log.action = orderChange
+          ? `Pedido atualizado pelo PCP: ${orderChange[1].trim()} → ${orderChange[2].trim()}.`
+          : this.auditAction(log.action);
+        log.displayDetails = undefined;
+      } else {
+        log.action = this.auditAction(log.action);
+      }
     });
     Object.values(record.answers ?? {}).forEach((answer) => {
       answer.description ??= '';

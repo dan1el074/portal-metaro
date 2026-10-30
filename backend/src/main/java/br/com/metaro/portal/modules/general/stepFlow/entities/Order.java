@@ -85,6 +85,16 @@ public class Order {
     }
 
     @Transient
+    public String getDisplayStatus() {
+        if (status == OrderStatus.IN_PROGRESS) {
+            if (checklistIntegration && steps != null && steps.stream()
+                    .anyMatch(step -> step.getStep() == currentStep && step.isChecklistPending())) return "Pendente";
+            if (dueDate != null && dueDate.isBefore(LocalDate.now())) return OrderStatus.LATE.toString();
+        }
+        return status.toString();
+    }
+
+    @Transient
     public String getDisplayNumber() {
         return occurrence != null && occurrence > 1 ? "%d-%d".formatted(number, occurrence) : number.toString();
     }
