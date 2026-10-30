@@ -11,6 +11,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ChecklistModuleMigrationTests {
     @Test
+    void migratesSkippedStatusesAndRecoversOnlyUnambiguousHistoricalStepFlows() throws Exception {
+        try (var connection = DriverManager.getConnection("jdbc:h2:mem:justified-history-" + UUID.randomUUID());
+             var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE tb_checklist_flow (id BIGINT PRIMARY KEY, cancelled BOOLEAN, serial_number VARCHAR(120))");
+            statement.execute("CREATE TABLE tb_checklist_record (id BIGINT PRIMARY KEY, flow_id BIGINT, status VARCHAR(20), CONSTRAINT ck_checklist_record_status CHECK(status IN ('DRAFT','IN_PROGRESS','PENDING','FINISHED','CANCELLED')))");
+            statement.execute("CREATE TABLE tb_checklist_audit (record_id BIGINT, action VARCHAR(80))");
+            statement.execute("CREATE TABLE tb_stepflow_order (id BIGINT PRIMARY KEY, number INT, occurrence INT)");
+            statement.execute("CREATE TABLE tb_checklist_step_binding (order_id BIGINT, flow_id BIGINT, created_at TIMESTAMP)");
+            statement.execute("CREATE TABLE tb_stepflow_order_step (id BIGINT PRIMARY KEY, order_id BIGINT)");
+            statement.execute("CREATE TABLE tb_stepflow_step_message (step_id BIGINT, message TEXT, created_at TIMESTAMP)");
+            statement.execute("INSERT INTO tb_checklist_flow VALUES (1, FALSE, '18918'), (2, TRUE, '18919'), (3, FALSE, '18919')");
+            statement.execute("INSERT INTO tb_checklist_record VALUES (1, 1, 'CANCELLED'), (2, 2, 'CANCELLED'), (3, 3, 'CANCELLED')");
+            statement.execute("INSERT INTO tb_checklist_audit VALUES (1, 'CHECKLIST_SKIPPED'), (2, 'CHECKLIST_SKIPPED'), (3, 'CANCELLED')");
+            statement.execute("INSERT INTO tb_stepflow_order VALUES (10, 901, 1), (11, 900, 2), (12, 899, 1)");
+            statement.execute("INSERT INTO tb_checklist_step_binding VALUES (10, 1, CURRENT_TIMESTAMP)");
+            statement.execute("INSERT INTO tb_stepflow_order_step VALUES (21, 11), (22, 12)");
+            statement.execute("INSERT INTO tb_stepflow_step_message VALUES (21, 'O número de série 18918 foi realocado para o pedido 901 pelo setor PCP.', CURRENT_TIMESTAMP), (22, 'O número de série 18919 foi realocado para o pedido 901 pelo setor PCP.', CURRENT_TIMESTAMP)");
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V24__checklist_justification_and_binding_history.sql"));
+            try (var result = statement.executeQuery("SELECT status FROM tb_checklist_record ORDER BY id")) {
+                result.next(); assertThat(result.getString(1)).isEqualTo("JUSTIFIED");
+                result.next(); assertThat(result.getString(1)).isEqualTo("CANCELLED");
+                result.next(); assertThat(result.getString(1)).isEqualTo("CANCELLED");
+            }
+            try (var result = statement.executeQuery("SELECT order_id, order_number, linked_at, unlinked_at FROM tb_checklist_step_binding_history ORDER BY order_id")) {
+                result.next(); assertThat(result.getLong(1)).isEqualTo(10); assertThat(result.getString(2)).isEqualTo("901");
+                assertThat(result.getTimestamp(3)).isNotNull(); assertThat(result.getTimestamp(4)).isNull();
+                result.next(); assertThat(result.getLong(1)).isEqualTo(11); assertThat(result.getString(2)).isEqualTo("900-2");
+                assertThat(result.getTimestamp(3)).isNull(); assertThat(result.getTimestamp(4)).isNotNull();
+                assertThat(result.next()).isFalse();
+            }
+        }
+    }
+
+    @Test
     void linksOnlyActiveLegacyMatchesAndEnforcesExclusiveReservation() throws Exception {
         try (var connection = DriverManager.getConnection("jdbc:h2:mem:serial-link-" + UUID.randomUUID());
              var statement = connection.createStatement()) {

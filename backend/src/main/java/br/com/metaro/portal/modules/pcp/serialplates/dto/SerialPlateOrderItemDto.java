@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 public class SerialPlateOrderItemDto {
     private String id;
     private String label;
+    private String orderDescription;
     private String description;
     private BigDecimal capacity;
     private String voltage;

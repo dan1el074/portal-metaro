@@ -315,8 +315,7 @@ tbody tr:last-child td {
   display: none;
 }
 
-.media-content > button,
-.media-file-list > span {
+.media-content > button {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -324,35 +323,6 @@ tbody tr:last-child td {
 
 .media-content app-checklist-evidence {
   width: 100%;
-}
-
-.media-file-list {
-  display: grid;
-  width: min(100%, 620px);
-  gap: 8px;
-}
-
-.media-file-list > span {
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--cui-border-color);
-  border-radius: 7px;
-  background: var(--cui-tertiary-bg);
-}
-
-.media-file-name {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.media-file-list button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--cui-danger);
 }
 
 .page-actions {

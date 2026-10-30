@@ -19,5 +19,6 @@ public class OrderInputDto {
     private String cancelled;
     private Integer newStepId;
     private List<OrderItemInputDto> items;
+    private List<Long> checklistFlowIds;
     private MultipartFile[] images;
 }

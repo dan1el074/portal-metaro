@@ -95,6 +95,14 @@ public class ChecklistMapper {
     }
 
     public ChecklistRecordDto toDto(ChecklistRecord entity) {
+        return toDto(entity, true);
+    }
+
+    public ChecklistRecordDto toRevisionDto(ChecklistRecord entity) {
+        return toDto(entity, false);
+    }
+
+    private ChecklistRecordDto toDto(ChecklistRecord entity, boolean hideJustifiedAnswers) {
         ChecklistRecordDto dto = new ChecklistRecordDto();
         dto.setId(entity.getId());
         dto.setFlowId(entity.getFlow().getId());
@@ -126,8 +134,41 @@ public class ChecklistMapper {
         dto.setComments(commentRepository.findByRecordIdAndActiveTrueOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
         dto.setLogs(auditRepository.findByRecordIdOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
         dto.setRevisions(revisionRepository.findByRecordIdOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
+        if (hideJustifiedAnswers && entity.getStatus() == ChecklistStatus.JUSTIFIED) {
+            dto.setAnswers(blankAnswers(entity));
+            dto.setFields(blankFields(entity));
+            dto.setDepartments(List.of());
+            dto.setMedia(List.of());
+            dto.setSignature(null);
+            dto.setSignedAt(null);
+        }
         dto.setVersion(entity.getLockVersion());
         return dto;
+    }
+
+    public Map<String, ChecklistAnswerDto> blankAnswers(ChecklistRecord record) {
+        Map<String, ChecklistAnswerDto> answers = new LinkedHashMap<>();
+        for (ChecklistSnapshotDto snapshot : this.<List<ChecklistSnapshotDto>>read(record.getFlow().getPlanJson(), new TypeReference<>() {})) {
+            if (!snapshot.getTemplate().getId().equals(record.getTemplate().getId())) continue;
+            for (ChecklistSectionDto section : snapshot.getTemplate().getSections()) {
+                for (ChecklistQuestionDto question : section.getQuestions()) {
+                    ChecklistAnswerDto answer = new ChecklistAnswerDto();
+                    question.getFields().forEach(field -> answer.getFields().put(field.getId(), ""));
+                    answers.put(question.getId(), answer);
+                }
+            }
+        }
+        return answers;
+    }
+
+    public Map<String, String> blankFields(ChecklistRecord record) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (ChecklistSnapshotDto snapshot : this.<List<ChecklistSnapshotDto>>read(record.getFlow().getPlanJson(), new TypeReference<>() {})) {
+            if (snapshot.getTemplate().getId().equals(record.getTemplate().getId())) {
+                snapshot.getCategory().getFields().forEach(field -> fields.put(field.getId(), ""));
+            }
+        }
+        return fields;
     }
 
     public ChecklistCommentDto toDto(ChecklistComment entity) {

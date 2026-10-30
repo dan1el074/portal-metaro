@@ -9,6 +9,7 @@ import { ModalBackNavigationDirective } from '../../../../app/directive/modal-ba
 import { Subscription } from 'rxjs';
 import { ChecklistActionModalComponent } from '../checklist-action-modal/checklist-action-modal.component';
 import { isProductionKit } from '../../../../app/shared/checklist-rules';
+import { BackNavigationService } from '../../../../app/services/back-navigation.service';
 
 @Component({
   selector: 'app-checklist-new-record-modal',
@@ -25,6 +26,8 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
   protected serialError = '';
   private serialRequest?: Subscription;
   private orderRequest?: Subscription;
+  private destroyed = false;
+  protected confirming = false;
 
   protected get production(): boolean { return this.category?.integration === 'production'; }
   protected get portalAdmin(): boolean { return this.store.user.roles.some(role => role.authority === 'ROLE_ADMIN'); }
@@ -57,7 +60,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
     });
   }
 
-  public ngOnDestroy(): void { this.orderRequest?.unsubscribe(); this.serialRequest?.unsubscribe(); }
+  public ngOnDestroy(): void { this.destroyed = true; this.orderRequest?.unsubscribe(); this.serialRequest?.unsubscribe(); }
 
   @Output() createRecord = new EventEmitter<ChecklistRecordCreate>();
 
@@ -76,6 +79,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
     protected store: ChecklistPreviewService,
     private readonly api: ChecklistService,
     private readonly cdr: ChangeDetectorRef,
+    private readonly backNavigation: BackNavigationService,
   ) {}
 
   public open(): void {
@@ -211,31 +215,53 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
   }
 
   protected async confirm(): Promise<void> {
-    if (!this.canConfirm) return;
+    if (!this.canConfirm || this.confirming) return;
     const withoutSerial = this.production && !this.predecessorId && !this.productionKit && !this.serial.trim();
-    if (withoutSerial) {
-      if (!this.portalAdmin) return;
-      this.visible = false;
-      const confirmed = await this.actionModal.open({
-        title: 'Criar checklist sem número de série?',
-        message: 'Este checklist será criado sem um número de série vinculado. Deseja continuar?',
-        confirmLabel: 'Criar sem número de série',
+    this.confirming = true;
+    try {
+      if (withoutSerial && (!this.portalAdmin || !await this.requestSerialWaiver())) return;
+      if (this.destroyed) return;
+      this.createRecord.emit({
+        readyStock: this.production && this.readyStock,
+        confirmWithoutSerial: withoutSerial,
+        templateId: this.templateId,
+        predecessorRecordId: this.predecessorId || undefined,
+        serial: this.serial.trim() || undefined,
+        order: this.readyStock ? undefined : this.order.trim() || undefined,
+        clientId: this.erpOrder?.cnpj,
+        client: this.erpOrder?.client,
+        item: this.item || undefined,
+        seller: this.erpOrder?.salesperson,
       });
-      if (!confirmed) { this.visible = true; this.cdr.detectChanges(); return; }
+      this.close();
+    } finally {
+      this.confirming = false;
+      if (!this.destroyed) this.cdr.markForCheck();
     }
-    this.createRecord.emit({
-      readyStock: this.production && this.readyStock,
-      confirmWithoutSerial: withoutSerial,
-      templateId: this.templateId,
-      predecessorRecordId: this.predecessorId || undefined,
-      serial: this.serial.trim() || undefined,
-      order: this.readyStock ? undefined : this.order.trim() || undefined,
-      clientId: this.erpOrder?.cnpj,
-      client: this.erpOrder?.client,
-      item: this.item || undefined,
-      seller: this.erpOrder?.salesperson,
+  }
+
+  private async requestSerialWaiver(): Promise<boolean> {
+    const confirmed = await new Promise<string | null>(resolve => {
+      this.backNavigation.runAfterOverlayClose(() => {
+        if (this.destroyed) { resolve(null); return; }
+        void this.actionModal.open({
+          title: 'Criar checklist sem número de série?',
+          message: 'Este checklist será criado sem um número de série vinculado. Deseja continuar?',
+          confirmLabel: 'Continuar',
+        }).then(resolve);
+      });
+      this.visible = false;
+      this.cdr.detectChanges();
     });
-    this.close();
+    if (this.destroyed) return false;
+    await new Promise<void>(resolve => this.backNavigation.runAfterOverlayClose(() => {
+      if (!this.destroyed && !confirmed) {
+        this.visible = true;
+        this.cdr.detectChanges();
+      }
+      resolve();
+    }));
+    return !!confirmed;
   }
 
   private selectDefaultTemplate(): void {

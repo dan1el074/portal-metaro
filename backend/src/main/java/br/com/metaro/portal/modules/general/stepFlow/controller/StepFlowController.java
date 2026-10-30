@@ -25,6 +25,12 @@ public class StepFlowController {
     @Autowired
     private StepFlowService stepFlowService;
 
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PutMapping("/{id}/reopen")
+    public ResponseEntity<OrderDto> reopen(@PathVariable Long id) {
+        return ResponseEntity.ok(stepFlowService.reopen(id));
+    }
+
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW')")
     @GetMapping
     public ResponseEntity<Page<OrderMinDto>> listOrders(
@@ -72,10 +78,12 @@ public class StepFlowController {
             @PathVariable Long id,
             @ModelAttribute OrderInputDto dto,
             @RequestParam(value = "itemsJson", required = false) String itemsJson,
+            @RequestParam(value = "checklistFlowIdsJson", required = false) String checklistFlowIdsJson,
             @RequestParam(value = "setStage", required = false) String stepId
     ) throws IOException {
         if (stepId != null) dto.setNewStepId(Integer.parseInt(stepId));
         dto.setItems(stepFlowService.parseItems(itemsJson));
+        dto.setChecklistFlowIds(stepFlowService.parseChecklistFlowIds(checklistFlowIdsJson));
         OrderDto newDto = stepFlowService.update(id, dto);
         return ResponseEntity.ok(newDto);
     }

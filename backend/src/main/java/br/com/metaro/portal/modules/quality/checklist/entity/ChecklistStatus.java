@@ -5,5 +5,6 @@ public enum ChecklistStatus {
     IN_PROGRESS,
     PENDING,
     FINISHED,
+    JUSTIFIED,
     CANCELLED
 }

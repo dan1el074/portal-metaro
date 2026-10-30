@@ -1,4 +1,5 @@
-export type PlateStatus = 'Criado' | 'Programado' | 'Terceiro' | 'Recebido' | 'Finalizado';
+// Terceiro is read-only legacy data; new selections use STATUSES.
+export type PlateStatus = 'Criado' | 'Programado' | 'Recebido' | 'Devolvido' | 'Finalizado' | 'Terceiro';
 export type PlatePatch = Partial<Omit<SerialPlate, 'serial' | 'history' | 'updated' | 'version'>>;
 export type SerialPlateDialog = '' | 'new' | 'edit' | 'batch' | 'settings' | 'report';
 
@@ -41,6 +42,7 @@ export interface PlateSettings {
 }
 
 export interface ErpOrderItem {
+  orderDescription?: string;
   id: string;
   label?: string;
   description: string;

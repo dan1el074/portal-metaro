@@ -30,7 +30,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class SerialPlateService {
-    private static final List<String> STATUSES = List.of("Criado", "Programado", "Terceiro", "Recebido", "Finalizado");
+    private static final List<String> STATUSES = List.of("Criado", "Programado", "Recebido", "Devolvido", "Finalizado");
     private static final Map<String, String> LABELS = labels();
     private static final Set<String> SORTS = Set.of("serial", "of", "order", "client", "description", "provider", "status", "updated");
     private final SerialPlateRepository repository;
@@ -85,6 +85,7 @@ public class SerialPlateService {
         Collections.reverse(events);
         List<SerialPlateHistoryDto> history = new ArrayList<>();
         Map<String, String> state = new HashMap<>();
+        Map<String, String> itemModels = new HashMap<>();
 
         for (SerialPlateLog event : events) {
             List<SerialPlateChangeDto> changes = readChanges(event);
@@ -95,9 +96,12 @@ public class SerialPlateService {
 
             for (SerialPlateChangeDto change : changes) {
                 if (change.getField().equals(LABELS.get("orderItem"))) {
+                    String previousItemModel = itemModels.getOrDefault(change.getBefore(), beforeModel);
+                    String nextItemModel = itemModels.getOrDefault(change.getAfter(), afterModel);
                     displayed.add(new SerialPlateChangeDto(change.getField(),
-                            itemHistoryLabel(change.getBefore(), change.getBeforeLabel(), beforeModel),
-                            itemHistoryLabel(change.getAfter(), change.getAfterLabel(), afterModel)));
+                            orderItemHistoryDescription(change.getBefore(), change.getBeforeLabel(), previousItemModel),
+                            orderItemHistoryDescription(change.getAfter(), change.getAfterLabel(), nextItemModel)));
+                    if (!text(change.getAfter()).isEmpty()) itemModels.put(change.getAfter(), nextItemModel);
                 } else {
                     displayed.add(new SerialPlateChangeDto(change.getField(), change.getBefore(), change.getAfter()));
                 }
@@ -153,7 +157,7 @@ public class SerialPlateService {
             plate.setOf(text(request.getOf()));
             plate.setManufactured(YearMonth.now(ZoneId.of("America/Sao_Paulo")).toString());
             if (order != null) applyOrder(plate, request.getOrder(), order, item);
-            validate(plate);
+            validate(plate, null);
             plate.setUpdated(Instant.now());
             repository.save(plate);
             audit(plate.getSerial(), user, plate.getUpdated(), List.of(new SerialPlateChangeDto("Registro", "", "Registro criado")), snapshot(plate), Map.of(), item == null ? null : item.getLabel());
@@ -217,7 +221,7 @@ public class SerialPlateService {
             } else if (text(plate.getOrder()).isEmpty()) plate.setOrderItem("");
 
             if (!text(plate.getProvider()).isEmpty() && before.get(LABELS.get("provider")).isEmpty() && plate.getStatus().equals("Criado")) plate.setStatus("Programado");
-            validate(plate);
+            validate(plate, before.get(LABELS.get("status")));
             Map<String, String> after = snapshot(plate);
 
             if (!before.equals(after)) {
@@ -343,12 +347,14 @@ public class SerialPlateService {
         plate.setCapacity(item.getCapacity()); plate.setWeight(item.getWeight());
     }
 
-    private void validate(SerialPlate plate) {
+    private void validate(SerialPlate plate, String previousStatus) {
         plate.setOf(text(plate.getOf()));
         if (plate.getOf().isBlank() || plate.getOf().length() > 80) throw invalid("Informe a ordem de fabricação (até 80 caracteres).");
         if (!plate.getOrder().matches("[0-9]{0,15}")) throw invalid("Número do pedido inválido.");
         if (!plate.getManufactured().matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) throw invalid("Informe mês e ano de fabricação válidos.");
-        if (!STATUSES.contains(plate.getStatus())) throw invalid("Status inválido.");
+        // Retired status may be preserved on existing records, but never assigned again.
+        boolean preservingLegacyStatus = "Terceiro".equals(previousStatus) && "Terceiro".equals(plate.getStatus());
+        if (!STATUSES.contains(plate.getStatus()) && !preservingLegacyStatus) throw invalid("Status inválido.");
         if (!plate.getStatus().equals("Criado") && text(plate.getProvider()).isEmpty()) throw invalid("Informe o prestador de serviço para esse status.");
 
         for (BigDecimal value : Arrays.asList(plate.getCapacity(), plate.getWeight())) {
@@ -401,6 +407,17 @@ public class SerialPlateService {
         }
 
         logs.save(log);
+    }
+
+    private String orderItemHistoryDescription(String reference, String label, String model) {
+        String description = itemHistoryLabel(reference, label, model);
+        if (!text(model).isEmpty()) {
+            for (String separator : List.of(" - ", " — ", " – ")) {
+                String suffix = separator + model;
+                if (description.endsWith(suffix)) return description.substring(0, description.length() - suffix.length());
+            }
+        }
+        return description;
     }
 
     private String previousItemLabel(Long serial, String reference, String model) {

@@ -103,6 +103,12 @@ export class ChecklistComponent implements OnInit {
     this.page = 1;
   }
 
+  protected get activeCategoryId(): string {
+    const categories = this.store.state().categories;
+    return categories.some(category => category.id === this.categoryId)
+      ? this.categoryId : categories[0]?.id ?? '';
+  }
+
   protected get todos() {
     return this.store.state().records.filter((record) => {
       return this.store.editable(record);
@@ -133,7 +139,7 @@ export class ChecklistComponent implements OnInit {
         };
       })
       .filter((row) => {
-        return (!this.categoryId || row.categoryId === this.categoryId) &&
+        return (row.categoryId === this.activeCategoryId) &&
         (!this.status || row.status === this.status) &&
         (!term || `${row.title} ${row.model} ${row.serial}`.toLocaleLowerCase().includes(term));
       });

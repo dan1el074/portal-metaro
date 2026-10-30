@@ -31,7 +31,16 @@ describe('New checklist serial selection', () => {
     fixture.componentInstance.open();
   });
 
-  afterEach(() => { fixture.destroy(); http.verify(); });
+  afterEach(async () => { fixture.destroy(); http.verify(); await new Promise(resolve => setTimeout(resolve, 80)); });
+
+  async function waitForConfirmation(): Promise<HTMLElement> {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 10)); await fixture.whenStable();
+      const modal = fixture.nativeElement.querySelector('app-checklist-action-modal') as HTMLElement;
+      if (modal.querySelector('c-modal[aria-modal="true"]')) return modal;
+    }
+    throw new Error('The serial waiver confirmation was closed unexpectedly');
+  }
 
   // Exercise protected form handlers through their actual bindings and rendered controls.
   function control(label: string): HTMLInputElement | HTMLSelectElement {
@@ -93,17 +102,36 @@ describe('New checklist serial selection', () => {
     await fixture.whenStable();
     const emitted = jasmine.createSpy('created'); fixture.componentInstance.createRecord.subscribe(emitted);
     const create = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Criar checklist')!;
-    create.click(); await fixture.whenStable();
+    create.click(); await waitForConfirmation(); await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain('Este checklist será criado sem um número de série vinculado');
     expect(emitted).not.toHaveBeenCalled();
-    const confirmation = fixture.nativeElement.querySelector('app-checklist-action-modal');
+    const confirmation = await waitForConfirmation();
     const cancel = Array.from(confirmation.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Cancelar')!;
     cancel.click(); await new Promise(resolve => setTimeout(resolve, 350)); await fixture.whenStable(); expect(emitted).not.toHaveBeenCalled();
     const createAgain = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Criar checklist')!;
     createAgain.click(); await new Promise(resolve => setTimeout(resolve, 350)); await fixture.whenStable();
-    const confirm = Array.from(confirmation.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Criar sem número de série')!;
-    confirm.click(); await fixture.whenStable();
+    const confirm = Array.from(confirmation.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Continuar')!;
+    confirm.click(); await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
     expect(emitted).toHaveBeenCalledWith(jasmine.objectContaining({ confirmWithoutSerial: true }));
+  });
+
+  it('keeps the first serial waiver confirmation open and creates once only after confirmation', async () => {
+    portalAdmin = true;
+    await change('Pedido', '900'); control('Pedido').dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter' }));
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush(order);
+    http.expectOne(request => request.url.endsWith('/available-serials')).flush([]);
+    await fixture.whenStable();
+    const emitted = jasmine.createSpy('created'); fixture.componentInstance.createRecord.subscribe(emitted);
+    const create = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Criar checklist')!;
+    create.click(); create.click();
+    const modal = await waitForConfirmation();
+    await new Promise(resolve => setTimeout(resolve, 100)); await fixture.whenStable();
+    expect(modal.querySelector('c-modal')?.getAttribute('aria-modal')).toBe('true');
+    expect(emitted).not.toHaveBeenCalled();
+    const confirm = Array.from(modal.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Continuar')!;
+    confirm.click(); await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
+    expect(emitted).toHaveBeenCalledTimes(1);
+    expect(emitted).toHaveBeenCalledWith(jasmine.objectContaining({ confirmWithoutSerial: true, order: '900', item: 'MESA - Mesa' }));
   });
 
   it('preserves KIT without series for checklist administrators', async () => {

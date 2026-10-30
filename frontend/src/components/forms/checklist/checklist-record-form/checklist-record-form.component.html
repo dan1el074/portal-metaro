@@ -156,14 +156,7 @@
           <app-checklist-icon name="file-text" /> Selecionar fotos e vídeos
         </button>
         @if (record.media.length) {
-        <app-checklist-evidence [media]="record.media" />
-        <div class="media-file-list">
-          @for (file of record.media; track file.id; let index = $index) {
-          <span><app-checklist-icon name="file-text" /><span class="media-file-name">{{ file.name }}</span><button
-              type="button" (click)="removeMedia(index)" [attr.aria-label]="'Excluir ' + file.name"><app-checklist-icon
-                name="trash" /></button></span>
-          }
-        </div>
+        <app-checklist-evidence [media]="record.media" [editable]="true" (removeEvidence)="removeEvidence($event)" />
         } @else {
         <small>Nenhum arquivo selecionado.</small>
         }
