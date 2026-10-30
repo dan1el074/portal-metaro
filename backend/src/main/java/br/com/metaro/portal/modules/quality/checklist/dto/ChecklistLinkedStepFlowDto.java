@@ -12,4 +12,5 @@ public class ChecklistLinkedStepFlowDto {
     private String order;
     private String status;
     private String currentStep;
+    private boolean linked;
 }

@@ -18,6 +18,7 @@ export class ChecklistPreviewService {
   readonly uploadState = signal<{ fileName: string; kind: 'image' | 'video'; progress: number; current: number; total: number } | null>(null);
   private loading?: Promise<void>;
   private catalogEntries: ChecklistCatalogEntry[] = [];
+  private contextLoadVersion = 0;
 
   get user() { return this.users.getCurrentUser()! }
   get admin() { return this.user.roles.some((r) => ['ROLE_ADMIN', 'ROLE_CHECKLIST_ADMIN'].includes(r.authority)) }
@@ -81,7 +82,7 @@ export class ChecklistPreviewService {
   }
 
   private normalizeRecord(record: Checklist): Checklist {
-    const statuses: Record<string, Checklist['status']> = { DRAFT: 'Rascunho', IN_PROGRESS: 'Em andamento', PENDING: 'Pendente', FINISHED: 'Finalizado', CANCELLED: 'Cancelado' };
+    const statuses: Record<string, Checklist['status']> = { DRAFT: 'Rascunho', IN_PROGRESS: 'Em andamento', PENDING: 'Pendente', FINISHED: 'Finalizado', JUSTIFIED: 'Justificado', CANCELLED: 'Cancelado' };
     record.id = String(record.id);
     record.flowId = String(record.flowId);
     record.templateId = String(record.templateId);
@@ -92,9 +93,25 @@ export class ChecklistPreviewService {
     record.fields ??= {};
     record.media ??= [];
     record.comments.forEach((comment) => comment.id = String(comment.id));
+    const knownProblems = [record, ...record.revisions.map(revision => revision.record)].flatMap(item =>
+      Object.values(item.answers ?? {}).flatMap(answer => answer.problems ?? []));
     record.logs.forEach((log) => {
+      const problem = knownProblems.find(item => log.details === `Problema ${item.id} tratado.`
+        || log.details === `Tratamento revertido para o problema ${item.id}.`);
+      if (problem) log.details = `Não conformidade: ${problem.item} — ${problem.code || problem.defect}.`;
       log.id = String(log.id);
-      log.action = this.auditAction(log.action);
+      log.displayDetails = ['SERIAL_PLATE_UPDATED', 'ORDER_UPDATED', 'SERIAL_UPDATED', 'REOPENED', 'CANCELLED',
+        'DELEGATED', 'TREATED', 'PROBLEM_TREATED', 'TREATMENT_REVERSED', 'CATEGORY_SKIPPED', 'CHECKLIST_SKIPPED', 'SERIAL_WAIVED']
+        .includes(log.action) ? log.details : undefined;
+      if (log.action === 'SERIAL_PLATE_UPDATED') {
+        const orderChange = log.details?.match(/(?:^|[.;]\s*)Pedido: ([^;]+) → ([^;]+)/);
+        log.action = orderChange
+          ? `Pedido atualizado pelo PCP: ${orderChange[1].trim()} → ${orderChange[2].trim()}.`
+          : this.auditAction(log.action);
+        log.displayDetails = undefined;
+      } else {
+        log.action = this.auditAction(log.action);
+      }
     });
     Object.values(record.answers ?? {}).forEach((answer) => {
       answer.description ??= '';
@@ -507,7 +524,7 @@ export class ChecklistPreviewService {
     await firstValueFrom(this.api.completeVideo(recordId, info.evidence.id));
   }
   private auditAction(action: string): string {
-    return ({ SERIAL_WAIVED: 'Série dispensada pelo administrador', SERIAL_PLATE_UPDATED: 'Dados atualizados pelo PCP', CREATED: 'Criado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Finalizado', FINISHED_INPUT: 'Preenchimento finalizado', CLAIMED: 'Assumido', DELEGATED: 'Delegado', REOPENED: 'Reaberto', CANCELLED: 'Cancelado', TREATED: 'Tratado', PROBLEM_TREATED: 'Problema tratado', TREATMENT_REVERSED: 'Tratamento revertido', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist pulado', GENERATED: 'Gerado automaticamente' } as Record<string, string>)[action] ?? action;
+    return ({ SERIAL_WAIVED: 'Série dispensada pelo administrador', SERIAL_PLATE_UPDATED: 'Dados atualizados pelo PCP', CREATED: 'Checklist iniciado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Checklist finalizado', FINISHED_INPUT: 'Checklist finalizado', CLAIMED: 'Assumiu o preenchimento do checklist', DELEGATED: 'Delegou o checklist para outro operador', REOPENED: 'Checklist reaberto para edição', CANCELLED: 'Cancelou o fluxo de checklist', TREATED: 'Tratado', PROBLEM_TREATED: 'Tratou uma não conformidade (NOK)', TREATMENT_REVERSED: 'Reverteu o tratamento de uma não conformidade', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist justificado', GENERATED: 'Checklist gerado automaticamente pelo fluxo' } as Record<string, string>)[action] ?? action;
   }
   private nextSnapshot(flow: Flow, templateId: string) {
     let index = flow.plan.findIndex((s) => s.template.id === templateId) + 1;
@@ -621,8 +638,8 @@ export class ChecklistPreviewService {
   }
   async reopen(id: string, reason: string): Promise<void> {
     this.requireAdmin();
-    const record = this.normalizeRecord(await firstValueFrom(this.api.reopen(id, reason)));
-    this.state.update((data) => ({ ...data, records: data.records.map((item) => item.id === id ? record : item) }));
+    await firstValueFrom(this.api.reopen(id, reason));
+    await this.loadRecordContext(id);
   }
 
   async delegate(id: string, userId: number): Promise<void> {
@@ -654,7 +671,11 @@ export class ChecklistPreviewService {
 
   async deleteDraft(recordId: string): Promise<void> {
     await firstValueFrom(this.api.deleteDraft(recordId));
-    await this.load(true);
+    this.state.update(data => {
+      const records = data.records.filter(record => record.id !== recordId);
+      return { ...data, records, flows: data.flows.filter(flow => records.some(record => record.flowId === flow.id)) };
+    });
+    await this.load(true).catch(() => undefined);
   }
 
   async cancelFlow(recordId: string, reason: string): Promise<void> {
@@ -666,6 +687,26 @@ export class ChecklistPreviewService {
     this.requireAdmin();
     await firstValueFrom(this.api.skip(recordId, reason));
     await this.load(true);
+  }
+
+  async loadRecordContext(recordId: string): Promise<Checklist> {
+    const version = ++this.contextLoadVersion;
+    const result = await firstValueFrom(forkJoin({
+      record: this.api.getRecord(recordId),
+      flow: this.api.getFlow(recordId),
+      records: this.api.listRecords(),
+    }));
+    const record = this.normalizeRecord(result.record);
+    const flow = this.normalizeFlow(result.flow);
+    const records = result.records.content.map(item => String(item.id) === recordId ? record : this.normalizeRecord(item));
+    if (!records.some(item => item.id === recordId)) records.push(record);
+    if (version === this.contextLoadVersion) {
+      this.state.update(data => ({ ...data,
+        records,
+        flows: [...data.flows.filter(item => item.id !== flow.id), flow],
+      }));
+    }
+    return record;
   }
 
   private async refreshRecord(recordId: string): Promise<void> {

@@ -1,0 +1,424 @@
+// Screen-only document viewer. The PDF preview keeps its own layout.
+@media screen {
+  .inspection-page:not(.print-preview-mode) {
+    .document-viewer-header {
+      margin: -1.5rem -1.5rem 24px;
+      background: var(--cui-body-bg);
+      border-bottom: 1px solid var(--cui-border-color);
+    }
+
+    .viewer-back-row {
+      display: flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--cui-border-color-translucent);
+    }
+
+    .viewer-back-row .back-link {
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .viewer-back-row .back-link:hover {
+      color: #2563eb;
+    }
+
+    .viewer-back-row .back-link app-checklist-icon {
+      font-size: 16px;
+    }
+
+    .viewer-back-row .record-navigation {
+      display: flex;
+      gap: 6px;
+    }
+
+    .viewer-back-row .record-navigation button {
+      width: 32px;
+      height: 32px;
+    }
+
+    .viewer-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      min-height: 96px;
+      align-items: center;
+      gap: 20px;
+      padding: 0 24px;
+    }
+
+    .viewer-document {
+      min-width: 0;
+      gap: 12px;
+    }
+
+    .viewer-file-icon {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #2563eb;
+      font-size: 20px;
+    }
+
+    .viewer-file-copy {
+      min-width: 0;
+    }
+
+    .viewer-file-copy .viewer-file-title {
+      display: block;
+      overflow: hidden;
+      color: var(--cui-body-color);
+      font-size: 16px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .viewer-file-meta {
+      display: block;
+      overflow: hidden;
+      margin-top: 4px;
+      color: var(--cui-secondary-color);
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .viewer-file-meta>span {
+      padding: 0 3px;
+    }
+
+    .viewer-document-tabs {
+      display: block;
+      min-width: 0;
+      max-width: 50vw;
+      align-self: stretch;
+      justify-self: center;
+    }
+
+    .viewer-document-tabs c-tabs-list {
+      display: flex;
+      height: 100%;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      justify-content: center;
+      gap: 4px;
+      overflow-x: auto;
+      border-bottom: 0;
+      scrollbar-width: thin;
+    }
+
+    .viewer-document-tab {
+      display: flex;
+      min-width: 110px;
+      flex: 0 0 auto;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px 14px;
+      font-size: 14px;
+    }
+
+    .viewer-tab-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .viewer-document-tab .status-badge {
+      gap: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .viewer-document-tab .status-badge i {
+      width: 5px;
+      height: 5px;
+    }
+
+    .viewer-document-tab .status-badge.justified {
+      background: rgba(217, 144, 0, 0.1);
+      color: #9a6500;
+    }
+
+    .viewer-actions {
+      justify-self: end;
+      gap: 8px;
+    }
+
+    .viewer-export-button,
+    .viewer-edit-button {
+      display: inline-flex;
+      height: 34px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    .viewer-edit-button {
+      background: #2563eb;
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+    }
+
+    .viewer-edit-button:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+
+    .viewer-export-button {
+      background: transparent;
+      color: var(--cui-secondary-color);
+      border-color: var(--cui-border-color);
+    }
+
+    .viewer-export-button:hover:not(:disabled) {
+      background: var(--cui-tertiary-bg);
+      color: var(--cui-body-color);
+    }
+
+    .viewer-export-button:disabled,
+    .viewer-edit-button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .viewer-export-button app-checklist-icon,
+    .viewer-edit-button app-checklist-icon {
+      font-size: 14px;
+    }
+
+    .viewer-export-button:focus-visible,
+    .viewer-edit-button:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 3px;
+    }
+
+    .viewer-status-row {
+      display: flex;
+      min-height: 48px;
+      justify-content: center;
+      padding: 10px 24px;
+      border-top: 1px solid var(--cui-border-color-translucent);
+      background: var(--cui-tertiary-bg);
+    }
+
+    .viewer-status-message {
+      display: flex;
+      max-width: 950px;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--cui-border-color);
+      border-radius: 6px;
+      color: var(--cui-secondary-color);
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .viewer-status-message>app-checklist-icon {
+      flex: 0 0 16px;
+      font-size: 16px;
+    }
+
+    .viewer-status-message.approved {
+      color: #087c59;
+      border-color: rgba(16, 185, 129, 0.22);
+      background: rgba(16, 185, 129, 0.06);
+    }
+
+    .viewer-status-message.justified,
+    .viewer-status-message.pending {
+      color: #9a6500;
+      border-color: rgba(217, 144, 0, 0.25);
+      background: rgba(217, 144, 0, 0.06);
+    }
+
+    .viewer-status-message.canceled {
+      color: #c5232a;
+      border-color: rgba(197, 35, 42, 0.2);
+      background: rgba(197, 35, 42, 0.05);
+    }
+
+    .viewer-message-separator {
+      padding: 0 5px;
+      opacity: 0.6;
+    }
+
+    .document-card {
+      --cui-body-bg: #fff;
+      --cui-body-color: #253147;
+      --cui-secondary-color: #697586;
+      --cui-medium-emphasis: #5e6b7e;
+      --cui-border-color: #dce2e9;
+      --cui-tertiary-bg: #f5f7fa;
+      width: 100%;
+      min-height: 690px;
+      margin: 0 0 20px;
+      padding: 32px;
+      border: 1px solid #e1e6ec;
+      border-radius: 0;
+      background: #fff;
+      color: #253147;
+      box-shadow: 0 8px 34px rgba(28, 39, 54, 0.12);
+    }
+
+    .document-card .brand-logo-light {
+      display: block !important;
+    }
+
+    .document-card .brand-logo-dark {
+      display: none !important;
+    }
+  }
+}
+
+@media screen and (max-width: 1200px) {
+  .inspection-page:not(.print-preview-mode) {
+    .viewer-toolbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px 16px;
+      padding-top: 16px;
+    }
+
+    .viewer-document-tabs {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      min-height: 80px;
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .inspection-page:not(.print-preview-mode) {
+    .viewer-back-row {
+      padding: 0 16px;
+    }
+
+    .viewer-toolbar {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 16px 16px 0;
+    }
+
+    .viewer-file-copy .viewer-file-title {
+      font-size: 15px;
+    }
+
+    .viewer-actions {
+      grid-row: 2;
+      justify-self: end;
+    }
+
+    .viewer-document-tabs {
+      grid-row: 3;
+    }
+
+    .viewer-document-tabs c-tabs-list {
+      justify-content: safe center;
+      padding-bottom: 8px;
+      scrollbar-width: none;
+    }
+
+    .viewer-document-tabs c-tabs-list::-webkit-scrollbar {
+      display: none;
+    }
+
+    .viewer-document-tab {
+      min-width: 110px;
+      padding: 14px 10px;
+    }
+
+    .viewer-status-row {
+      padding: 10px 16px;
+    }
+
+    .viewer-status-message {
+      width: 100%;
+    }
+
+    .document-card {
+      min-height: 560px;
+      padding: 16px 10px;
+    }
+
+    .document-card .quality-brand {
+      gap: 6px;
+      padding: 14px 16px;
+    }
+
+    .document-card .quality-brand .brand-logo {
+      width: 120px;
+    }
+
+    .document-card .quality-brand span,
+    .document-card .quality-reference span {
+      font-size: 12px;
+    }
+
+    .document-card .document-identification {
+      padding: 12px 16px;
+    }
+
+    .document-card .document-identification>span {
+      font-size: 10px;
+    }
+
+    .document-card .document-header h1 {
+      font-size: 17px;
+    }
+
+    .document-card .document-header p {
+      font-size: 11px;
+    }
+
+    .document-card .metadata-grid,
+    .document-card .additional-metadata-grid {
+      gap: 12px 16px;
+      padding: 14px 16px;
+    }
+
+    .document-card .metadata-grid strong,
+    .document-card .additional-metadata-grid strong {
+      font-size: 12px;
+    }
+
+    .document-card .document-label {
+      font-size: 11px;
+    }
+  }
+}
+
+@media screen {
+  :host-context(html[data-coreui-theme="dark"]) .inspection-page:not(.print-preview-mode) {
+    .viewer-status-message.approved {
+      color: #6ee7b7;
+    }
+
+    .viewer-status-message.justified,
+    .viewer-status-message.pending {
+      color: #fcd34d;
+    }
+
+    .viewer-document-tab .status-badge.justified {
+      color: #fcd34d;
+    }
+  }
+}

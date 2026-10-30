@@ -1,3 +1,4 @@
+import { BackNavigationService } from '../../../services/back-navigation.service';
 import { ChecklistActionModalComponent } from '../../../../components/modal/checklist/checklist-action-modal/checklist-action-modal.component';
 import { Subject, Observable, firstValueFrom, forkJoin, switchMap, takeUntil, catchError, EMPTY } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -44,6 +45,7 @@ export class SerialPlatesComponent implements OnDestroy {
   private readonly data = inject(SerialPlatesService);
   private readonly reports = inject(ReportPreviewService);
   private readonly modals = inject(ModalService);
+  private readonly backNavigation = inject(BackNavigationService);
   private readonly toaster = inject(ToastrService);
   private readonly user = inject(UserService).getCurrentUser();
   private readonly authorities = this.user?.roles.map(role => role.authority) ?? [];
@@ -86,7 +88,7 @@ export class SerialPlatesComponent implements OnDestroy {
   public confirmationCount = 0;
   public readonly views = [{ value: 'operator', label: 'Operador' }, { value: 'consultation', label: 'Consulta' }] as const;
   public readonly summaries = STATUSES.map((status, index) => ({
-    status, title: status, color: ['#64748b', '#0369dd', '#d99000', '#7852b4', '#009966'][index],
+    status, title: status, color: ['#64748b', '#0369dd', '#7852b4', '#d99000', '#009966'][index],
   }));
 
   public constructor() {
@@ -502,16 +504,30 @@ export class SerialPlatesComponent implements OnDestroy {
       let confirmed = false;
       if (impacts.length) {
         const modalWasVisible = this.modalVisible;
-        this.modalVisible = false;
-        this.updateView();
         const details = impacts.map(impact => `Série ${impact.serial} → ${impact.order ? 'pedido ' + impact.order : 'Pronta Entrega'} (fluxo(s) ${impact.stepFlows.join(', ')})`).join('; ');
-        confirmed = !!await this.relocationModal.open({
-          title: 'Confirmar realocação de equipamento',
-          message: `${details}. O equipamento será removido do Fluxo de Etapas antigo. Uma mensagem será registrada na etapa atual. Fluxos abertos serão encaminhados ao PCP; fluxos concluídos continuarão concluídos. Os demais equipamentos serão preservados. Deseja continuar?`,
-          confirmLabel: 'Confirmar realocação',
+        // Consume the edit modal's history entry before registering the confirmation.
+        // Otherwise its asynchronous popstate closes the new modal instead.
+        confirmed = !!await new Promise<string | null>(resolve => {
+          this.backNavigation.runAfterOverlayClose(() => {
+            if (this.destroyed) { resolve(null); return; }
+            void this.relocationModal.open({
+              title: 'Confirmar realocação de equipamento',
+              message: `${details}. O vínculo com o Fluxo de Etapas anterior será removido e a realocação será registrada nos comentários da etapa atual. A etapa, o status, as quantidades e os demais equipamentos serão preservados. Deseja continuar?`,
+              confirmLabel: 'Confirmar realocação',
+            }).then(resolve);
+          });
+          this.modalVisible = false;
+          this.changeDetector.detectChanges();
         });
         if (this.destroyed) return;
-        this.modalVisible = modalWasVisible;
+        await new Promise<void>(resolve => this.backNavigation.runAfterOverlayClose(() => {
+          if (!this.destroyed) {
+            this.modalVisible = modalWasVisible;
+            this.changeDetector.detectChanges();
+          }
+          resolve();
+        }));
+        if (this.destroyed) return;
         if (!confirmed) return;
       }
       const response = await this.request(this.data.update(records, patch, batch, confirmed));

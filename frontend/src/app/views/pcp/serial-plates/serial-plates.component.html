@@ -43,7 +43,7 @@
   </section>
   @if (canEdit()) { <div class="secondary-actions"><button cButton color="secondary" variant="ghost" (click)="open('settings')"><app-checklist-icon name="settings" /> Configurações</button></div> }
   <c-card class="records-card">
-    <div class="records-header"><div><h2>Números de série e plaquetas</h2><p>{{ countStatus('') }} registros · Acompanhe da criação à conclusão do equipamento.</p></div>@if (canEdit()) { <button cButton color="primary" (click)="open('new')"><app-checklist-icon name="plus" /> Novo</button> }</div>
+    <div class="records-header"><div><h2>Números de série e plaquetas</h2><p>{{ countStatus('') }} registros<span class="records-description"> · Acompanhe da criação à conclusão do equipamento.</span></p></div>@if (canEdit()) { <button cButton color="primary" (click)="open('new')"><app-checklist-icon name="plus" /> Novo</button> }</div>
     <app-serial-plates-table
       [data]="pageRows()" [selected]="selected" [search]="search" [canEdit]="canEdit()"
       [page]="page" [pages]="pages()" [perPage]="perPage" [sorter]="sorter"

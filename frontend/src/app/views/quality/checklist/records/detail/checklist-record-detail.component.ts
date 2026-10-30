@@ -2,13 +2,12 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ContainerComponent, FormControlDirective, TooltipDirective } from '@coreui/angular';
+import { ContainerComponent, FormControlDirective, SpinnerComponent, TabDirective, TabsComponent, TabsListComponent, TooltipDirective } from '@coreui/angular';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Checklist, Comment, Problem } from '../../../../../interface/checklist.interface';
+import { Checklist, Comment, Problem, Status } from '../../../../../interface/checklist.interface';
 import { ChecklistPreviewService } from '../../../../../services/checklist-preview.service';
 import { ToastrService } from '../../../../../services/toast.service';
 import { ChecklistIconComponent } from '../../../../../../components/icons/checklist-icon/checklist-icon.component';
-import { ChecklistFlowComponent } from '../../../../../../components/cards/checklist-flow/checklist-flow.component';
 import { ChecklistActionModalComponent } from '../../../../../../components/modal/checklist/checklist-action-modal/checklist-action-modal.component';
 import { ChecklistClientHistoryComponent } from '../../../../../../components/offcanvas/checklist-client-history/checklist-client-history.component';
 import { ChecklistUpdateOrderModalComponent } from '../../../../../../components/modal/checklist/checklist-update-order-modal/checklist-update-order-modal.component';
@@ -17,6 +16,8 @@ import { ChecklistDelegateModalComponent } from '../../../../../../components/mo
 import { ChecklistLinkedStepFlow, ChecklistService } from '../../../../../services/checklist.service';
 import { isProductionKit } from '../../../../../shared/checklist-rules';
 import { ReportPreviewService } from '../../../../../services/report-preview.service';
+import { firstValueFrom } from 'rxjs';
+import { BackNavigationService } from '../../../../../services/back-navigation.service';
 
 @Component({
   selector: 'app-checklist-record-detail',
@@ -26,9 +27,12 @@ import { ReportPreviewService } from '../../../../../services/report-preview.ser
     RouterLink,
     ContainerComponent,
     FormControlDirective,
+    SpinnerComponent,
     TooltipDirective,
+    TabsComponent,
+    TabsListComponent,
+    TabDirective,
     ChecklistIconComponent,
-    ChecklistFlowComponent,
     ChecklistActionModalComponent,
     ChecklistClientHistoryComponent,
     ChecklistUpdateOrderModalComponent,
@@ -56,19 +60,55 @@ export class ChecklistRecordDetailComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly checklistApi = inject(ChecklistService);
   private readonly reportPreview = inject(ReportPreviewService);
+  private readonly backNavigation = inject(BackNavigationService);
   private recordId = '';
+  private loadVersion = 0;
+  private initialLoad?: Promise<void>;
+  protected loading = true;
+  protected loadError = '';
+  protected deleting = false;
   protected record!: Checklist;
   protected commentText = '';
   protected linkedStepFlows: ChecklistLinkedStepFlow[] = [];
 
-  async ngOnInit(): Promise<void> {
-    await this.store.load();
-    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+  ngOnInit(): void {
+    this.initialLoad = this.store.load();
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       this.recordId = params.get('id') ?? '';
       this.commentText = '';
-      this.load();
-      this.cdr.markForCheck();
+      void this.loadContext(this.recordId);
     });
+  }
+
+  private async loadContext(id: string): Promise<void> {
+    const version = ++this.loadVersion;
+    this.loading = true;
+    this.loadError = '';
+    this.cdr.markForCheck();
+    try {
+      await (this.initialLoad ??= this.store.load());
+      const record = await this.store.loadRecordContext(id);
+      const linked = await firstValueFrom(this.checklistApi.listLinkedStepFlows(record.flowId));
+      if (version !== this.loadVersion || this.destroyRef.destroyed) return;
+      if (!this.store.visible(record)) {
+        void this.router.navigate(['/qualidade/checklist']);
+        return;
+      }
+      this.record = record;
+      this.linkedStepFlows = linked;
+    } catch {
+      if (version === this.loadVersion) this.loadError = 'Não foi possível carregar o checklist. Tente novamente.';
+    } finally {
+      if (version === this.loadVersion && !this.destroyRef.destroyed) {
+        this.loading = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  protected retryLoad(): void {
+    this.initialLoad = undefined;
+    void this.loadContext(this.recordId);
   }
 
   private load(): void {
@@ -148,19 +188,50 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected get statusClass(): string {
-    return this.record.status === 'Rascunho'
+    return this.statusTone(this.record.status);
+  }
+
+  private statusTone(status: Status | undefined): string {
+    return status === 'Rascunho'
       ? 'draft'
-      : this.record.status === 'Finalizado'
+      : status === 'Finalizado'
         ? 'approved'
-        : this.record.status === 'Pendente'
+        : status === 'Pendente'
           ? 'pending'
-          : this.record.status === 'Cancelado'
+          : status === 'Justificado'
+            ? 'justified'
+          : status === 'Cancelado'
             ? 'canceled'
             : 'active';
   }
 
+  protected get skipReason(): string {
+    return this.flow.skipped[this.record.templateId] ?? '';
+  }
+
+  protected get navigationSteps() {
+    return this.flow.plan.map(step => {
+      const record = this.store.state().records.find(item => item.flowId === this.flow.id && item.templateId === step.template.id);
+      const skipped = this.flow.skipped[step.template.id];
+      return {
+        templateId: step.template.id,
+        label: step.category.name,
+        title: step.template.name,
+        recordId: record && this.store.visible(record) ? record.id : '',
+        current: record?.id === this.record.id,
+        status: record?.status ?? (skipped ? 'Etapa pulada' : 'Ainda não gerado'),
+        tone: record ? this.statusTone(record.status) : skipped ? 'justified' : 'draft',
+      };
+    });
+  }
+
   protected open(id: string): void {
     void this.router.navigate(['/qualidade/checklist', id]);
+  }
+
+  protected selectStep(key: string | number | undefined): void {
+    const step = this.navigationSteps.find(item => item.templateId === key);
+    if (step?.recordId && !step.current) this.open(step.recordId);
   }
 
   protected edit(): void {
@@ -296,17 +367,29 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected async deleteDraft(): Promise<void> {
+    if (this.deleting) return;
     const ok = await this.actionModal.open({
       title: 'Excluir rascunho',
       message: 'Este rascunho será excluído definitivamente.',
       danger: true,
       confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        this.deleting = true;
+        this.cdr.markForCheck();
+        try {
+          await this.store.deleteDraft(this.record.id);
+        } finally {
+          this.deleting = false;
+          this.cdr.markForCheck();
+        }
+      },
     });
 
     if (!ok) return;
-
-    await this.store.deleteDraft(this.record.id);
-    void this.router.navigate(['/qualidade/checklist']);
+    this.backNavigation.runAfterOverlayClose(() => {
+      this.toaster.success('Checklist excluído com sucesso.');
+      void this.router.navigate(['/qualidade/checklist']);
+    });
   }
 
   protected async cancelFlow(): Promise<void> {

@@ -255,7 +255,7 @@
                     <div class="status-cell">
                       <div
                         class="badge"
-                        [class.late]="item.status == 'Atrasado' || item.status == 'Cancelado'"
+                        [class.pending]="item.status === 'Pendente'" [class.late]="item.status == 'Atrasado' || item.status == 'Cancelado'"
                         [class.in-progress]="item.status == 'Andamento'"
                         [class.complete]="item.status == 'Concluído'"
                       >
@@ -329,5 +329,5 @@
     </c-card-body>
   </c-card>
 
-  <app-step-flow-offcanvas #stepFlowOffcanvas [isAdmin]="isAdmin" [showMoney]="showMoney"></app-step-flow-offcanvas>
+  <app-step-flow-offcanvas #stepFlowOffcanvas [isAdmin]="isAdmin" [showMoney]="showMoney" [steps]="steps" (reloadOrders)="reloadOrders()"></app-step-flow-offcanvas>
 </c-container>

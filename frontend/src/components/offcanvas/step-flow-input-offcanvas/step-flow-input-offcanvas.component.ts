@@ -100,8 +100,12 @@ export class StepFlowInputOffcanvasComponent {
   protected selectedVideo: (StepFlowVideo & { safeUrl: SafeResourceUrl }) | null = null;
   protected checklistEquipment: StepFlowChecklistEquipment[] = [];
   protected checklistEquipmentLoading = false;
+  protected checklistEquipmentError = false;
+  protected get checklistEquipmentLimit(): number {
+    return this.itemsForm.controls.reduce((total, control) => total + Math.max(0, Number(control.get('producedQuantity')?.value) || 0), 0);
+  }
   protected get selectedChecklistEquipmentCount(): number { return this.checklistEquipment.filter((item) => item.selected).length; }
-  protected get linkedChecklistEquipment(): StepFlowChecklistEquipment[] { return this.checklistEquipment.filter((item) => item.selected); }
+  protected linkedChecklistEquipment: StepFlowChecklistEquipment[] = [];
 
   constructor(
     private formBuilder: FormBuilder,
@@ -171,6 +175,9 @@ export class StepFlowInputOffcanvasComponent {
   protected loadOrder(): void {
     this.loading = true;
     this.order = null;
+    this.linkedChecklistEquipment = [];
+    this.checklistEquipment = [];
+    this.initialChecklistFlowIds.clear();
     this.itemsForm.clear();
 
     this.stepFlowService.findById(this.orderId).subscribe({
@@ -195,8 +202,9 @@ export class StepFlowInputOffcanvasComponent {
     });
   }
 
-  private loadChecklistEquipment(): void {
+  protected loadChecklistEquipment(): void {
     this.checklistEquipmentLoading = true;
+    this.checklistEquipmentError = false;
     this.stepFlowService.listChecklistEquipment(this.orderId).subscribe({
       next: (equipment) => {
         this.checklistEquipment = equipment;
@@ -206,6 +214,7 @@ export class StepFlowInputOffcanvasComponent {
       },
       error: () => {
         this.checklistEquipment = [];
+        this.checklistEquipmentError = true;
         this.initialChecklistFlowIds.clear();
         this.checklistEquipmentLoading = false;
         this.cdf.detectChanges();
@@ -214,16 +223,9 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected toggleChecklistEquipment(flowId: string, selected: boolean): void {
+    if (this.order?.currentStep !== 'Montagem Final') return;
+    if (selected && this.selectedChecklistEquipmentCount >= this.checklistEquipmentLimit) return;
     this.checklistEquipment = this.checklistEquipment.map((item) => item.flowId === flowId ? { ...item, selected } : item);
-  }
-
-  protected saveChecklistEquipment(): void {
-    const flowIds = this.checklistEquipment.filter((item) => item.selected).map((item) => item.flowId);
-    this.checklistEquipmentLoading = true;
-    this.stepFlowService.replaceChecklistEquipment(this.orderId, flowIds).subscribe({
-      next: () => { this.checklistEquipmentLoading = false; this.toasterService.success('Equipamentos vinculados ao processo.'); this.loadChecklistEquipment(); },
-      error: () => { this.checklistEquipmentLoading = false; this.toasterService.error('Não foi possível vincular os equipamentos.'); this.loadChecklistEquipment(); },
-    });
   }
 
   private populateStepFields(order: StepFlowOrder): void {
@@ -259,8 +261,20 @@ export class StepFlowInputOffcanvasComponent {
     );
   }
 
-  protected onSubmit(): void {
+  protected onReturnToFinalAssembly(): void {
+    if (this.order?.currentStep !== 'PCP') return;
+    this.onSubmit(true);
+  }
+
+  protected onSubmit(returnToFinalAssembly = false): void {
+    if (returnToFinalAssembly && this.order?.currentStep !== 'PCP') return;
     if (!this.commitFileNameEdit()) {
+      return;
+    }
+
+    if (this.saveLoading || this.checklistEquipmentLoading) return;
+    if (this.selectedChecklistEquipmentCount > this.checklistEquipmentLimit) {
+      this.toasterService.error('A quantidade de equipamentos vinculados não pode ultrapassar a quantidade de itens a produzir.');
       return;
     }
 
@@ -276,7 +290,7 @@ export class StepFlowInputOffcanvasComponent {
       && this.adminStepControl.dirty
       && this.adminStepControl.value !== currentStepId;
 
-    if (this.order?.currentStep === 'Montagem Final' && !isAdminStageChange && !this.order.checklistIntegration) {
+    if (this.order?.currentStep === 'Montagem Final' && !isAdminStageChange) {
       if (this.itemsForm.invalid) {
         this.itemsForm.markAllAsTouched();
         return;
@@ -297,6 +311,7 @@ export class StepFlowInputOffcanvasComponent {
     }
 
     const formData = this.buildFormData();
+    if (returnToFinalAssembly) formData.set('setStage', '0');
     const hasPendingVideos = this.files().some(f => f.kind === 'video');
     const hasChecklistChanges = this.haveChecklistSelectionChanges();
 
@@ -315,14 +330,7 @@ export class StepFlowInputOffcanvasComponent {
     }
 
     this.saveLoading = true;
-    const checklistRequest = hasChecklistChanges
-      ? this.stepFlowService.replaceChecklistEquipment(this.orderId, this.getSelectedChecklistFlowIds())
-      : of(undefined);
-    const saveRequest = this.isFormDataEmpty(formData)
-      ? checklistRequest.pipe(map(() => this.order as StepFlowOrder))
-      : checklistRequest.pipe(switchMap(() => this.stepFlowService.updateStep(this.orderId, formData)));
-
-    saveRequest
+    this.stepFlowService.updateStep(this.orderId, formData)
       .pipe(finalize(() => {
         this.saveLoading = false;
         this.cdf.detectChanges();
@@ -332,7 +340,7 @@ export class StepFlowInputOffcanvasComponent {
           this.toasterService.success('Informações atualizada com sucesso.');
           this.captureChecklistSelection();
 
-          if (hasQuantityChanges) {
+          if (hasQuantityChanges || returnToFinalAssembly) {
             this.close();
             this.reloadOrders.emit();
             return;
@@ -342,6 +350,7 @@ export class StepFlowInputOffcanvasComponent {
           this.buildItemsForm(data.items);
           this.resetForm();
           this.populateStepFields(data);
+          if (hasChecklistChanges) this.loadChecklistEquipment();
 
           if (this.isAdmin) {
             const current = this.steps.find(s => s.title === data.currentStep);
@@ -354,8 +363,8 @@ export class StepFlowInputOffcanvasComponent {
           }
         },
         error: (error) => {
-          if (error.error.status == 422) {
-            this.toasterService.error(error.error.error);
+          if (error.status === 422 || error.error?.status === 422) {
+            this.toasterService.error(error.error?.error || error.error?.message || 'Não foi possível salvar os vínculos.');
             return;
           }
           this.toasterService.error('Erro ao atualizar a etapa.');
@@ -365,6 +374,9 @@ export class StepFlowInputOffcanvasComponent {
 
   private buildFormData(): FormData {
     const formData = new FormData();
+    if (this.order?.currentStep === 'Montagem Final' && this.haveChecklistSelectionChanges()) {
+      formData.append('checklistFlowIdsJson', JSON.stringify(this.getSelectedChecklistFlowIds()));
+    }
     const { carrier, shippment, comment } = this.form.value;
 
     if (this.isAdmin && this.adminStepControl.dirty) {
@@ -375,7 +387,7 @@ export class StepFlowInputOffcanvasComponent {
       }
     }
 
-    if (this.order?.currentStep === 'Montagem Final' && !this.order.checklistIntegration) {
+    if (this.order?.currentStep === 'Montagem Final') {
       const itemsPayload = this.itemsForm.value.map((item: any) => ({
         id: item.id,
         producedQuantity: item.producedQuantity,
@@ -554,10 +566,11 @@ export class StepFlowInputOffcanvasComponent {
 
   private captureChecklistSelection(): void {
     this.initialChecklistFlowIds = new Set(this.getSelectedChecklistFlowIds());
+    this.linkedChecklistEquipment = this.checklistEquipment.filter(item => item.selected).map(item => ({ ...item }));
   }
 
   private haveChecklistSelectionChanges(): boolean {
-    if (this.order?.currentStep !== 'Montagem Final' || !this.order.checklistIntegration) {
+    if (!this.order) {
       return false;
     }
 

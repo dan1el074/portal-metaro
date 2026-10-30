@@ -1,9 +1,9 @@
-import { ChangeDetectorRef, Component, Input, LOCALE_ID, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, Output, LOCALE_ID, ChangeDetectionStrategy } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ToastrService } from '../../../app/services/toast.service';
-import { AccordionButtonDirective, AccordionComponent, AccordionItemComponent, ButtonCloseDirective, ButtonDirective, OffcanvasService, Tabs2Module, TemplateIdDirective } from '@coreui/angular';
+import { AccordionButtonDirective, AccordionComponent, AccordionItemComponent, ButtonCloseDirective, ButtonDirective, FormLabelDirective, FormSelectDirective, SpinnerComponent, Tabs2Module, TemplateIdDirective } from '@coreui/angular';
 import { StepFlowService } from '../../../app/services/step-flow.service';
-import { StepFlowChecklistEquipment, StepFlowOrder, StepFlowVideo } from '../../../app/interface/step-flow.interface';
+import { Step, StepFlowChecklistEquipment, StepFlowOrder, StepFlowVideo } from '../../../app/interface/step-flow.interface';
 import localePt from '@angular/common/locales/pt';
 import { CommonModule, registerLocaleData } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -13,12 +13,20 @@ import { StepFlowTimelineComponent } from './timeline/step-flow-timeline.compone
 import { StepFlowOrderItemsComponent } from './order-items/step-flow-order-items.component';
 import { StepFlowMediaListComponent } from './media-list/step-flow-media-list.component';
 
+import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
+
 registerLocaleData(localePt);
 
 @Component({
   selector: 'app-step-flow-offcanvas',
   imports: [
     CommonModule,
+    ReactiveFormsModule,
+    FormsModule,
+    FormLabelDirective,
+    FormSelectDirective,
+    SpinnerComponent,
     RouterLink,
     ButtonCloseDirective,
     Tabs2Module,
@@ -40,6 +48,10 @@ registerLocaleData(localePt);
 export class StepFlowOffcanvasComponent {
   @Input() isAdmin!: boolean;
   @Input() showMoney!: boolean;
+  @Input() steps: Step[] = [];
+  @Output() reloadOrders = new EventEmitter<void>();
+  protected adminStepControl = new FormControl<number | null>(null);
+  protected stageSaveLoading = false;
   protected order: StepFlowOrder | null = null;
   protected orderId: number | null = null;
   protected visible = false;
@@ -71,12 +83,14 @@ export class StepFlowOffcanvasComponent {
 
   protected getData(): void {
     this.order = null;
+    this.adminStepControl.reset(null, { emitEvent: false });
     this.checklistEquipment = [];
 
     if (this.orderId) {
       this.stepFlowService.findById(this.orderId).subscribe({
         next: data => {
           this.order = data;
+          this.resetStageSelection(data);
           this.loadChecklistEquipment();
           this.cdf.detectChanges();
         },
@@ -89,6 +103,63 @@ export class StepFlowOffcanvasComponent {
     }
 
     this.toasterService.error('O número da ordem é nulo!')
+  }
+
+  private resetStageSelection(order: StepFlowOrder): void {
+    const currentStep = this.steps.find(step => step.title === order.currentStep);
+    this.adminStepControl.reset(currentStep?.id ?? null, { emitEvent: false });
+  }
+
+  protected saveStage(): void {
+    if (!this.isAdmin || !this.order || !this.orderId || this.stageSaveLoading
+      || this.order.status === 'Cancelado' || this.order.status === 'Concluído') return;
+    const target = this.steps.find(step => step.id === Number(this.adminStepControl.value) && step.id > 0);
+    if (!target || target.title === this.order.currentStep) return;
+
+    const orderId = this.orderId;
+    const data = new FormData();
+    data.append('setStage', String(target.id - 1));
+    this.stageSaveLoading = true;
+    this.stepFlowService.updateStep(orderId, data)
+      .pipe(finalize(() => {
+        this.stageSaveLoading = false;
+        this.cdf.detectChanges();
+      }))
+      .subscribe({
+        next: order => {
+          if (this.orderId === orderId) {
+            this.order = order;
+            this.resetStageSelection(order);
+          }
+          this.toasterService.success('Etapa atualizada com sucesso.');
+          this.reloadOrders.emit();
+        },
+        error: error => {
+          this.toasterService.error(error.error?.error || error.error?.message || 'Erro ao atualizar a etapa.');
+        },
+      });
+  }
+
+  protected reopen(): void {
+    if (!this.isAdmin || !this.order || this.stageSaveLoading
+      || !['Conclu�do', 'Cancelado'].includes(this.order.status)) return;
+    const id = this.order.id;
+    this.stageSaveLoading = true;
+    this.stepFlowService.reopen(id).pipe(finalize(() => {
+      this.stageSaveLoading = false;
+      this.cdf.detectChanges();
+    })).subscribe({
+      next: order => {
+        if (this.orderId === id) {
+          this.order = order;
+          this.resetStageSelection(order);
+          this.loadChecklistEquipment();
+        }
+        this.toasterService.success('Fluxo de etapas reaberto com sucesso.');
+        this.reloadOrders.emit();
+      },
+      error: error => this.toasterService.error(error.error?.error || error.error?.message || 'Erro ao reabrir o fluxo de etapas.'),
+    });
   }
 
   private loadChecklistEquipment(): void {

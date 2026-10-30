@@ -59,6 +59,7 @@ export interface ChecklistOperator {
 }
 
 export interface ChecklistLinkedStepFlow {
+  linked?: boolean;
   id: number;
   order: string;
   status: string;

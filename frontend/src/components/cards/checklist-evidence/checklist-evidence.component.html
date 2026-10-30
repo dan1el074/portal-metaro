@@ -1,5 +1,5 @@
 @if (presented.length) {
-  <div class="evidence-gallery">
+  <div class="evidence-gallery" [class.editable-gallery]="editable">
     @for (item of presented; track item.id) {
       <figure class="evidence-item" [class.video-evidence]="isVideo(item)">
         @if (isImage(item) && (item.source || item.publicUrl)) {
@@ -28,7 +28,10 @@
         } @else {
           <div class="unavailable-media"><app-checklist-icon name="file-text" /><span>Imagem indisponível</span></div>
         }
-        <figcaption>{{ item.name }}</figcaption>
+        @if (editable) {
+          <button type="button" class="evidence-remove no-print" (click)="removeEvidence.emit(item.id)" [attr.aria-label]="'Excluir ' + item.name" [title]="'Excluir ' + item.name"><app-checklist-icon name="trash" /></button>
+        }
+        <figcaption [title]="item.name">{{ item.name }}</figcaption>
       </figure>
     }
   </div>

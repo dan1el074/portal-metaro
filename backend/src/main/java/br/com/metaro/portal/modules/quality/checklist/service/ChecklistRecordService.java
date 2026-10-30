@@ -149,7 +149,7 @@ public class ChecklistRecordService {
                 record.setSignedAt(record.getFinishedAt());
             }
             record.setStatus(hasUntreatedProblems(record) ? ChecklistStatus.PENDING : ChecklistStatus.FINISHED);
-            addAudit(record, user, "FINISHED_INPUT", "Preenchimento do checklist encerrado com o status " + record.getStatus().name() + ".");
+            addAudit(record, user, "FINISHED_INPUT", record.getStatus() == ChecklistStatus.PENDING ? "Checklist finalizado com pendências de tratamento de NOK." : "Checklist finalizado.");
         } else {
             addAudit(record, user, "SAVED", "Preenchimento do checklist salvo.");
         }
@@ -185,12 +185,12 @@ public class ChecklistRecordService {
             }
             problem.setTreated(false);
             problem.setCommentId(null);
-            addAudit(record, user, "TREATMENT_REVERSED", "Tratamento revertido para o problema " + problem.getId() + ".");
+            addAudit(record, user, "TREATMENT_REVERSED", "Reverteu o tratamento da não conformidade: " + problem.getItem() + " — " + problem.getCode() + ".");
         } else {
             ChecklistComment comment = createComment(record, user, input.getJustification().trim(), problem.getId());
             problem.setTreated(true);
             problem.setCommentId(comment.getId().toString());
-            addAudit(record, user, "PROBLEM_TREATED", "Problema " + problem.getId() + " tratado.");
+            addAudit(record, user, "PROBLEM_TREATED", "Tratou a não conformidade: " + problem.getItem() + " — " + problem.getCode() + ". Justificativa: " + input.getJustification().trim());
         }
         record.setAnswersJson(mapper.write(answers));
         record.setUpdatedAt(Instant.now());
@@ -213,16 +213,18 @@ public class ChecklistRecordService {
         User user = userService.authenticate();
         assertAdministrator(user);
         ChecklistRecord record = findRecord(id);
-        if (record.getStatus() != ChecklistStatus.FINISHED) {
-            throw new UnprocessableEntityException("Somente um checklist finalizado pode voltar para edição.");
+        if (!Set.of(ChecklistStatus.FINISHED, ChecklistStatus.JUSTIFIED).contains(record.getStatus()) || record.getFlow().isCancelled()) {
+            throw new UnprocessableEntityException("Somente um checklist finalizado ou justificado pode voltar para edição.");
         }
-        ChecklistRevision revision = new ChecklistRevision();
-        revision.setRecord(record);
-        revision.setCreatedBy(user);
-        revision.setReason(input.getReason().trim());
-        revision.setSnapshotJson(mapper.write(mapper.toDto(record)));
-        revision.setCreatedAt(Instant.now());
-        revisionRepository.save(revision);
+        saveRevision(record, user, input.getReason().trim());
+        if (record.getStatus() == ChecklistStatus.JUSTIFIED) {
+            clearForm(record);
+            Map<String, String> skipped = skipped(record.getFlow());
+            skipped.remove(record.getTemplate().getId().toString());
+            record.getFlow().setSkippedJson(mapper.write(skipped));
+            record.getFlow().setUpdatedAt(Instant.now());
+            flowRepository.save(record.getFlow());
+        }
 
         record.setStatus(ChecklistStatus.IN_PROGRESS);
         record.setOwner(user);
@@ -276,7 +278,9 @@ public class ChecklistRecordService {
         flow.setUpdatedAt(Instant.now());
         flowRepository.save(flow);
 
-        record.setStatus(ChecklistStatus.CANCELLED);
+        saveRevision(record, actor, "Checklist justificado: " + input.getReason().trim());
+        clearForm(record);
+        record.setStatus(ChecklistStatus.JUSTIFIED);
         record.setOwner(null);
         record.setUpdatedAt(Instant.now());
         recordRepository.save(record);
@@ -699,6 +703,27 @@ public class ChecklistRecordService {
         comment.setCreatedAt(Instant.now());
         comment.setUpdatedAt(comment.getCreatedAt());
         return commentRepository.save(comment);
+    }
+
+    private void saveRevision(ChecklistRecord record, User actor, String reason) {
+        ChecklistRevision revision = new ChecklistRevision();
+        revision.setRecord(record);
+        revision.setCreatedBy(actor);
+        revision.setReason(reason);
+        revision.setSnapshotJson(mapper.write(mapper.toRevisionDto(record)));
+        revision.setCreatedAt(Instant.now());
+        revisionRepository.save(revision);
+    }
+
+    private void clearForm(ChecklistRecord record) {
+        record.setAnswersJson(mapper.write(mapper.blankAnswers(record)));
+        record.setFieldsJson(mapper.write(mapper.blankFields(record)));
+        record.setDepartmentsJson("[]");
+        record.setFinisher(null);
+        record.setFinishedAt(null);
+        record.setSignature(null);
+        record.setSignedAt(null);
+        checklistEvidenceService.archiveCurrentEvidence(record.getId());
     }
 
     private void addAudit(ChecklistRecord record, User actor, String action, String details) {

@@ -26,7 +26,7 @@ export class ChecklistTableComponent {
   @Output() statusChange = new EventEmitter<string>();
   @Output() clearAll = new EventEmitter<void>();
 
-  protected readonly statuses: Status[] = ['Rascunho', 'Em andamento', 'Pendente', 'Finalizado', 'Cancelado'];
+  protected readonly statuses: Status[] = ['Rascunho', 'Em andamento', 'Pendente', 'Finalizado', 'Justificado', 'Cancelado'];
   protected readonly columns: IColumn[] = [
     this.column('number', '#'),
     this.column('title', 'Título'),
@@ -49,7 +49,7 @@ export class ChecklistTableComponent {
   }
 
   protected badgeClass(status: Status): string {
-    return status === 'Finalizado' ? 'complete' : status === 'Pendente' ? 'pending' : status === 'Cancelado' ? 'canceled' : status === 'Em andamento' ? 'in-progress' : 'draft';
+    return status === 'Finalizado' ? 'complete' : status === 'Pendente' ? 'pending' : status === 'Justificado' ? 'justified' : status === 'Cancelado' ? 'canceled' : status === 'Em andamento' ? 'in-progress' : 'draft';
   }
 
   private column(key: string, label: string): IColumn {

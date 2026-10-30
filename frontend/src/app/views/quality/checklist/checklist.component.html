@@ -47,8 +47,7 @@
   <c-card class="records-card">
     <div class="records-header"><div><h2>Registros</h2><p>Consulte checklists em andamento e finalizados.</p></div>@if (currentView !== 'consultation' && store.operator) { <button cButton color="primary" (click)="newRecordModal.open()"><app-checklist-icon name="plus" /> Novo</button> }</div>
     <nav class="category-tabs" aria-label="Categorias">
-      <button type="button" [class.active]="!categoryId" (click)="selectCategory('')">Todos <span>{{ store.state().records.length }}</span></button>
-      @for (category of store.state().categories; track category.id) { <button type="button" [class.active]="categoryId === category.id" (click)="selectCategory(category.id)">{{ category.name }} <span>{{ count(category.id) }}</span></button> }
+      @for (category of store.state().categories; track category.id) { <button type="button" [class.active]="activeCategoryId === category.id" (click)="selectCategory(category.id)">{{ category.name }} <span>{{ count(category.id) }}</span></button> }
     </nav>
     <div class="content-panel">
       <app-checklist-table [data]="pageRows" [searchValue]="search" [selectedStatus]="status" [sorterValue]="sorter" (openRecord)="openRecord($event)" (filterChange)="search = $event; page = 1" (statusChange)="status = $event; page = 1" (sorterChange)="sorter = $event; page = 1" (itemsPerPageChange)="itemsPerPage = $event; page = 1" (clearAll)="clearFilters()" />
