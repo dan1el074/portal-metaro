@@ -29,6 +29,18 @@ export class ReportPreviewService {
     const content = element.cloneNode(true) as HTMLElement;
     content.classList.add('print-preview-mode');
     content.querySelectorAll('.no-print').forEach(node => node.remove());
+    content.querySelectorAll<HTMLTableElement>('table.detail-table').forEach(table => {
+      if (table.tFoot) return;
+      // A repeated, zero-height footer closes each printed fragment at its last row.
+      const footer = table.createTFoot();
+      footer.className = 'checklist-table-footer';
+      footer.setAttribute('aria-hidden', 'true');
+      const cell = footer.insertRow().insertCell();
+      cell.colSpan = Array.from(table.tHead?.rows[0]?.cells ?? []).reduce((count, heading) => count + heading.colSpan, 0) || 1;
+      const edge = document.createElement('div');
+      edge.className = 'checklist-table-edge';
+      cell.appendChild(edge);
+    });
     const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
       .map(node => node.outerHTML).join('');
     const escape = (value: string) => value.replace(/[&<>"']/g, char =>
@@ -71,9 +83,11 @@ export class ReportPreviewService {
         .print-preview-mode .document-section { min-width: 0 !important; padding: 14px 0 !important; gap: 16px !important; border-bottom: 0 !important; }
         .print-preview-mode .detail-table-container { min-width: 0 !important; width: 100% !important; overflow: visible !important; }
         .print-preview-mode .detail-table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; font-size: 10px !important; }
+        .print-preview-mode .checklist-table-footer { display: none; }
         .print-preview-mode .detail-table th, .print-preview-mode .detail-table td { padding: 9px 6px !important; font-size: 10px !important; line-height: 1.5 !important; white-space: normal !important; overflow-wrap: anywhere !important; vertical-align: top; }
         .print-preview-mode .detail-table thead th { white-space: nowrap !important; overflow-wrap: normal !important; }
-        .print-preview-mode .detail-table .number-column, .print-preview-mode .detail-table .number { width: 30px !important; color: #697586 !important; }
+        .print-preview-mode .detail-table .number-column, .print-preview-mode .detail-table .number { width: 40px !important; color: #697586 !important; }
+        .print-preview-mode .detail-table tbody td.number { padding-right: 3px !important; padding-left: 3px !important; white-space: nowrap !important; overflow-wrap: normal !important; word-break: normal !important; }
         .print-preview-mode .detail-table .mark-column, .print-preview-mode .detail-table .mark { width: 30px !important; }
         .print-preview-mode .detail-table .item-description-column, .print-preview-mode .detail-table .item-description { width: 32% !important; }
         .print-preview-mode .mobile-question-number { display: none !important; }
