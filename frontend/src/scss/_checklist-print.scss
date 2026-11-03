@@ -148,7 +148,30 @@
     }
 
     .inspection-page .document-section {
+      display: block !important;
       padding: 14px 0 !important;
+    }
+
+    // Let the questionnaire span pages without changing the footer cards' grouping.
+    .inspection-page .detail-content {
+      display: block !important;
+    }
+
+    .inspection-page .document-card,
+    .inspection-page .document-section,
+    .inspection-page .detail-table-container,
+    .inspection-page .detail-table,
+    .inspection-page .detail-table tbody {
+      page-break-inside: auto !important;
+      break-inside: auto !important;
+    }
+
+    .inspection-page .document-card {
+      overflow: visible !important;
+    }
+
+    .inspection-page .detail-table-container + .detail-table-container {
+      margin-top: 16px;
     }
 
     .inspection-page .detail-table-container {
@@ -158,6 +181,23 @@
     .inspection-page .detail-table {
       width: 100% !important;
       min-width: 0 !important;
+    }
+
+    .inspection-page .detail-table thead {
+      display: table-header-group;
+    }
+
+    .inspection-page .detail-table col.number-column,
+    .inspection-page .detail-table tbody td.number {
+      width: 40px !important;
+    }
+
+    .inspection-page .detail-table tbody td.number {
+      padding-right: 3px !important;
+      padding-left: 3px !important;
+      white-space: nowrap !important;
+      overflow-wrap: normal !important;
+      word-break: normal !important;
     }
 
     .inspection-page .detail-table tbody tr:nth-child(even) td:not(.mark) {
