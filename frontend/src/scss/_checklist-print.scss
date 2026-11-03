@@ -170,17 +170,28 @@
       overflow: visible !important;
     }
 
-    .inspection-page .detail-table-container + .detail-table-container {
-      margin-top: 16px;
+    .inspection-page .detail-table-container {
+      // The wrapper would extend to the page edge after the last printable row.
+      // Draw the frame on the table itself so each fragment ends with its rows.
+      display: contents;
+      border: 0;
+      border-radius: 0;
     }
 
-    .inspection-page .detail-table-container {
-      overflow: visible !important;
+    .inspection-page .detail-table-container + .detail-table-container > .detail-table {
+      margin-top: 16px;
     }
 
     .inspection-page .detail-table {
       width: 100% !important;
       min-width: 0 !important;
+      border: 1px solid #d8dbe0;
+      border-collapse: separate !important;
+      border-spacing: 0;
+      border-radius: 8px;
+      overflow: clip;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
     }
 
     .inspection-page .detail-table thead {
