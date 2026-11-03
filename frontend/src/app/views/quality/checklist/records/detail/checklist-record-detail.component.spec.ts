@@ -160,6 +160,13 @@ describe('Checklist detail loading, history and deletion', () => {
       expect(preview.document.querySelector('.comments-card')).toBeNull();
       expect(preview.document.querySelector('.document-header h1')?.textContent).toContain('Modelo 1');
       expect(preview.getComputedStyle(preview.document.querySelector('.document-card')!).padding).toBe('0px');
+      const numbering = preview.document.querySelector<HTMLTableCellElement>('.detail-table td.number')!;
+      expect(preview.getComputedStyle(numbering).whiteSpace).toBe('nowrap');
+      expect(preview.getComputedStyle(numbering).overflowWrap).toBe('normal');
+      const footer = preview.document.querySelector<HTMLTableSectionElement>('.detail-table tfoot.checklist-table-footer')!;
+      expect(footer.rows[0].cells[0].colSpan).toBe(5);
+      expect(preview.getComputedStyle(footer).display).toBe('none');
+      expect(fixture.nativeElement.querySelector('.checklist-table-footer')).toBeNull();
       expect(preview.document.querySelector('.document-workspace')).toBeNull();
     } finally {
       frame.remove();
