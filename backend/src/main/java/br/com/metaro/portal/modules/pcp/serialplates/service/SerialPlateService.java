@@ -20,6 +20,7 @@ import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
+import org.hibernate.query.criteria.JpaExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -318,9 +319,9 @@ public class SerialPlateService {
                 String pattern = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
                 List<Predicate> matches = new ArrayList<>();
                 for (String field : LABELS.keySet()) {
-                    if (!field.equals("readyStock")) matches.add(cb.like(cb.lower(root.get(field).as(String.class)), pattern, '!'));
+                    if (!field.equals("readyStock")) matches.add(cb.like(cb.lower(((JpaExpression<?>) root.get(field)).cast(String.class)), pattern, '!'));
                 }
-                matches.add(cb.like(root.get("serial").as(String.class), pattern, '!'));
+                matches.add(cb.like(((JpaExpression<?>) root.get("serial")).cast(String.class), pattern, '!'));
                 if ("pe pronta entrega".contains(term)) matches.add(cb.isTrue(root.get("readyStock")));
                 conditions.add(cb.or(matches.toArray(Predicate[]::new)));
             }
