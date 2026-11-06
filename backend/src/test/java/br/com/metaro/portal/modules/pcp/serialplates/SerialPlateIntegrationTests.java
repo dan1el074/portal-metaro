@@ -181,6 +181,23 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    @WithMockUser(roles = "SERIAL_PLATES_CONSULTATION")
+    void searchesPartialSerialThroughThePaginatedEndpoint() throws Exception {
+        Param sequence = params.findByName("serialPlatesCount").orElseThrow();
+        sequence.setContent("18689"); params.saveAndFlush(sequence);
+        service.createPlates(draft(12));
+
+        mvc.perform(get("/api/serial-plates")
+                .param("page", "0").param("size", "10").param("search", "1869")
+                .param("status", "").param("sort", "serial,desc"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalElements").value(10))
+            .andExpect(jsonPath("$.content.length()").value(10))
+            .andExpect(jsonPath("$.content[0].serial").value("18699"))
+            .andExpect(jsonPath("$.content[9].serial").value("18690"));
+    }
+
+    @Test
     void mapsFoccoModelDecimalAndNullWeightWithStableItems() {
         FoccoPlateLineDto line = new FoccoPlateLineDto();
         line.setOrderNumber(900L); line.setClient("Cliente"); line.setDescription("PA MESA");
