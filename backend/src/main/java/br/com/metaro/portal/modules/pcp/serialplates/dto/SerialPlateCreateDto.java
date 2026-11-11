@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 public class SerialPlateCreateDto {
     @NotNull @DecimalMin("1") @DecimalMax("500") @Digits(integer = 3, fraction = 0)
     private BigDecimal quantity;
-    @NotBlank @Size(max = 80)
+    @Size(max = 80)
     private String of;
     @Pattern(regexp = "[0-9]{0,15}")
     private String order = "";

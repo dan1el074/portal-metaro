@@ -372,3 +372,13 @@
     display: none;
   }
 }
+.reload-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  &:hover, &:focus-visible { opacity: .7; text-decoration-thickness: 2px; }
+  &:disabled { opacity: .5; cursor: wait; }
+}

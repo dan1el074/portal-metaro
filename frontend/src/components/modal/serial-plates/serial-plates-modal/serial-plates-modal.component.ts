@@ -23,6 +23,7 @@ export class SerialPlatesModalComponent {
   @Input() public error = '';
   @Input() public busy = false;
   @Input() public canEdit = false;
+  @Input() public admin = false;
   @Input() public createDraft!: SerialPlateCreateDraft;
   @Input() public edit: SerialPlate | null = null;
   @Input() public batch!: PlatePatch;

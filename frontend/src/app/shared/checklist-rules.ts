@@ -70,11 +70,11 @@ export function validateTemplate( model: Template, state: ChecklistState): strin
       previous.categoryId === model.categoryId
     ) return 'O requisito deve pertencer a outra categoria.';
 
-    if (
-      state.templates.some(
-        (t) => t.id !== model.id && t.predecessorId === model.predecessorId,
-      )
-    ) return 'Este requisito já tem um sucessor. Bifurcações não são permitidas.';
+    const successor = state.templates.find((t) => t.id !== model.id && t.predecessorId === model.predecessorId);
+    if (successor) {
+      const successorCategory = state.categories.find((c) => c.id === successor.categoryId);
+      return `Este requisito já tem um sucessor. Bifurcações não são permitidas.\n${successorCategory?.name || ''} - ${successor.name}`;
+    }
 
     const predecessorCategory = state.categories.find((c) => c.id === previous.categoryId)!;
 

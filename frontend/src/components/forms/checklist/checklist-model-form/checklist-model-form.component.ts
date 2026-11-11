@@ -7,6 +7,7 @@ import { emptyChecklistField as emptyField, emptyChecklistQuestion as emptyQuest
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
 import { checklistIntegrationLabel } from '../../../../app/shared/checklist-rules';
 import { ChecklistIconComponent } from '../../../icons/checklist-icon/checklist-icon.component';
+import { ToastrService } from '../../../../app/services/toast.service';
 
 @Component({
   selector: 'app-checklist-model-form',
@@ -44,7 +45,7 @@ export class ChecklistModelFormComponent {
     { value: 'select', label: 'Seleção única' },
   ];
 
-  constructor(protected store: ChecklistPreviewService) {}
+  constructor(protected store: ChecklistPreviewService, private readonly toaster: ToastrService) {}
 
   protected get category() {
     return this.store.state().categories.find((item) => item.id === this.model.categoryId);
@@ -80,7 +81,7 @@ export class ChecklistModelFormComponent {
         category.id === item.categoryId)?.integration;
       return item.id !== this.model.id
       && item.categoryId !== this.model.categoryId
-      && (!item.predecessorId || !this.store.state().templates.some((candidate) => candidate.predecessorId === item.id))
+      && item.equipmentId === this.model.equipmentId
       && this.category?.integration === predecessorIntegration;
     });
   }
@@ -88,6 +89,21 @@ export class ChecklistModelFormComponent {
   protected predecessorLabel(template: Template): string {
     const category = this.store.state().categories.find((item) => item.id === template.categoryId);
     return `${category?.name || 'Categoria não encontrada'} - ${template.name}`;
+  }
+
+  protected predecessorChanged(value: string): void {
+    const successor = value && this.store.state().templates.find((item) =>
+      item.id !== this.model.id && item.predecessorId === value);
+    if (successor) {
+      this.toaster.error(`Este requisito já tem um sucessor. Bifurcações não são permitidas.\n${this.predecessorLabel(successor)}`);
+      return;
+    }
+    this.model.predecessorId = value;
+    if (!value) {
+      this.model.automatic = false;
+      this.model.optionalPredecessor = false;
+    }
+    this.changed();
   }
 
   protected changed(): void {
@@ -106,6 +122,9 @@ export class ChecklistModelFormComponent {
   }
 
   protected equipmentChanged(): void {
+    this.model.predecessorId = '';
+    this.model.automatic = false;
+    this.model.optionalPredecessor = false;
     const equipment = this.store.state().equipment.find((item) => item.id === this.model.equipmentId);
     this.model.name = equipment?.abbreviation || '';
     this.changed();
