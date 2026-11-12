@@ -1,5 +1,5 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { AdminDashboard, PagedResult, StepFlowChecklistEquipment, StepFlowData, StepFlowOrder, StepFlowOrderInfo, StepFlowVolume } from './../interface/step-flow.interface';
+import { AdminDashboard, PagedResult, StepFlowChecklistEquipment, StepFlowData, StepFlowOrder, StepFlowOrderInfo, StepFlowVolume, StepFlowOrderItem } from './../interface/step-flow.interface';
 import { Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -63,6 +63,10 @@ export class StepFlowService {
 
   public createVolume(orderId: number, volume: StepFlowVolume): Observable<StepFlowVolume> {
     return this.http.post<StepFlowVolume>(`${this.api}/${orderId}/volumes`, volume);
+  }
+
+  public updateItemQuantity(orderId: number, itemId: number, producedQuantity: number): Observable<StepFlowOrderItem> {
+    return this.http.put<StepFlowOrderItem>(`${this.api}/${orderId}/items/${itemId}/quantity`, { producedQuantity });
   }
 
   public updateVolume(orderId: number, volume: StepFlowVolume): Observable<StepFlowVolume> {

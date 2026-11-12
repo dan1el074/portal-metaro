@@ -601,8 +601,8 @@ public class StepFlowService {
         volume.setOrder(order);
         applyVolumeInput(volume, dto);
         order.addVolume(volume);
-        orderRepository.saveAndFlush(order);
-        return new OrderVolumeDto(volume);
+        Order persistedOrder = orderRepository.saveAndFlush(order);
+        return new OrderVolumeDto(persistedOrder.getVolumes().getLast());
     }
 
     @Transactional
@@ -626,20 +626,44 @@ public class StepFlowService {
         orderRepository.save(order);
     }
 
+    @Transactional
+    public OrderItemDto updateItemQuantity(Long orderId, Long itemId, OrderItemQuantityInputDto input) {
+        Order order = orderRepository.findLockedById(orderId).orElseThrow(ResourceNotFoundException::new);
+        assertFinalAssemblyChangeAllowed(order);
+        OrderItem item = order.getItems().stream().filter(current -> current.getId().equals(itemId))
+                .findFirst().orElseThrow(ResourceNotFoundException::new);
+        Integer quantity = input.getProducedQuantity();
+        if (quantity == null || quantity < 0 || quantity > item.getQuantity()) {
+            throw new UnprocessableEntityException("Informe uma quantidade inteira entre zero e a quantidade do item.");
+        }
+        OrderInputDto update = new OrderInputDto();
+        update.setItems(order.getItems().stream().map(current -> new OrderItemInputDto(current.getId(),
+                current.getId().equals(itemId) ? quantity : current.getProducedQuantity(), null)).toList());
+        checkQuantity(update, order);
+        checklistStepFlowService.assertEquipmentCapacity(order);
+        order.setUpdatedAt(Instant.now());
+        orderRepository.saveAndFlush(order);
+        return new OrderItemDto(item);
+    }
+
     private Order getOrderForVolumeChange(Long orderId) {
         Order order = orderRepository.findById(orderId).orElseThrow(ResourceNotFoundException::new);
+        assertFinalAssemblyChangeAllowed(order);
+        return order;
+    }
+
+    private void assertFinalAssemblyChangeAllowed(Order order) {
         User me = userService.authenticate();
 
         if (!canInteract(order, me)) {
             throw new ForbiddenException("Usuário não corresponde ao setor competente!");
         }
         if (!order.getCurrentStep().equals(StepType.FINAL_ASSEMBLY)) {
-            throw new UnprocessableEntityException("Volumes só podem ser alterados durante a Montagem Final!");
+            throw new UnprocessableEntityException("Volumes e quantidades só podem ser alterados durante a Montagem Final!");
         }
         if (!order.getStatus().equals(OrderStatus.IN_PROGRESS)) {
-            throw new UnprocessableEntityException("Não é possível alterar volumes deste pedido!");
+            throw new UnprocessableEntityException("Não é possível alterar volumes ou quantidades deste pedido!");
         }
-        return order;
     }
 
     private void applyVolumeInput(OrderVolume volume, OrderVolumeInputDto input) {
