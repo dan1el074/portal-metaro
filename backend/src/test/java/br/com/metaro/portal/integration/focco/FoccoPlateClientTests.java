@@ -2,6 +2,7 @@ package br.com.metaro.portal.integration.focco;
 
 import br.com.metaro.portal.integration.focco.dto.FoccoCredentialsDto;
 import org.junit.jupiter.api.Test;
+import br.com.metaro.portal.modules.pcp.serialplates.service.SerialPlateErpService;
 import org.springframework.http.*;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,6 +26,26 @@ class FoccoPlateClientTests {
         assertThat(lines.getFirst().getOrderNumber()).isEqualTo(900);
         assertThat(lines.getFirst().getCapacity()).isEqualTo("1,5 TON");
         assertThat(lines.getFirst().getWeight()).isNull();
+        server.verify();
+    }
+
+    @Test
+    void importsTheProvidedOrderWithTextCapacityAndDistinctNumericWeights() {
+        FoccoConfigService config = mock(FoccoConfigService.class);
+        when(config.getCredentials()).thenReturn(new FoccoCredentialsDto("https://focco.example", "test-key", "test-token"));
+        FoccoPlateClient client = new FoccoPlateClient(config, "/plates");
+        MockRestServiceServer server = MockRestServiceServer.bindTo((RestTemplate) ReflectionTestUtils.getField(client, "restTemplate")).build();
+        server.expect(anything()).andRespond(withSuccess("""
+            {"succeeded":true,"value":[
+              {"order_number":751,"client":"91735 - B7 & OTILIA EMPREENDIMENTOS LTDA","description":"PA NIVELADORA DE DOCA EMBUTIDA (NDE)","model":"NDE 902020","voltage":"380V TRIF.","capacity":"9 TON","weight":1.0},
+              {"order_number":751,"client":"91735 - B7 & OTILIA EMPREENDIMENTOS LTDA","description":"PA NIVELADORA DE DOCA EMBUTIDA (NDE)","model":"NDE 902020","voltage":"380V TRIF.","capacity":"9 TON","weight":180.0}
+            ]}
+            """, MediaType.APPLICATION_JSON));
+        var order = new SerialPlateErpService(client).findOrder("751");
+        assertThat(order.getItems()).hasSize(2);
+        assertThat(order.getItems().getFirst().getCapacity()).isEqualByComparingTo("9");
+        assertThat(order.getItems().getFirst().getWeight()).isEqualByComparingTo("1");
+        assertThat(order.getItems().getLast().getWeight()).isEqualByComparingTo("180");
         server.verify();
     }
 

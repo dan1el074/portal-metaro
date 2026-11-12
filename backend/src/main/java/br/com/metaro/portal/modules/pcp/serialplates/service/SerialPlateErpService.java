@@ -51,7 +51,7 @@ public class SerialPlateErpService {
             if (result.signum() <= 0 || result.scale() > 6 || result.precision() - result.scale() > 12) throw new NumberFormatException();
             return result.stripTrailingZeros();
         } catch (NumberFormatException exception) {
-            throw new FoccoIntegrationException("O FoccoERP retornou capacidade ou peso inválido.");
+            return null;
         }
     }
 
