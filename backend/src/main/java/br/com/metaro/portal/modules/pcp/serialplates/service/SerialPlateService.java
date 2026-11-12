@@ -139,6 +139,10 @@ public class SerialPlateService {
             throw invalid("Informe a ordem de fabricação. Somente ROLE_ADMIN pode criar registros sem OF.");
         }
 
+        if (!text(request.getOrder()).isEmpty() && text(request.getOrderItem()).isEmpty()) {
+            throw invalid("Selecione um item do pedido ou limpe o campo Nº Pedido para continuar.");
+        }
+
         // Resolve upstream data before taking the global sequence lock.
         SerialPlateOrderDto order = text(request.getOrder()).isEmpty() ? null : erp.findOrder(request.getOrder());
         SerialPlateOrderItemDto item = order == null ? null : orderItem(order, request.getOrderItem());

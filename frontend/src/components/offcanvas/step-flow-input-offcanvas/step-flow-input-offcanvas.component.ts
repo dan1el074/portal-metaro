@@ -22,6 +22,7 @@ import { StepFlowHistoryComponent } from './history/step-flow-history.component'
 import { StepFlowEditableMediaComponent } from './editable-media/step-flow-editable-media.component';
 import { StepFlowUploadComponent } from './upload/step-flow-upload.component';
 import { VolumeStepFlowModalComponent } from '../../modal/step-flow/volume-step-flow-modal/volume-step-flow-modal.component';
+import { ReprocessStepFlowModalComponent } from '../../modal/step-flow/reprocess-step-flow-modal/reprocess-step-flow-modal.component';
 
 @Component({
   selector: 'app-step-flow-input-offcanvas',
@@ -45,7 +46,8 @@ import { VolumeStepFlowModalComponent } from '../../modal/step-flow/volume-step-
     QuantityStepFlowModalComponent,
     DeleteStepFlowMediaModalComponent,
     UnsavedChangesStepFlowModalComponent,
-    VolumeStepFlowModalComponent
+    VolumeStepFlowModalComponent,
+    ReprocessStepFlowModalComponent,
   ],
   templateUrl: './step-flow-input-offcanvas.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -65,6 +67,8 @@ export class StepFlowInputOffcanvasComponent {
   protected form!: FormGroup;
   protected itemsForm!: FormArray;
   protected showCancelModal = false;
+  protected showReprocessModal = false;
+  protected reprocessLoading = false;
   protected adminStepControl = new FormControl<number | null>(null);
   protected saveLoading: boolean = false;
   protected nextStepLoading: boolean = false;
@@ -135,6 +139,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   public open(id: number): void {
+    if (this.reprocessLoading) return;
     this.visible = true;
     this.orderId = id;
     this.resetForm();
@@ -143,6 +148,8 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   public close(): void {
+    if (this.reprocessLoading) return;
+    this.showReprocessModal = false;
     this.visible = false;
     this.toggleCancelModel(false);
     this.showNextStepConfirmationModal = false;
@@ -152,6 +159,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   private hide(): void {
+    this.showReprocessModal = false;
     this.visible = false;
     this.toggleCancelModel(false);
     this.showNextStepConfirmationModal = false;
@@ -266,7 +274,38 @@ export class StepFlowInputOffcanvasComponent {
     this.onSubmit(true);
   }
 
+  protected openReprocessModal(): void {
+    if (this.order?.currentStep !== 'PCP' || this.reprocessLoading || this.saveLoading || this.nextStepLoading) return;
+    this.showReprocessModal = true;
+  }
+
+  protected closeReprocessModal(): void {
+    this.showReprocessModal = false;
+  }
+
+  protected reprocessOrder(): void {
+    if (!this.showReprocessModal || this.order?.currentStep !== 'PCP' || this.reprocessLoading || this.saveLoading || this.nextStepLoading) return;
+    this.reprocessLoading = true;
+    this.stepFlowService.reprocess(this.orderId).pipe(finalize(() => {
+      this.reprocessLoading = false;
+      this.cdf.detectChanges();
+    })).subscribe({
+      next: () => {
+        this.reprocessLoading = false;
+        this.toasterService.success('Pedido reprocessado. Reconfigure as quantidades na etapa Montagem Final.');
+        const closeEditor = () => { this.close(); this.reloadOrders.emit(); };
+        if (this.showReprocessModal) {
+          this.backNav.runAfterOverlayClose(closeEditor);
+          this.showReprocessModal = false;
+          this.cdf.detectChanges();
+        } else closeEditor();
+      },
+      error: error => this.toasterService.error(error.error?.error || error.error?.message || 'Não foi possível reprocessar o pedido. Tente novamente.'),
+    });
+  }
+
   protected onSubmit(returnToFinalAssembly = false): void {
+    if (this.reprocessLoading) return;
     if (returnToFinalAssembly && this.order?.currentStep !== 'PCP') return;
     if (!this.commitFileNameEdit()) {
       return;
@@ -430,6 +469,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onNextStep(): void {
+    if (this.reprocessLoading) return;
     if (!this.isAdmin && this.order?.currentStep === 'Montagem Final' && this.order.volumes.length === 0) {
       this.shippingValidationForNextStep = true;
       this.toasterService.error('Cadastre ao menos um volume antes de avançar.');

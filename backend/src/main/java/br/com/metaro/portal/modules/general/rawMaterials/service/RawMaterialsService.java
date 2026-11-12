@@ -208,7 +208,7 @@ public class RawMaterialsService {
         Set<Long> operators = new HashSet<>();
         userRepository.findRawMaterialOperators().forEach(user -> operators.add(user.getId()));
 
-        for (RawMaterialAccessUpdateDto.UserCategoriesDto input : dto.getUsers()) {
+        for (UserCategoriesDto input : dto.getUsers()) {
             if (!operators.contains(input.getId())) {
                 throw new UnprocessableEntityException("Usuário sem perfil de operador de matérias-primas.");
             }

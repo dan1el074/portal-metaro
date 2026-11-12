@@ -17,6 +17,24 @@ describe('Checklist server context and audit normalization', () => {
   });
   afterEach(() => http.verify());
 
+  it('loads configuration without all records and waits for full context when navigating during that request', async () => {
+    const configuration = store.load(false, true);
+    const fullContext = store.load();
+    http.expectNone(request => request.url.endsWith('/records') || request.url.endsWith('/records/flows'));
+    const flushConfiguration = () => {
+      for (const endpoint of ['/categories', '/equipment', '/templates', '/catalog/ITEM', '/catalog/DEFECT']) {
+        http.expectOne(request => request.url.endsWith(endpoint)).flush([]);
+      }
+    };
+    flushConfiguration();
+    await configuration;
+    await Promise.resolve();
+    flushConfiguration();
+    http.expectOne(request => request.url.endsWith('/records')).flush({ content: [] });
+    http.expectOne(request => request.url.endsWith('/records/flows')).flush([]);
+    await fullContext;
+  });
+
   function flushContext(id: string, actions: string[] = []): void {
     http.expectOne(request => request.url.endsWith('/records/' + id)).flush({ id, flowId: id, templateId: 't', status: 'JUSTIFIED', answers: {},
       logs: actions.map((action, index) => ({ id: index + 1, action, details: 'Detalhes do evento ' + action, actor: 'Operador' })),

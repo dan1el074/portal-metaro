@@ -53,6 +53,10 @@ export class StepFlowService {
     return this.http.put<StepFlowOrder>(`${this.api}/${orderId}/reopen`, {});
   }
 
+  public reprocess(orderId: number): Observable<StepFlowOrder> {
+    return this.http.put<StepFlowOrder>(`${this.api}/${orderId}/reprocess`, {});
+  }
+
   public nextStep(orderId: number): Observable<void> {
     return this.http.put<void>(this.api + '/' + orderId + '/nextStep', null);
   }

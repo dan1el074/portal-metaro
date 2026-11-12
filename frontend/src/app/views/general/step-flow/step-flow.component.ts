@@ -344,6 +344,7 @@ export class StepFlowComponent implements OnInit, AfterViewInit {
 
     switch (this.user.position) {
       case 'Montagem Final':
+      case 'Qualidade':
         this.currentStepIndex = this.views.findIndex(view => view.title == 'Montagem Final');
         this.showMoney = false;
         break;

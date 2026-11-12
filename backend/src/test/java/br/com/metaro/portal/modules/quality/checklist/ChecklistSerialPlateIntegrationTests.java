@@ -78,6 +78,78 @@ class ChecklistSerialPlateIntegrationTests {
         when(erp.findProductionOrderByNumber(901, ErpSource.FOCCO)).thenReturn(Optional.of(erpOrder(901, "Novo")));
     }
 
+
+    @Autowired private ChecklistListingService listing;
+    @Autowired private ChecklistDepartmentService departmentSettings;
+    @Autowired private PositionRepository positions;
+
+    @Test
+    void paginatesSearchAndSortsByTheRenderedTitleAndNumber() {
+        template.setTitleExpression("Equipamento %serie");
+        plate(310, true); plate(311, true); plate(312, true);
+        var first = records.createRecord(input("310", true));
+        records.createRecord(input("311", true));
+        var last = records.createRecord(input("312", true));
+        entityManager.flush(); entityManager.clear();
+        var request = org.springframework.data.domain.PageRequest.of(0, 1, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "title"));
+        var page = listing.list(request, template.getCategory().getId(), "Equipamento", "", false, false);
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getTotalPages()).isEqualTo(3);
+        assertThat(page.getContent().getFirst().getId()).isEqualTo(last.getId().toString());
+        var next = listing.list(request.next(), template.getCategory().getId(), "Equipamento", "", false, false);
+        assertThat(next.getContent().getFirst().getSerial()).isEqualTo("311");
+        var asc = listing.list(org.springframework.data.domain.PageRequest.of(0, 10, org.springframework.data.domain.Sort.by("number")), template.getCategory().getId(), "", "", false, false);
+        assertThat(asc.getContent().getFirst().getId()).isEqualTo(first.getId().toString());
+        assertThat(listing.list(request, template.getCategory().getId(), "312", "", false, false).getTotalElements()).isEqualTo(1);
+        assertThat(listing.list(request, template.getCategory().getId(), "%", "", false, false).getTotalElements()).isZero();
+        assertThat(listing.counts(false).get(template.getCategory().getId().toString())).isEqualTo(3);
+    }
+
+    @Test
+    void sortsStatusByPortugueseLabelsAndAppliesVisibilityBeforePagination() {
+        plate(314, true); plate(315, true); plate(316, true);
+        var a = records.createRecord(input("314", true));
+        var b = records.createRecord(input("315", true));
+        var c = records.createRecord(input("316", true));
+        recordRepository.findById(a.getId()).orElseThrow().setStatus(ChecklistStatus.DRAFT);
+        recordRepository.findById(b.getId()).orElseThrow().setStatus(ChecklistStatus.FINISHED);
+        recordRepository.findById(c.getId()).orElseThrow().setStatus(ChecklistStatus.IN_PROGRESS);
+        entityManager.flush();
+        var request = org.springframework.data.domain.PageRequest.of(0, 10, org.springframework.data.domain.Sort.by("status"));
+        var page = listing.list(request, template.getCategory().getId(), "", "", true, false);
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getContent()).extracting(ChecklistTableRowDto::getStatus).containsExactly("Em andamento", "Finalizado");
+        var descending = listing.list(org.springframework.data.domain.PageRequest.of(0, 10, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "status")), template.getCategory().getId(), "", "", true, false);
+        assertThat(descending.getContent()).extracting(ChecklistTableRowDto::getStatus).containsExactly("Finalizado", "Em andamento");
+        assertThat(listing.list(request, template.getCategory().getId(), "", "Finalizado", false, false).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void keepsListingTitleInSyncWhenPcpChangesTheIdentification() {
+        template.setTitleExpression("Pedido %pedido - %cliente");
+        SerialPlate plate = plate(313, false);
+        var record = records.createRecord(input("313", false));
+        assertThat(recordRepository.findById(record.getId()).orElseThrow().getListingTitle()).contains("900");
+        plate.setOrder("901"); plate.setClient("Novo");
+        serials.synchronizePlate(plate, "MESA - Mesa", actor, true);
+        entityManager.flush(); entityManager.clear();
+        assertThat(listing.list(org.springframework.data.domain.PageRequest.of(0, 10), template.getCategory().getId(), "Pedido 901", "", false, false).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void persistsDepartmentSelectionIncludingAnExplicitlyEmptySelection() {
+        var available = departmentSettings.list();
+        assertThat(available).isNotEmpty();
+        Long selected = available.getFirst().getId();
+        departmentSettings.save(List.of(selected));
+        entityManager.flush(); entityManager.clear();
+        assertThat(departmentSettings.list().stream().filter(ChecklistDepartmentDto::isEnabled).map(ChecklistDepartmentDto::getId)).containsExactly(selected);
+        departmentSettings.save(List.of());
+        entityManager.flush(); entityManager.clear();
+        assertThat(departmentSettings.list()).noneMatch(ChecklistDepartmentDto::isEnabled);
+        assertThatThrownBy(() -> departmentSettings.save(List.of(-999L))).hasMessageContaining("indisponível");
+    }
+
     private ErpOrderDto erpOrder(int number, String client) {
         ErpOrderDto dto = new ErpOrderDto(number, client, "CNPJ-" + number, "", "Vendedor " + number, null, null, "", 0d, 0d, 0d);
         dto.addItem(new ErpOrderItemDto("MESA", "Mesa", 0d, "UN", 3, 0));
@@ -265,6 +337,51 @@ class ChecklistSerialPlateIntegrationTests {
     void rejectsReusingSeriesInIndependentChecklist() {
         plate(900001, true); records.createRecord(input("900001", true));
         assertThatThrownBy(() -> records.createRecord(input("900001", true))).hasMessageContaining("outro fluxo");
+    }
+
+    @Test
+    void reprocessesAnExistingOrderInPlaceAndPreservesChecklistBindings() throws Exception {
+        plate(330, false);
+        var record = records.createRecord(input("330", false));
+        Order order = bind(record, OrderStatus.IN_PROGRESS, StepType.PCP);
+        Long oldItem = order.getItems().getFirst().getId();
+        actor.setRoles(new HashSet<>(roles.findAll().stream().filter(role -> role.getAuthority().equals("ROLE_ADMIN")).toList()));
+        order.setOccurrence(2); order.setPhone("antigo"); order.setCarrier("Transportadora local"); order.setShipment(25d);
+        order.getSteps().stream().filter(step -> step.getStep() == StepType.PCP).forEach(step -> step.setChecklistPending(true));
+        var fresh = erpOrder(900, "Cliente atualizado");
+        fresh.getItems().clear(); fresh.addItem(new ErpOrderItemDto("NOVO", "Novo modelo", 20d, "UN", 5, 4));
+        when(erp.findProductionOrderByNumberWithoutRules(900)).thenReturn(Optional.of(fresh));
+        stepFlowService.reprocess(order.getId());
+        entityManager.flush(); entityManager.clear();
+        Order updated = orders.findById(order.getId()).orElseThrow();
+        assertThat(updated.getDisplayNumber()).isEqualTo("900-2");
+        assertThat(updated.getCurrentStep()).isEqualTo(StepType.FINAL_ASSEMBLY);
+        assertThat(updated.getStatus()).isEqualTo(OrderStatus.IN_PROGRESS);
+        assertThat(updated.getClient()).isEqualTo("Cliente atualizado");
+        assertThat(updated.getPhone()).isEqualTo("");
+        assertThat(updated.getCarrier()).isEqualTo("Transportadora local");
+        assertThat(updated.getShipment()).isEqualTo(25d);
+        assertThat(updated.getItems()).hasSize(1);
+        assertThat(updated.getItems().getFirst().getItemCode()).isEqualTo("NOVO");
+        assertThat(updated.getItems().getFirst().getProducedQuantity()).isZero();
+        assertThat(entityManager.find(OrderItem.class, oldItem)).isNull();
+        assertThat(bindings.countByOrderId(updated.getId())).isEqualTo(1);
+        assertThat(updated.getSteps()).allMatch(step -> !step.isChecklistPending());
+        var pcp = updated.getSteps().stream().filter(step -> step.getStep() == StepType.PCP).findFirst().orElseThrow();
+        assertThat(pcp.getMessages()).anyMatch(message -> message.getMessage().contains("reprocessado"));
+    }
+
+    @Test
+    void failedErpReprocessingLeavesTheOrderAndItsCountsUntouched() {
+        plate(331, false);
+        var record = records.createRecord(input("331", false));
+        Order order = bind(record, OrderStatus.IN_PROGRESS, StepType.PCP);
+        actor.setRoles(new HashSet<>(roles.findAll().stream().filter(role -> role.getAuthority().equals("ROLE_ADMIN")).toList()));
+        when(erp.findProductionOrderByNumberWithoutRules(900)).thenThrow(new IllegalStateException("ERP indisponível"));
+        assertThatThrownBy(() -> stepFlowService.reprocess(order.getId())).hasMessageContaining("ERP indisponível");
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+        assertThat(order.getItems().getFirst().getProducedQuantity()).isEqualTo(2);
+        assertThat(bindings.countByOrderId(order.getId())).isEqualTo(1);
     }
 
     private Order bind(ChecklistRecordDto record, OrderStatus status, StepType current) {
