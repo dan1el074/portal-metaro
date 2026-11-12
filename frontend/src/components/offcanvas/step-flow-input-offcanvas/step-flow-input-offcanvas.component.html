@@ -90,12 +90,12 @@
                   </div>
 
                   <div class="volume-actions">
-                    <button type="button" class="volume-action edit" (click)="openEditVolumeModal(volume, i)" [disabled]="volumeMutationLoading" aria-label="Editar volume">
+                    <button type="button" class="volume-action edit" (click)="openEditVolumeModal(volume, i)" [disabled]="volumeMutationLoading || quantityMutationLoading || saveLoading || nextStepLoading" aria-label="Editar volume">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>
                       </svg>
                     </button>
-                    <button type="button" class="volume-action delete" (click)="deleteVolume(i)" [disabled]="volumeMutationLoading" aria-label="Excluir volume">
+                    <button type="button" class="volume-action delete" (click)="deleteVolume(i)" [disabled]="volumeMutationLoading || quantityMutationLoading || saveLoading || nextStepLoading" aria-label="Excluir volume">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M10 11v6"/>
                           <path d="M14 11v6"/>
@@ -111,7 +111,7 @@
               }
             </div>
 
-            <button cButton color="primary" type="button" class="add-volume-button" (click)="openAddVolumeModal()" [disabled]="volumeMutationLoading">
+            <button cButton color="primary" type="button" class="add-volume-button" (click)="openAddVolumeModal()" [disabled]="volumeMutationLoading || quantityMutationLoading || saveLoading || nextStepLoading">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -142,6 +142,7 @@
                     class="sof-file-edit-icon"
                     type="button"
                     (click)="onOpenEditQuantityModal(itemGroup)"
+                      [disabled]="quantityMutationLoading || volumeMutationLoading || saveLoading || nextStepLoading"
                     [attr.aria-label]="'Editar quantidade de ' + itemGroup.get('code')?.value"
                   >
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -257,7 +258,7 @@
           @if (order.currentStep == "PCP") {
             <button cButton color="secondary" variant="outline" type="button" class="sofd-action-btn return-to-assembly"
               (click)="onReturnToFinalAssembly()"
-              [disabled]="reprocessLoading || saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
+              [disabled]="quantityMutationLoading || reprocessLoading || saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: rotate(180deg)">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M8 12h8"></path>
@@ -266,7 +267,7 @@
               Voltar Etapa
             </button>
             <button cButton color="secondary" variant="outline" type="button" class="sofd-action-btn"
-              (click)="openReprocessModal()" [disabled]="reprocessLoading || saveLoading || nextStepLoading || volumeMutationLoading">
+              (click)="openReprocessModal()" [disabled]="quantityMutationLoading || reprocessLoading || saveLoading || nextStepLoading || volumeMutationLoading">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
                 <path d="M3 3v5h5"></path>
@@ -284,7 +285,7 @@
             </button>
           }
 
-          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="reprocessLoading || saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
+          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="quantityMutationLoading || reprocessLoading || saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
             @if (!saveLoading) {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="save-icon">
                 <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
@@ -327,7 +328,7 @@
         color="primary"
         class="sofd-action-btn"
         (click)="onNextStep()"
-        [disabled]="reprocessLoading || nextStepLoading || volumeMutationLoading"
+        [disabled]="quantityMutationLoading || reprocessLoading || nextStepLoading || volumeMutationLoading"
         [attr.aria-busy]="nextStepLoading"
       >
         @if (nextStepLoading) {
@@ -356,7 +357,7 @@
 <app-cancel-step-flow-modal [visible]="showCancelModal" [orderNumber]="order ? order.number : 0 " (close)="toggleCancelModel(false)" (cancelTask)="onCancel($event)"></app-cancel-step-flow-modal>
 <app-reprocess-step-flow-modal [visible]="showReprocessModal" [processing]="reprocessLoading" [orderNumber]="order?.number || ''" (close)="closeReprocessModal()" (confirm)="reprocessOrder()" />
 <app-video-modal [visible]="showVideoModal" [video]="selectedVideo" (close)="onCloseVideoModal()"></app-video-modal>
-<app-quantity-step-flow-modal [visible]="showEditQuantityModal" [item]="editingItem" (close)="onCloseEditQuantityModal()" (save)="onSaveEditQuantity($event)"></app-quantity-step-flow-modal>
+<app-quantity-step-flow-modal [visible]="showEditQuantityModal" [item]="editingItem" [saving]="quantityMutationLoading" (close)="onCloseEditQuantityModal()" (save)="onSaveEditQuantity($event)"></app-quantity-step-flow-modal>
 <app-volume-step-flow-modal
   [visible]="showVolumeModal"
   [volume]="editingVolume"

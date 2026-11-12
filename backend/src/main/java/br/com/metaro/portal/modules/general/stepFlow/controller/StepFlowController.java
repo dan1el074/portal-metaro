@@ -1,6 +1,9 @@
 package br.com.metaro.portal.modules.general.stepFlow.controller;
 
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderDto;
+import br.com.metaro.portal.modules.general.stepFlow.dto.OrderItemDto;
+import br.com.metaro.portal.modules.general.stepFlow.dto.OrderItemQuantityInputDto;
+import jakarta.validation.Valid;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderMinDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderVolumeDto;
@@ -24,6 +27,13 @@ import java.util.List;
 public class StepFlowController {
     @Autowired
     private StepFlowService stepFlowService;
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @PutMapping("/{orderId}/items/{itemId}/quantity")
+    public ResponseEntity<OrderItemDto> updateItemQuantity(@PathVariable Long orderId, @PathVariable Long itemId,
+            @Valid @RequestBody OrderItemQuantityInputDto dto) {
+        return ResponseEntity.ok(stepFlowService.updateItemQuantity(orderId, itemId, dto));
+    }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
     @PutMapping("/{id}/reprocess")
