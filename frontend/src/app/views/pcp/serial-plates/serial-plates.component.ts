@@ -15,7 +15,7 @@ import { UserService } from '../../../services/user.service';
 import { ToastrService } from '../../../services/toast.service';
 import { SerialPlatesService } from '../../../services/serial-plates.service';
 import { ReportPreviewService } from '../../../services/report-preview.service';
-import { DEFAULT_SETTINGS, STATUSES, FIELD_LABELS, SERIAL_PLATES_REPORT_COLUMNS } from '../../../config/serial-plates.config';
+import { DEFAULT_SETTINGS, STATUSES, FIELD_LABELS, SERIAL_PLATES_REPORT_COLUMNS, SERIAL_PLATES_REPORT_KEYS } from '../../../config/serial-plates.config';
 import { ErpOrderItem, SerialPlateBatchFields, PlateHistory, PlatePatch, PlateSettings, SerialPlate, SerialPlateDialog, SerialPlateCreateDraft, SerialPlateQuery } from '../../../interface/serial-plates.interface';
 import { ReportPreviewData } from '../../../interface/report-preview.interface';
 
@@ -290,8 +290,14 @@ export class SerialPlatesComponent implements OnDestroy {
   }
 
   public reportRows(): string[][] {
+    const indices = this.reportColumnIndices();
     return this.selectedRows().map(row => [this.serialLabel(row.serial), row.description || '-', this.data.manufacturingLabel(row.manufactured),
-    row.voltage || '-', this.settings.crea || '-', row.weight === null ? '-' : `${row.weight.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} kg`]);
+    row.voltage || '-', this.settings.crea || '-', row.weight === null ? '-' : `${row.weight.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} kg`].filter((_, index) => indices.includes(index)));
+  }
+
+  private reportColumnIndices(): number[] {
+    const columns = this.settings.reportColumns ?? SERIAL_PLATES_REPORT_KEYS;
+    return SERIAL_PLATES_REPORT_KEYS.map((key, index) => columns.includes(key) ? index : -1).filter(index => index >= 0);
   }
 
   public toggleAll(checked: boolean): void {
@@ -570,6 +576,10 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public async saveSettings(): Promise<void> {
     if (!this.canEdit() || this.busy) return;
+    if (this.settingsDraft.reportColumns?.length === 0) {
+      this.error = 'Selecione pelo menos uma coluna do relatório.';
+      return;
+    }
     this.busy = true;
     try {
       this.settings = await this.request(this.data.saveSettings(this.settingsDraft));
@@ -621,13 +631,16 @@ export class SerialPlatesComponent implements OnDestroy {
   }
 
   public reportData(): ReportPreviewData {
+    const indices = this.reportColumnIndices();
+    const widths = [11, 30, 18, 15, 15, 11].filter((_, index) => indices.includes(index));
+    const totalWidth = widths.reduce((total, width) => total + width, 0);
     return {
       title: 'Relatório de gravação', previewTitle: 'Metaro · Relatório de gravação',
       subtitle: 'Plaquetas de identificação dos equipamentos', brandName: 'Metaro',
       logoUrl: new URL('assets/images/brand/default-logo.svg', document.baseURI).href,
       footerText: 'Metaro · Controle de números de série e plaquetas', itemLabel: 'plaqueta(s)',
-      fileNamePrefix: 'relatorio-plaquetas', columns: SERIAL_PLATES_REPORT_COLUMNS, columnWidths: [11, 30, 18, 15, 15, 11],
-      rows: this.reportRows(), metadata: ['CREA: ' + this.settings.crea], instructions: this.settings.instructions
+      fileNamePrefix: 'relatorio-plaquetas', columns: SERIAL_PLATES_REPORT_COLUMNS.filter((_, index) => indices.includes(index)), columnWidths: widths.map(width => width * 100 / totalWidth),
+      rows: this.reportRows(), metadata: indices.includes(4) ? ['CREA: ' + this.settings.crea] : [], instructions: this.settings.instructions
     };
   }
 

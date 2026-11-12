@@ -245,6 +245,33 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void persistsReportColumnsAndOnlyRequiresSelectedFieldsForExport() {
+        SerialPlateSettingsDto original = service.getSettings();
+        assertThat(original.getReportColumns()).containsExactly("serial", "description", "manufactured", "voltage", "crea", "weight");
+        SerialPlateDto plate = service.createPlates(draft(1)).getFirst();
+        try {
+            SerialPlateSettingsDto settings = service.getSettings();
+            settings.setReportColumns(List.of("serial")); settings.setCrea("");
+            service.updateSettings(settings);
+            assertThat(service.getSettings().getReportColumns()).containsExactly("serial");
+            assertThat(service.prepareReport(selection(plate.getSerial())).getRecords()).hasSize(1);
+
+            settings.setReportColumns(List.of("serial", "voltage")); service.updateSettings(settings);
+            assertThatThrownBy(() -> service.prepareReport(selection(plate.getSerial())))
+                    .hasMessageContaining("tensão").hasMessageNotContaining("modelo").hasMessageNotContaining("peso");
+            settings.setReportColumns(List.of("crea")); service.updateSettings(settings);
+            assertThatThrownBy(() -> service.prepareReport(selection(plate.getSerial()))).hasMessageContaining("CREA");
+            for (List<String> invalid : List.of(List.<String>of(), List.of("invalid"), List.of("serial", "serial"))) {
+                settings.setReportColumns(invalid);
+                assertThatThrownBy(() -> service.updateSettings(settings)).hasMessageContaining("coluna válida");
+                assertThat(service.getSettings().getReportColumns()).containsExactly("crea");
+            }
+        } finally {
+            service.updateSettings(original);
+        }
+    }
+
+    @Test
     void rollbackAlsoRemovesChangesAlreadyAppliedToEarlierBatchRows() {
         List<SerialPlateDto> rows = service.createPlates(draft(2));
         SerialPlatePatchDto provider = new SerialPlatePatchDto(); provider.setProvider("Interno");

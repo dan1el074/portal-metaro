@@ -1,5 +1,5 @@
 import type { SerialPlate, PlatePatch, PlateSettings, SerialPlateBatchFields } from '../interface/serial-plates.interface';
-import { FIELD_LABELS } from '../config/serial-plates.config';
+import { FIELD_LABELS, SERIAL_PLATES_REPORT_KEYS } from '../config/serial-plates.config';
 
 export class SerialPlatesDomainService {
   public hasEquipmentData(record: PlatePatch): boolean {
@@ -25,13 +25,15 @@ export class SerialPlatesDomainService {
 
   public reportMissing(records: SerialPlate[], settings: PlateSettings): string[] {
     const missing: string[] = [];
+    const columns = new Set(settings.reportColumns ?? SERIAL_PLATES_REPORT_KEYS);
+    if (!columns.size) return ['Selecione pelo menos uma coluna do relatório nas configurações.'];
 
-    if (!settings.crea.trim()) missing.push('Informe o CREA nas configurações.');
+    if (columns.has('crea') && !settings.crea.trim()) missing.push('Informe o CREA nas configurações.');
 
     records.forEach(row => {
-      const fields = [!row.description.trim() && 'modelo',
-      !row.voltage.trim() && 'tensão', !(row.weight !== null && row.weight > 0) && 'peso',
-      !/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(row.manufactured) && 'data de fabricação'].filter(Boolean);
+      const fields = [columns.has('description') && !row.description.trim() && 'modelo',
+      columns.has('voltage') && !row.voltage.trim() && 'tensão', columns.has('weight') && !(row.weight !== null && row.weight > 0) && 'peso',
+      columns.has('manufactured') && !/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(row.manufactured) && 'data de fabricação'].filter(Boolean);
 
       if (fields.length) missing.push(`${row.serial}: ${fields.join(', ')}.`);
     });

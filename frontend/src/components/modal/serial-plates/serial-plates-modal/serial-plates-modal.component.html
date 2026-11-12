@@ -27,7 +27,7 @@
             <label class="ready-stock-control span-all"><input type="checkbox" [ngModel]="row.readyStock" (ngModelChange)="readyStockChange.emit($event)"><span>Pronta Entrega</span></label>
             <label class="span-two">Modelo<input cFormControl [(ngModel)]="row.description"></label>
             <label>Capacidade<c-input-group><input cFormControl type="number" min="0.001" step="any" [(ngModel)]="row.capacity"><span cInputGroupText class="unit-tooltip" data-tooltip="Tonelada" aria-label="Tonelada">ton</span></c-input-group></label>
-            <label>Voltagem<input cFormControl [(ngModel)]="row.voltage" placeholder="Ex.: 220v TRI ou 380v BI"></label>
+            <label>Voltagem<input cFormControl [(ngModel)]="row.voltage" placeholder="220V TRIF."></label>
             <label>Peso<c-input-group><input cFormControl type="number" min="0.001" step="any" [(ngModel)]="row.weight"><span cInputGroupText class="unit-tooltip" data-tooltip="Quilograma" aria-label="Quilograma">kg</span></c-input-group></label>
             <label><span>Data de fabricação<span class="required-marker">*</span></span><div class="manufacturing-fields"><select class="form-select" aria-label="Mês de fabricação" [ngModel]="manufacturingMonth()" (ngModelChange)="setManufacturingMonth($event)">@for (month of months; track month; let index = $index) { <option [value]="(index + 1).toString().padStart(2, '0')">{{ month }}</option> }</select><input cFormControl type="text" inputmode="numeric" pattern="[1-9][0-9]{3}" maxlength="4" aria-label="Ano de fabricação" placeholder="Ano" [ngModel]="manufacturingYear()" (ngModelChange)="setManufacturingYear($event)"></div></label>
             <label>Prestador de serviço<select class="form-select" [(ngModel)]="row.provider"><option value="">Selecione</option>@if (row.provider && !providers.includes(row.provider)) { <option [value]="row.provider">{{ row.provider }}</option> }@for (provider of providers; track provider) { <option [value]="provider">{{ provider }}</option> }</select></label>
@@ -62,6 +62,13 @@
       @case ('settings') {
         <div class="form-grid">
           <label>CREA<input cFormControl [(ngModel)]="settingsDraft.crea"></label>
+          <fieldset class="span-all report-column-options">
+            <legend>Colunas do relatório de gravação</legend>
+            @for (column of reportColumnOptions; track column.key) {
+              <label><input type="checkbox" [ngModel]="reportColumnChecked(column.key)" (ngModelChange)="toggleReportColumn(column.key, $event)"> {{ column.label }}</label>
+            }
+            <small>Selecione ao menos uma coluna. Somente os dados das colunas selecionadas serão exigidos para emitir o relatório.</small>
+          </fieldset>
           <label class="span-all">Orientações no relatório de gravação<textarea cFormControl rows="3" [(ngModel)]="settingsDraft.instructions"></textarea></label>
           <label class="span-all">Prestadores de serviço (um por linha)<textarea cFormControl rows="3" [(ngModel)]="settingsDraft.providers"></textarea></label>
         </div>

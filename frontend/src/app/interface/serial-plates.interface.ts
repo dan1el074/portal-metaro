@@ -35,7 +35,10 @@ export interface SerialPlate {
   history?: PlateHistory[];
 }
 
+export type SerialPlateReportColumn = 'serial' | 'description' | 'manufactured' | 'voltage' | 'crea' | 'weight';
+
 export interface PlateSettings {
+  reportColumns?: SerialPlateReportColumn[];
   crea: string;
   instructions: string;
   providers: string;
