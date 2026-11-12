@@ -18,14 +18,14 @@ public class PositionController {
     @Autowired
     private PositionService positionService;
 
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_POSITION_PANEL')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_POSITION_PANEL','ROLE_CHECKLIST')")
     @GetMapping
     public ResponseEntity<List<PositionDto>> listPositions() {
         List<PositionDto> dtos = positionService.listPositions();
         return ResponseEntity.ok(dtos);
     }
 
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_ADM_PANEL','ROLE_MEMORANDO','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_ADM_PANEL','ROLE_MEMORANDO')")
     @GetMapping(value = "/min")
     public ResponseEntity<List<PositionMinDto>> listActivePositions() {
         List<PositionMinDto> dtos = positionService.listActivePositions();

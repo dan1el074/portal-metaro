@@ -45,7 +45,7 @@
       <div class="model-card-content form-grid">
         <div class="requirement-field">
           <label>Requisito
-            <select cSelect [(ngModel)]="model.predecessorId" (ngModelChange)="changed()">
+            <select cSelect #predecessorSelect [ngModel]="model.predecessorId" (ngModelChange)="predecessorChanged($event); predecessorSelect.value = model.predecessorId">
               <option value="">Sem requisito</option>
               @for (item of predecessors; track item.id) { <option [value]="item.id">{{ predecessorLabel(item) }}</option> }
             </select>

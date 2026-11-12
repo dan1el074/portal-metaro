@@ -57,7 +57,7 @@
 
 <app-serial-plates-modal
   [(visible)]="modalVisible" [dialog]="dialog" [title]="dialogTitle()" [error]="error" [canEdit]="canEdit()" [busy]="busy"
-  [createDraft]="createDraft" [edit]="edit" [batch]="batch" [batchFields]="batchFields" [settingsDraft]="settingsDraft"
+  [admin]="admin" [createDraft]="createDraft" [edit]="edit" [batch]="batch" [batchFields]="batchFields" [settingsDraft]="settingsDraft"
   [batchOrderItems]="batchOrderItems" [providers]="providers()" [selectedCount]="selected.size" [report]="reportData()" [missing]="missing()"
   (closeRequest)="close()" (createRequest)="create()" (saveRequest)="saveEdit()" (batchRequest)="saveBatch()"
   (settingsRequest)="saveSettings()" (historyRequest)="openHistory()" (exportRequest)="printReport()"

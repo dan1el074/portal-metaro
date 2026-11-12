@@ -133,6 +133,10 @@ public class SerialPlateService {
     @Transactional
     public List<SerialPlateDto> createPlates(SerialPlateCreateDto request) {
         int quantity = request.getQuantity().intValueExact();
+        User user = users.authenticate();
+        if (text(request.getOf()).isEmpty() && !user.hasRole("ROLE_ADMIN")) {
+            throw invalid("Informe a ordem de fabricação. Somente ROLE_ADMIN pode criar registros sem OF.");
+        }
 
         // Resolve upstream data before taking the global sequence lock.
         SerialPlateOrderDto order = text(request.getOrder()).isEmpty() ? null : erp.findOrder(request.getOrder());
@@ -149,7 +153,6 @@ public class SerialPlateService {
 
         Long maximum = repository.findMaximumSerial();
         if (maximum != null && last < maximum) throw invalid("A sequência está abaixo do maior número de série existente. Corrija serialPlatesCount.");
-        User user = users.authenticate();
         List<SerialPlate> created = new ArrayList<>();
 
         for (int index = 0; index < quantity; index++) {
@@ -158,7 +161,7 @@ public class SerialPlateService {
             plate.setOf(text(request.getOf()));
             plate.setManufactured(YearMonth.now(ZoneId.of("America/Sao_Paulo")).toString());
             if (order != null) applyOrder(plate, request.getOrder(), order, item);
-            validate(plate, null);
+            validate(plate, null, text(request.getOf()).isEmpty());
             plate.setUpdated(Instant.now());
             repository.save(plate);
             audit(plate.getSerial(), user, plate.getUpdated(), List.of(new SerialPlateChangeDto("Registro", "", "Registro criado")), snapshot(plate), Map.of(), item == null ? null : item.getLabel());
@@ -222,7 +225,7 @@ public class SerialPlateService {
             } else if (text(plate.getOrder()).isEmpty()) plate.setOrderItem("");
 
             if (!text(plate.getProvider()).isEmpty() && before.get(LABELS.get("provider")).isEmpty() && plate.getStatus().equals("Criado")) plate.setStatus("Programado");
-            validate(plate, before.get(LABELS.get("status")));
+            validate(plate, before.get(LABELS.get("status")), before.get(LABELS.get("of")).isBlank());
             Map<String, String> after = snapshot(plate);
 
             if (!before.equals(after)) {
@@ -348,9 +351,9 @@ public class SerialPlateService {
         plate.setCapacity(item.getCapacity()); plate.setWeight(item.getWeight());
     }
 
-    private void validate(SerialPlate plate, String previousStatus) {
+    private void validate(SerialPlate plate, String previousStatus, boolean allowMissingOf) {
         plate.setOf(text(plate.getOf()));
-        if (plate.getOf().isBlank() || plate.getOf().length() > 80) throw invalid("Informe a ordem de fabricação (até 80 caracteres).");
+        if ((!allowMissingOf && plate.getOf().isBlank()) || plate.getOf().length() > 80) throw invalid("Informe a ordem de fabricação (até 80 caracteres).");
         if (!plate.getOrder().matches("[0-9]{0,15}")) throw invalid("Número do pedido inválido.");
         if (!plate.getManufactured().matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) throw invalid("Informe mês e ano de fabricação válidos.");
         // Retired status may be preserved on existing records, but never assigned again.

@@ -31,12 +31,7 @@ describe('VideoModalComponent', () => {
 
   it('should close through browser back without unregistering twice', () => {
     component.video = {
-      id: 1,
       name: 'Vídeo',
-      viewUrl: 'https://example.test/video',
-      status: 'READY',
-      createdAt: new Date().toISOString(),
-      isCurrentStep: true,
       safeUrl: 'https://example.test/video',
     };
     component.visible = true;
@@ -52,12 +47,7 @@ describe('VideoModalComponent', () => {
 
   it('should unregister when closed normally', () => {
     component.video = {
-      id: 1,
       name: 'Vídeo',
-      viewUrl: 'https://example.test/video',
-      status: 'READY',
-      createdAt: new Date().toISOString(),
-      isCurrentStep: true,
       safeUrl: 'https://example.test/video',
     };
     component.visible = true;

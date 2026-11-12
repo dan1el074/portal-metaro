@@ -26,7 +26,7 @@
     }
   </header>
 
-  @if (store.warning()) { <div class="alert alert-warning">{{ store.warning() }}</div> }
+  @if (store.warning()) { <div class="alert alert-warning" role="alert">{{ store.warning() }} <button type="button" class="reload-link" [disabled]="reloading()" (click)="reload()">{{ reloading() ? 'Atualizando...' : 'atualizar' }}</button></div> }
 
   @if (currentView === 'admin') {
     <section class="management-grid" aria-label="Administração do checklist">

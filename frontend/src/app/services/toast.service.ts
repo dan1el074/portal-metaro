@@ -54,6 +54,7 @@ export class ToastrService {
 
     const body = this.document.createElement('div');
     body.className = 'app-toast__message';
+    body.style.whiteSpace = 'pre-line';
     if (options?.enableHtml) {
       body.innerHTML = this.sanitizer.sanitize(SecurityContext.HTML, message) ?? '';
     } else {
