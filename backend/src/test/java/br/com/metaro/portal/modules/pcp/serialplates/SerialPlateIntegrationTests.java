@@ -231,6 +231,50 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void ignoresInvalidErpCapacityWithoutDiscardingValidWeightOrBlockingCreation() {
+        for (String capacity : List.of("inválida", "0 TON", "-9 TON", "1000000000000 TON", "0.0000001 TON")) {
+            FoccoPlateLineDto line = new FoccoPlateLineDto();
+            line.setOrderNumber(900L); line.setClient("Cliente"); line.setDescription("Niveladora");
+            line.setModel("NDE 902020"); line.setVoltage("380V TRIF.");
+            line.setCapacity(capacity); line.setWeight("180.0");
+            when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
+            SerialPlateOrderDto order = erp.findOrder("900");
+            assertThat(order.getItems().getFirst().getCapacity()).isNull();
+            assertThat(order.getItems().getFirst().getWeight()).isEqualByComparingTo("180");
+            SerialPlateCreateDto input = draft(1); input.setOrder("900"); input.setOrderItem(order.getItems().getFirst().getId());
+            SerialPlateDto created = service.createPlates(input).getFirst();
+            assertThat(created.getCapacity()).isNull();
+            assertThat(created.getWeight()).isEqualByComparingTo("180");
+            assertThat(created.getDescription()).isEqualTo("NDE 902020");
+        }
+    }
+
+    @Test
+    void ignoresInvalidErpWeightAndAllowsBothOptionalMeasurementsToBeBlank() {
+        for (String weight : List.of("inválido", "0 KG", "-1 KG", "1000000000000 KG", "0.0000001 KG")) {
+            FoccoPlateLineDto line = new FoccoPlateLineDto();
+            line.setOrderNumber(900L); line.setClient("Cliente"); line.setModel("NDE 902020");
+            line.setCapacity("9 TON"); line.setWeight(weight);
+            when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
+            SerialPlateOrderDto order = erp.findOrder("900");
+            assertThat(order.getItems().getFirst().getCapacity()).isEqualByComparingTo("9");
+            assertThat(order.getItems().getFirst().getWeight()).isNull();
+            SerialPlateCreateDto input = draft(1); input.setOrder("900"); input.setOrderItem(order.getItems().getFirst().getId());
+            SerialPlateDto created = service.createPlates(input).getFirst();
+            assertThat(created.getCapacity()).isEqualByComparingTo("9");
+            assertThat(created.getWeight()).isNull();
+        }
+        FoccoPlateLineDto line = new FoccoPlateLineDto();
+        line.setOrderNumber(900L); line.setClient("Cliente"); line.setModel("NDE 902020");
+        line.setCapacity("N/A"); line.setWeight("N/A");
+        when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
+        SerialPlateOrderDto order = erp.findOrder("900");
+        SerialPlateCreateDto input = draft(1); input.setOrder("900"); input.setOrderItem(order.getItems().getFirst().getId());
+        SerialPlateDto created = service.createPlates(input).getFirst();
+        assertThat(created.getCapacity()).isNull(); assertThat(created.getWeight()).isNull();
+    }
+
+    @Test
     void mapsFoccoModelDecimalAndNullWeightWithStableItems() {
         FoccoPlateLineDto line = new FoccoPlateLineDto();
         line.setOrderNumber(900L); line.setClient("Cliente"); line.setDescription("PA MESA");
