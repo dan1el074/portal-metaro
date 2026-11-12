@@ -49,6 +49,7 @@ export class SerialPlatesComponent implements OnDestroy {
   private readonly toaster = inject(ToastrService);
   private readonly user = inject(UserService).getCurrentUser();
   private readonly authorities = this.user?.roles.map(role => role.authority) ?? [];
+  public readonly admin = this.authorities.includes('ROLE_ADMIN');
   public readonly operator = this.authorities.some(role => ['ROLE_ADMIN', 'ROLE_SERIAL_PLATES_OPERATOR'].includes(role));
   public createDraft: SerialPlateCreateDraft = { quantity: 1, of: '', order: '', orderItem: '' };
   public view: 'operator' | 'consultation' = this.operator ? 'operator' : 'consultation';
@@ -424,12 +425,32 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public async create(): Promise<void> {
     if (!this.canEdit() || this.busy) return;
-    if (!Number.isInteger(this.createDraft.quantity) || this.createDraft.quantity < 1 || this.createDraft.quantity > 500 || !this.createDraft.of.trim()) {
-      this.error = 'Informe a OF e uma quantidade inteira entre 1 e 500.';
+    if (!Number.isInteger(this.createDraft.quantity) || this.createDraft.quantity < 1 || this.createDraft.quantity > 500 || (!this.admin && !this.createDraft.of.trim())) {
+      this.error = this.admin ? 'Informe uma quantidade inteira entre 1 e 500.' : 'Informe a OF e uma quantidade inteira entre 1 e 500.';
       return;
     }
     this.busy = true;
     try {
+      if (!this.createDraft.of.trim()) {
+        const confirmed = await new Promise<string | null>(resolve => {
+          this.backNavigation.runAfterOverlayClose(() => {
+            if (this.destroyed) { resolve(null); return; }
+            void this.relocationModal.open({
+              title: 'Criar números de série sem OF?',
+              message: `Os ${this.createDraft.quantity} registro(s) serão criados sem vínculo com uma ordem de fabricação. Esta exceção é exclusiva do administrador do portal. Deseja continuar?`,
+              confirmLabel: 'Criar sem OF',
+            }).then(resolve);
+          });
+          this.modalVisible = false;
+          this.changeDetector.detectChanges();
+        });
+        if (this.destroyed) return;
+        await new Promise<void>(resolve => this.backNavigation.runAfterOverlayClose(() => {
+          if (!this.destroyed) { this.modalVisible = true; this.changeDetector.detectChanges(); }
+          resolve();
+        }));
+        if (!confirmed || this.destroyed) return;
+      }
       const created = await this.request(this.data.create(this.createDraft));
       this.clearFilters();
       this.finish(`${created.length} número(s) de série criado(s).`);

@@ -6,7 +6,7 @@
       @case ('new') {
         <div class="form-grid">
           <label><span>Quantidade<span class="required-marker">*</span></span><input cFormControl type="number" min="1" max="500" step="1" [(ngModel)]="createDraft.quantity"></label>
-          <label><span>Ordem de fabricação<span class="required-marker">*</span></span><input cFormControl maxlength="80" [(ngModel)]="createDraft.of" placeholder="Informe a OF"></label>
+          <label><span>Ordem de fabricação@if (admin) { (opcional) } @else { <span class="required-marker">*</span> }</span><input cFormControl maxlength="80" [(ngModel)]="createDraft.of" placeholder="Informe a OF"></label>
           <label>Nº Pedido (opcional)<input cFormControl [ngModel]="createDraft.order" (ngModelChange)="createDraft.order = $event; createDraft.orderItem = ''" (blur)="createErpRequest.emit()" placeholder="Opcional"></label>
           @if (createDraft.order.trim() && orderItems(createDraft.order).length) {
             <label class="span-all">Item do pedido<select class="form-select" [(ngModel)]="createDraft.orderItem"><option value="">Primeiro item do pedido</option>@for (item of orderItems(createDraft.order); track item.id) { <option [value]="item.id">{{ item.label || item.description }}</option> }</select></label>

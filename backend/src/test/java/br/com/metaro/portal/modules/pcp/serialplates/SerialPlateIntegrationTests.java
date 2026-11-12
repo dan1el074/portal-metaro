@@ -61,6 +61,31 @@ class SerialPlateIntegrationTests {
         dto.setQuantity(BigDecimal.valueOf(quantity)); dto.setOf("8301"); return dto;
     }
 
+    @Test
+    void onlyPortalAdministratorCanCreateWithoutOfAndOperatorsCanLaterUpdateThosePlates() {
+        User admin = users.findAll().getFirst();
+        Role adminRole = new Role(); adminRole.setId(-1L); adminRole.setAuthority("ROLE_ADMIN");
+        admin.setRoles(new HashSet<>(Set.of(adminRole)));
+        when(userService.authenticate()).thenReturn(admin);
+        SerialPlateCreateDto input = draft(1); input.setOf("   ");
+        List<SerialPlateDto> created = service.createPlates(input);
+        assertThat(created.getFirst().getOf()).isEmpty();
+
+        User operator = new User(); operator.setId(admin.getId()); operator.setName(admin.getName());
+        Role checklistAdmin = new Role(); checklistAdmin.setId(-2L); checklistAdmin.setAuthority("ROLE_CHECKLIST_ADMIN");
+        operator.setRoles(new HashSet<>(Set.of(checklistAdmin)));
+        when(userService.authenticate()).thenReturn(operator);
+        assertThatThrownBy(() -> service.createPlates(input)).hasMessageContaining("Somente ROLE_ADMIN");
+        assertThat(repository.count()).isEqualTo(1);
+        SerialPlatePatchDto patch = new SerialPlatePatchDto(); patch.setNotes("Atualizado");
+        List<SerialPlateDto> updated = service.updatePlates(mutation(created, patch, "notes"));
+        assertThat(updated.getFirst().getOf()).isEmpty();
+        patch.setOf("1234");
+        List<SerialPlateDto> linked = service.updatePlates(mutation(updated, patch, "of"));
+        patch.setOf("");
+        assertThatThrownBy(() -> service.updatePlates(mutation(linked, patch, "of"))).hasMessageContaining("ordem de fabricação");
+    }
+
     private SerialPlateMutationDto mutation(List<SerialPlateDto> rows, SerialPlatePatchDto patch, String... fields) {
         SerialPlateMutationDto dto = new SerialPlateMutationDto();
         dto.setPatch(patch); dto.setFields(List.of(fields));

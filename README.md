@@ -4,8 +4,11 @@ A **Plataforma Metaro** centraliza processos internos e ferramentas utilizadas
 pelos diferentes setores da empresa. O repositório reúne a API, a interface web
 e o aplicativo Android da solução.
 
-<p align="center">
-  <img width="100%" alt="Tela principal da Plataforma Metaro" src="https://github.com/user-attachments/assets/15e1a126-c5fe-40dd-9c9c-ad023c07613c">
+<p align="center"> 
+  <img width="1633" height="915" alt="Captura de tela 2026-11-09 083142" src="https://github.com/user-attachments/assets/7da878d5-8a82-4690-a85b-9563e7071636" />
+  <img width="1633" height="916" alt="Captura de tela 2026-11-09 083024" src="https://github.com/user-attachments/assets/e50a3c1a-d88a-4b0b-9ef8-6ea64252c7ce" />
+  <img width="1633" height="915" alt="Captura de tela 2026-11-09 082912" src="https://github.com/user-attachments/assets/741bb84d-0939-4dcb-9c09-6a317e860244" />
+  <img width="1632" height="916" alt="Captura de tela 2026-11-09 083338" src="https://github.com/user-attachments/assets/ae4247fb-9e89-4864-875b-7524bbd8bdd5" />
 </p>
 
 ## Componentes
@@ -13,7 +16,7 @@ e o aplicativo Android da solução.
 ```text
 portal-demo/
 ├── backend/    # API - Java 21, Spring Boot 3.4, Spring Security, JPA, Flyway, PostgreSQL, H2 e Oracle
-├── frontend/   # SPA - Angular 21, CoreUI 5, Angular Material, RxJS e SCSS
+├── frontend/   # SPA - Angular 21, CoreUI 5, RxJS e SCSS
 └── mobile/     # APP - Kotlin, Android SDK 36 e WebView
 ```
 
@@ -23,12 +26,10 @@ PDFs, câmera e links externos.
 
 ## Funcionalidades
 
-- [PCP — Nº Série/Plaquetas: especificação funcional, backend e implantação](docs/pcp-serial-plates.md).
-
 - Autenticação por JWT e autorização baseada em perfis.
 - Mural eletrônico para comunicados e avisos internos.
 - Gerenciamento e compartilhamento de arquivos.
-- Integração com PostgreSQL, Oracle, bunny.net e Focco ERP.
+- Integração com PostgreSQL, Oracle, bunny.net, Probus e FoccoERP.
 
 ## Pré-requisitos
 

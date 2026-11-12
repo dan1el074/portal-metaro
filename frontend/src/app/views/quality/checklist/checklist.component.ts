@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ButtonDirective, CardBodyComponent, CardComponent, ContainerComponent, DropdownComponent, DropdownItemDirective, DropdownItemPlainDirective, DropdownMenuDirective, DropdownToggleDirective } from '@coreui/angular';
 import { SmartPaginationComponent } from '@coreui/angular-pro';
@@ -68,10 +68,19 @@ export class ChecklistComponent implements OnInit {
   protected sorter: any = { column: 'updated', state: 'desc' };
   protected page = 1;
   protected itemsPerPage = 10;
+  protected readonly reloading = signal(false);
+
+  protected async reload(): Promise<void> {
+    if (this.reloading()) return;
+    this.reloading.set(true);
+    try { await this.store.load(true); }
+    catch { /* The alert keeps the server error and allows another attempt. */ }
+    finally { this.reloading.set(false); }
+  }
 
   public async ngOnInit(): Promise<void> {
-    await this.store.load();
     this.currentView = this.store.admin ? 'admin' : this.store.operator ? 'operator' : 'consultation';
+    await this.store.load().catch(() => undefined);
   }
 
   protected setView(view: ChecklistView): void {

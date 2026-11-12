@@ -330,4 +330,35 @@ describe('SerialPlatesComponent API integration', () => {
     expect(component.modalVisible).toBeFalse();
     http.expectNone(request => request.url.endsWith('/report'));
   });
+
+  it('requires an OF for operators before sending a creation request', async () => {
+    initialize(); component.open('new');
+    await component.create();
+    expect(component.error).toContain('Informe a OF');
+    http.expectNone(request => request.method === 'POST');
+  });
+
+  it('confirms admin creation without OF and preserves the draft when cancelled', async () => {
+    roles.splice(0, roles.length, 'ROLE_ADMIN');
+    initialize(); fixture.detectChanges(); await fixture.whenStable();
+    component.open('new'); component.createDraft.quantity = 2;
+    await fixture.whenStable();
+    const cancelled = component.create();
+    let action = await waitForRelocation();
+    expect(action.textContent).toContain('Criar números de série sem OF?');
+    http.expectNone(request => request.method === 'POST');
+    Array.from(action.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Cancelar')!.click();
+    await cancelled; await fixture.whenStable();
+    expect(component.modalVisible).toBeTrue(); expect(component.createDraft.quantity).toBe(2);
+    const pending = component.create();
+    action = await waitForRelocation();
+    Array.from(action.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Criar sem OF')!.click();
+    await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
+    const request = http.expectOne(request => request.method === 'POST' && request.url.endsWith('/serial-plates'));
+    expect(request.request.body.of).toBe(''); expect(request.request.body.quantity).toBe(2);
+    request.flush([{ ...row, of: '' }, { ...row, serial: '18919', of: '' }]); await pending;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 2, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 2 });
+    expect(component.busy).toBeFalse(); expect(component.modalVisible).toBeFalse();
+  });
 });

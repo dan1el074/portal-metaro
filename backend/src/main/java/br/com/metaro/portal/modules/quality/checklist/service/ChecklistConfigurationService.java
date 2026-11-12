@@ -296,7 +296,9 @@ public class ChecklistConfigurationService {
                 ? templateRepository.existsByPredecessorId(predecessor.getId())
                 : templateRepository.existsByPredecessorIdAndIdNot(predecessor.getId(), id);
         if (predecessorAlreadyUsed) {
-            throw new UnprocessableEntityException("Um predecessor pode possuir somente um sucessor.");
+            ChecklistTemplate successor = templateRepository.findByPredecessorId(predecessor.getId()).orElseThrow();
+            throw new UnprocessableEntityException("Este requisito já tem um sucessor. Bifurcações não são permitidas.\n"
+                    + successor.getCategory().getName() + " - " + successor.getName());
         }
         boolean production = category.getIntegration() == ChecklistIntegration.PRODUCTION;
         if (category.getIntegration() != predecessor.getCategory().getIntegration()) {
