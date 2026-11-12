@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Category, Checklist, Comment, Equipment, Flow, Template } from '../interface/checklist.interface';
+import { Category, Checklist, ChecklistTableRow, Comment, Equipment, Flow, Template } from '../interface/checklist.interface';
 import { PendingIssues } from '../interface/user.interface';
 
 export interface ChecklistPage<T> {
@@ -10,6 +10,8 @@ export interface ChecklistPage<T> {
   totalElements: number;
   totalPages: number;
 }
+
+export interface ChecklistDepartment { id: number; name: string; enabled: boolean; }
 
 export interface ChecklistCatalogEntry {
   id: number;
@@ -101,6 +103,17 @@ export class ChecklistService {
   updateCatalog(entry: ChecklistCatalogEntry): Observable<ChecklistCatalogEntry> {
     return this.http.put<ChecklistCatalogEntry>(`${this.api}/catalog/${entry.id}`, entry);
   }
+
+  listRecordRows(query: { page: number; size: number; categoryId?: string; search?: string; status?: string; sort?: string; consultation?: boolean; actionable?: boolean }): Observable<ChecklistPage<ChecklistTableRow & { order?: string }>> {
+    let params = new HttpParams();
+    Object.entries(query).forEach(([key, value]) => { if (value !== undefined && value !== '') params = params.set(key, value); });
+    return this.http.get<ChecklistPage<ChecklistTableRow & { order?: string }>>(`${this.api}/records/table`, { params });
+  }
+  recordCounts(consultation: boolean): Observable<Record<string, number>> {
+    return this.http.get<Record<string, number>>(`${this.api}/records/counts`, { params: new HttpParams().set('consultation', consultation) });
+  }
+  listDepartments(): Observable<ChecklistDepartment[]> { return this.http.get<ChecklistDepartment[]>(`${this.api}/departments`); }
+  saveDepartments(ids: number[]): Observable<ChecklistDepartment[]> { return this.http.put<ChecklistDepartment[]>(`${this.api}/departments`, ids); }
 
   listRecords(size = 2000): Observable<ChecklistPage<Checklist>> {
     return this.http.get<ChecklistPage<Checklist>>(`${this.api}/records`, { params: new HttpParams().set('size', size) });

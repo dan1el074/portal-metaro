@@ -25,6 +25,12 @@ public class StepFlowController {
     @Autowired
     private StepFlowService stepFlowService;
 
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @PutMapping("/{id}/reprocess")
+    public ResponseEntity<OrderDto> reprocess(@PathVariable Long id) throws IOException {
+        return ResponseEntity.ok(stepFlowService.reprocess(id));
+    }
+
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @PutMapping("/{id}/reopen")
     public ResponseEntity<OrderDto> reopen(@PathVariable Long id) {

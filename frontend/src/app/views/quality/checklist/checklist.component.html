@@ -35,23 +35,23 @@
       <button type="button" class="management-card" (click)="equipmentModal.open()"><span class="management-icon"><app-checklist-icon name="package" /></span><strong>Equipamentos</strong><small>Tipos associados aos modelos</small></button>
       <button type="button" class="management-card" (click)="accessModal.open()"><span class="management-icon"><app-checklist-icon name="users" /></span><strong>Controle de acesso</strong><small>Operadores por categoria</small></button>
     </section>
-    <div class="secondary-actions"><button cButton color="secondary" variant="ghost" (click)="catalogModal.open()"><app-checklist-icon name="settings" /> Integração de Produção</button></div>
+    <div class="secondary-actions"><button cButton color="secondary" variant="ghost" (click)="catalogModal.open()"><app-checklist-icon name="settings" /> Configurações</button></div>
   }
 
   @if (currentView === 'operator') {
-    <c-card class="todo-card"><c-card-body><div class="section-heading"><div><h2>Lista de afazeres <span>{{ todos.length }}</span></h2><p>Checklists disponíveis nas suas categorias.</p></div></div>
-      <div class="todo-grid">@for (record of todos; track record.id) { <button type="button" (click)="openRecord(record.id)"><strong>{{ store.snapshot(record).category.name }}</strong><span>{{ store.title(record) }}</span><small>Pedido: {{ store.flow(record).order || '—' }} · Série: {{ store.flow(record).serial || '—' }}</small><small>{{ record.status }} · {{ record.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></button> } @empty { <p class="empty-state">Nenhum checklist pendente.</p> }</div>
-    </c-card-body></c-card>
+    <c-card class="todo-card"><c-card-body><div class="section-heading"><div><h2>Lista de afazeres <span>{{ todoTotal() }}</span></h2><p>Checklists disponíveis nas suas categorias.</p></div></div>
+      <div class="todo-grid">@for (record of todoRows(); track record.id) { <button type="button" (click)="openRecord(record.id)"><strong>{{ record.category }}</strong><span>{{ record.title }}</span><small>Pedido: {{ record.order || '—' }} · Série: {{ record.serial || '—' }}</small><small>{{ record.status }} · {{ record.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></button> } @empty { <p class="empty-state">Nenhum checklist pendente.</p> }</div>
+    @if(todoPages() > 1) { <c-smart-pagination [activePage]="todoPage" [pages]="todoPages()" (activePageChange)="loadTodos($event)" /> }</c-card-body></c-card>
   }
 
   <c-card class="records-card">
-    <div class="records-header"><div><h2>Registros</h2><p>Consulte checklists em andamento e finalizados.</p></div>@if (currentView !== 'consultation' && store.operator) { <button cButton color="primary" (click)="newRecordModal.open()"><app-checklist-icon name="plus" /> Novo</button> }</div>
+    <div class="records-header"><div><h2>Registros</h2><p>Consulte checklists em andamento e finalizados.</p></div>@if (currentView !== 'consultation' && store.operator) { <button cButton color="primary" (click)="openNewRecord()"><app-checklist-icon name="plus" /> Novo</button> }</div>
     <nav class="category-tabs" aria-label="Categorias">
       @for (category of store.state().categories; track category.id) { <button type="button" [class.active]="activeCategoryId === category.id" (click)="selectCategory(category.id)">{{ category.name }} <span>{{ count(category.id) }}</span></button> }
     </nav>
     <div class="content-panel">
-      <app-checklist-table [data]="pageRows" [searchValue]="search" [selectedStatus]="status" [sorterValue]="sorter" (openRecord)="openRecord($event)" (filterChange)="search = $event; page = 1" (statusChange)="status = $event; page = 1" (sorterChange)="sorter = $event; page = 1" (itemsPerPageChange)="itemsPerPage = $event; page = 1" (clearAll)="clearFilters()" />
-      @if (rows.length > itemsPerPage) { <div class="pagination-wrap"><c-smart-pagination [activePage]="page" [pages]="pages" (activePageChange)="page = $event" /></div> }
+      <app-checklist-table [data]="pageRows()" [loading]="loadingRows()" [perPage]="itemsPerPage" [searchValue]="search" [selectedStatus]="status" [sorterValue]="sorter" (openRecord)="openRecord($event)" (filterChange)="changeSearch($event)" (statusChange)="changeStatus($event)" (sorterChange)="changeSort($event)" (itemsPerPageChange)="changeSize($event)" (clearAll)="clearFilters()" />
+      @if (pages() > 1) { <div class="pagination-wrap"><c-smart-pagination [activePage]="page" [pages]="pages()" (activePageChange)="changePage($event)" /></div> }
     </div>
   </c-card>
 </c-container>

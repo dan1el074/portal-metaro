@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { firstValueFrom, forkJoin } from 'rxjs';
+import { firstValueFrom, forkJoin, of } from 'rxjs';
 import { UserService } from './user.service';
 import { Checklist, ChecklistState, Flow, Template } from '../interface/checklist.interface';
 import { CHECKLIST_BODY_EVIDENCE_ID, checklistCopy as copy, checklistId as uid, checklistNow as now, defaultChecklistNokFields } from '../shared/checklist-factory';
@@ -24,9 +24,15 @@ export class ChecklistPreviewService {
   get admin() { return this.user.roles.some((r) => ['ROLE_ADMIN', 'ROLE_CHECKLIST_ADMIN'].includes(r.authority)) }
   get operator() { return (this.admin || this.user.roles.some((r) => r.authority === 'ROLE_CHECKLIST_OPERATOR')) }
 
-  load(force = false): Promise<void> {
-    if (this.loading && !force) return this.loading;
-    this.loading = this.fetchState().finally(() => this.loading = undefined);
+  private configurationOnly = false;
+
+  load(force = false, configurationOnly = false): Promise<void> {
+    if (this.loading && !force) {
+      if (this.configurationOnly === configurationOnly) return this.loading;
+      return this.loading.then(() => this.load(false, configurationOnly));
+    }
+    this.configurationOnly = configurationOnly;
+    this.loading = this.fetchState(configurationOnly).finally(() => this.loading = undefined);
     return this.loading;
   }
 
@@ -36,14 +42,14 @@ export class ChecklistPreviewService {
     return this.persistConfiguration(previous, data);
   }
 
-  private async fetchState(): Promise<void> {
+  private async fetchState(configurationOnly = false): Promise<void> {
     try {
       const result = await firstValueFrom(forkJoin({
         categories: this.api.listCategories(),
         equipment: this.api.listEquipment(),
         templates: this.api.listTemplates(),
-        records: this.api.listRecords(),
-        flows: this.api.listFlows(),
+        records: configurationOnly ? of({ content: [] as Checklist[] }) : this.api.listRecords(),
+        flows: configurationOnly ? of([] as Flow[]) : this.api.listFlows(),
         items: this.api.listCatalog('ITEM'),
         defects: this.api.listCatalog('DEFECT'),
       }));
@@ -183,10 +189,10 @@ export class ChecklistPreviewService {
     this.persistCatalog(previous.defects, current.defects, 'DEFECT', requests);
     try {
       await Promise.all(requests);
-      if (requests.length) await this.load(true);
+      if (requests.length) await this.load(true, this.configurationOnly);
       return true;
     } catch {
-      await this.load(true).catch(() => undefined);
+      await this.load(true, this.configurationOnly).catch(() => undefined);
       this.warning.set('Uma alteração não pôde ser salva no servidor. Os dados foram recarregados.');
       return false;
     }

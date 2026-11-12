@@ -48,6 +48,37 @@ public class StepFlowService {
     private PictureService pictureService;
     @Autowired
     private ChecklistStepFlowService checklistStepFlowService;
+    @Autowired
+    private StepFlowErpOrderService erpOrders;
+
+    @Transactional
+    public OrderDto reprocess(Long id) throws IOException {
+        User actor = userService.authenticate();
+        Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
+        if (!canInteract(order, actor)) throw new ForbiddenException("Usuário não corresponde ao setor competente!");
+        if (order.getCurrentStep() != StepType.PCP || order.getStatus() != OrderStatus.IN_PROGRESS) {
+            throw new UnprocessableEntityException("Somente pedidos abertos na etapa PCP podem ser reprocessados.");
+        }
+        ErpOrderDto fresh = erpOrders.findOrderForReprocessing(order.getNumber(), order.getErpSource());
+        snapshotErpInfo(order, fresh);
+        order.getItems().forEach(item -> item.setProducedQuantity(0));
+        OrderInputDto transition = new OrderInputDto();
+        transition.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+        rulesForUpdate(transition, order);
+        for (OrderStep step : order.getSteps()) {
+            step.setChecklistPending(false);
+            if (step.getStep() != StepType.FINAL_ASSEMBLY) {
+                step.setStartedAt(null);
+                step.setFinishedAt(null);
+                step.setFinishedBy(null);
+            }
+            if (step.getStep() == StepType.PCP) {
+                step.getMessages().add(new StepMessage("Pedido reprocessado a partir do ERP. Informações da integração atualizadas e quantidades a produzir zeradas. Pedido retornado à Montagem Final para reconfiguração.", step, actor));
+            }
+        }
+        order.setUpdatedAt(Instant.now());
+        return new OrderDto(orderRepository.saveAndFlush(order));
+    }
 
     @Transactional(readOnly = true)
     public OrderDto findById(Long id) {
@@ -307,6 +338,7 @@ public class StepFlowService {
         if (
             !me.getPosition().getName().equals("Montagem Final")
             && !me.getPosition().getName().equals("Almoxarifado")
+            && !me.getPosition().getName().equals("Qualidade")
             && me.getAuthorities().stream().noneMatch(x ->
                     x.getAuthority().equals("ROLE_ADMIN"))
         ) {
@@ -328,9 +360,13 @@ public class StepFlowService {
         entity.setDiscount(order.getDiscount());
         entity.setTotal(order.getTotal());
         entity.setErpSource(order.getSource());
-        entity.setItems(new ArrayList<>());
+        entity.setPhone(order.getPhone());
 
-        if (order.getPhone() != null) entity.setPhone(order.getPhone());
+        if (entity.getItems() == null) {
+            entity.setItems(new ArrayList<>());
+        } else {
+            entity.getItems().clear();
+        }
 
         for (ErpOrderItemDto dto : order.getItems()) {
             OrderItem item = new OrderItem();
@@ -537,7 +573,8 @@ public class StepFlowService {
 
         return switch (order.getCurrentStep()) {
             case FINAL_ASSEMBLY -> user.getPosition().getName().equals("Montagem Final")
-                                || user.getPosition().getName().equals("Almoxarifado");
+                                || user.getPosition().getName().equals("Almoxarifado")
+                                || user.getPosition().getName().equals("Qualidade");
             case PCP ->  user.getPosition().getName().equals("PCP");
             case FREIGHT -> user.getPosition().getName().equals("Comercial");
             case BILLING -> user.getPosition().getName().equals("Financeiro");

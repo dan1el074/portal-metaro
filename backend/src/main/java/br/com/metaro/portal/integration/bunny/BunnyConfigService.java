@@ -6,6 +6,7 @@ import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityExceptio
 import br.com.metaro.portal.integration.bunny.dto.BunnyConfigDto;
 import br.com.metaro.portal.integration.bunny.dto.BunnyConfigUpdateDto;
 import lombok.RequiredArgsConstructor;
+import br.com.metaro.portal.integration.bunny.dto.BunnyCredentialsDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -42,13 +43,13 @@ public class BunnyConfigService {
     }
 
     @Transactional(readOnly = true)
-    public BunnyCredentials getCredentials() {
+    public BunnyCredentialsDto getCredentials() {
         String libraryId = findValue(LIBRARY_ID_PARAM);
         String apiKey = findValue(API_KEY_PARAM);
         if (!StringUtils.hasText(libraryId) || !StringUtils.hasText(apiKey)) {
             throw new UnprocessableEntityException("A integração com o Bunny Stream não está configurada!");
         }
-        return new BunnyCredentials(libraryId, apiKey);
+        return new BunnyCredentialsDto(libraryId, apiKey);
     }
 
     private String findValue(String name) {
@@ -61,5 +62,4 @@ public class BunnyConfigService {
         paramRepository.save(param);
     }
 
-    public record BunnyCredentials(String libraryId, String apiKey) {}
 }
