@@ -391,3 +391,14 @@ input[type="checkbox"] {
     animation: none;
   }
 }
+.report-column-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  legend { font-size: 14px; font-weight: 600; }
+  .form-grid & label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  small { flex-basis: 100%; color: var(--cui-secondary-color); }
+}

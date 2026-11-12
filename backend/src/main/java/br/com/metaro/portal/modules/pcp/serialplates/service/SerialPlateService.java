@@ -34,6 +34,7 @@ public class SerialPlateService {
     private static final List<String> STATUSES = List.of("Criado", "Programado", "Recebido", "Devolvido", "Finalizado");
     private static final Map<String, String> LABELS = labels();
     private static final Set<String> SORTS = Set.of("serial", "of", "order", "client", "description", "provider", "status", "updated");
+    private static final List<String> REPORT_COLUMNS = List.of("serial", "description", "manufactured", "voltage", "crea", "weight");
     private final SerialPlateRepository repository;
     private final SerialPlateLogRepository logs;
     private final ParamRepository params;
@@ -276,20 +277,29 @@ public class SerialPlateService {
         dto.setCrea(param("serialPlates.crea"));
         dto.setInstructions(param("serialPlates.instructions"));
         dto.setProviders(param("serialPlates.providers"));
+        dto.setReportColumns(params.findByName("serialPlates.reportColumns")
+                .map(value -> Arrays.asList(value.getContent().split(","))).orElse(REPORT_COLUMNS));
 
         return dto;
     }
 
     @Transactional
     public SerialPlateSettingsDto updateSettings(SerialPlateSettingsDto dto) {
-        List.of("serialPlates.crea", "serialPlates.instructions", "serialPlates.providers").forEach(key -> params.findLockedByName(key).orElseThrow(ResourceNotFoundException::new));
+        if (dto.getReportColumns() == null || dto.getReportColumns().isEmpty()
+                || !REPORT_COLUMNS.containsAll(dto.getReportColumns())
+                || new HashSet<>(dto.getReportColumns()).size() != dto.getReportColumns().size()) {
+            throw invalid("Selecione pelo menos uma coluna válida do relatório, sem repetições.");
+        }
+        List<String> columns = REPORT_COLUMNS.stream().filter(dto.getReportColumns()::contains).toList();
+        List.of("serialPlates.crea", "serialPlates.instructions", "serialPlates.providers", "serialPlates.reportColumns").forEach(key -> params.findLockedByName(key).orElseThrow(ResourceNotFoundException::new));
         User user = users.authenticate();
-        Map<String, String> changes = Map.of("CREA", dto.getCrea().trim(), "Orientações", dto.getInstructions().trim(), "Prestadores", dto.getProviders().trim());
+        Map<String, String> changes = Map.of("CREA", dto.getCrea().trim(), "Orientações", dto.getInstructions().trim(), "Prestadores", dto.getProviders().trim(), "Colunas do relatório", String.join(",", columns));
         SerialPlateSettingsDto before = getSettings();
-        audit(null, user, Instant.now(), List.of(), changes, Map.of("CREA", before.getCrea(), "Orientações", before.getInstructions(), "Prestadores", before.getProviders()), null);
+        audit(null, user, Instant.now(), List.of(), changes, Map.of("CREA", before.getCrea(), "Orientações", before.getInstructions(), "Prestadores", before.getProviders(), "Colunas do relatório", String.join(",", before.getReportColumns())), null);
         saveParam("serialPlates.crea", dto.getCrea().trim());
         saveParam("serialPlates.instructions", dto.getInstructions().trim());
         saveParam("serialPlates.providers", dto.getProviders().trim());
+        saveParam("serialPlates.reportColumns", String.join(",", columns));
 
         return getSettings();
     }
@@ -297,13 +307,18 @@ public class SerialPlateService {
     @Transactional(readOnly = true)
     public SerialPlateReportDto prepareReport(SerialPlateSelectionDto selection) {
         SerialPlateSettingsDto settings = getSettings();
-        if (settings.getCrea().isBlank()) throw invalid("Informe o CREA nas configurações.");
+        List<String> columns = settings.getReportColumns();
+        if (columns.isEmpty()) throw invalid("Selecione pelo menos uma coluna do relatório nas configurações.");
+        if (columns.contains("crea") && settings.getCrea().isBlank()) throw invalid("Informe o CREA nas configurações.");
         List<SerialPlateDto> records = getSelection(selection.getSerials());
 
         for (SerialPlateDto row : records) {
-            if (row.getDescription().isBlank()
-                    || row.getVoltage().isBlank()
-                    || row.getWeight() == null) throw invalid("Complete modelo, tensão e peso do registro #" + row.getSerial() + ".");
+            List<String> missing = new ArrayList<>();
+            if (columns.contains("description") && row.getDescription().isBlank()) missing.add("modelo");
+            if (columns.contains("voltage") && row.getVoltage().isBlank()) missing.add("tensão");
+            if (columns.contains("weight") && (row.getWeight() == null || row.getWeight().signum() <= 0)) missing.add("peso");
+            if (columns.contains("manufactured") && !text(row.getManufactured()).matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) missing.add("data de fabricação");
+            if (!missing.isEmpty()) throw invalid("Complete " + String.join(", ", missing) + " do registro #" + row.getSerial() + ".");
         }
 
         return new SerialPlateReportDto(records, settings);
