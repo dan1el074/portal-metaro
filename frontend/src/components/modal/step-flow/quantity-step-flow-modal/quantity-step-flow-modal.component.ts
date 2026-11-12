@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, ViewChild, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, SimpleChanges, Output, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { IconDirective } from '@coreui/icons-angular';
@@ -38,6 +38,7 @@ export interface EditableItem {
 export class QuantityStepFlowModalComponent implements OnChanges {
   @ViewChild('quantityInput') quantityInput?: ElementRef<HTMLInputElement>;
   @Input() visible = false;
+  @Input() saving = false;
   @Input() item: EditableItem | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() save = new EventEmitter<number>();
@@ -45,7 +46,8 @@ export class QuantityStepFlowModalComponent implements OnChanges {
   protected readonly icons = { cilPencil };
   protected quantityControl = new FormControl<number>(0);
 
-  public ngOnChanges(): void {
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (!changes['item'] && !changes['visible']) return;
     if (this.item) {
       this.quantityControl.setValidators([
         Validators.required,
@@ -115,10 +117,12 @@ export class QuantityStepFlowModalComponent implements OnChanges {
   }
 
   protected onClose(): void {
+    if (this.saving) return;
     this.close.emit();
   }
 
   protected onSave(): void {
+    if (this.saving) return;
     if (this.quantityControl.invalid) {
       this.quantityControl.markAsTouched();
       return;

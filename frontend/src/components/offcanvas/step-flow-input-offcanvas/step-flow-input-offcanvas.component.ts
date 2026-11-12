@@ -82,11 +82,11 @@ export class StepFlowInputOffcanvasComponent {
   protected editingVolume: StepFlowVolume | null = null;
   protected editingVolumeIndex: number | null = null;
   protected volumeMutationLoading = false;
+  protected quantityMutationLoading = false;
   protected editingFileId: string | null = null;
   protected editingFileName = '';
   protected editingFileExtension = '';
   private initialCurrentStepFormValue = '';
-  private initialProducedQuantities = new Map<number, number>();
   private initialChecklistFlowIds = new Set<string>();
 
   // file
@@ -264,9 +264,6 @@ export class StepFlowInputOffcanvasComponent {
       );
     });
 
-    this.initialProducedQuantities = new Map(
-      items.map(item => [item.id, item.producedQuantity] as const)
-    );
   }
 
   protected onReturnToFinalAssembly(): void {
@@ -305,7 +302,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onSubmit(returnToFinalAssembly = false): void {
-    if (this.reprocessLoading) return;
+    if (this.reprocessLoading || this.quantityMutationLoading || this.volumeMutationLoading) return;
     if (returnToFinalAssembly && this.order?.currentStep !== 'PCP') return;
     if (!this.commitFileNameEdit()) {
       return;
@@ -320,33 +317,6 @@ export class StepFlowInputOffcanvasComponent {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
-    }
-
-    let hasQuantityChanges = false;
-
-    const currentStepId = this.steps.find(step => step.title === this.order?.currentStep)?.id ?? null;
-    const isAdminStageChange = this.isAdmin
-      && this.adminStepControl.dirty
-      && this.adminStepControl.value !== currentStepId;
-
-    if (this.order?.currentStep === 'Montagem Final' && !isAdminStageChange) {
-      if (this.itemsForm.invalid) {
-        this.itemsForm.markAllAsTouched();
-        return;
-      }
-
-      hasQuantityChanges = this.itemsForm.controls.some(
-        control => control.get('producedQuantity')?.dirty
-      );
-
-      const hasAtLeastOneItem = this.itemsForm.controls.some(
-        control => control.get('producedQuantity')?.value > 0
-      );
-
-      if (!hasAtLeastOneItem) {
-        this.toasterService.error('Informe a quantidade produzida de ao menos um item.');
-        return;
-      }
     }
 
     const formData = this.buildFormData();
@@ -379,7 +349,7 @@ export class StepFlowInputOffcanvasComponent {
           this.toasterService.success('Informações atualizada com sucesso.');
           this.captureChecklistSelection();
 
-          if (hasQuantityChanges || returnToFinalAssembly) {
+          if (returnToFinalAssembly) {
             this.close();
             this.reloadOrders.emit();
             return;
@@ -426,15 +396,6 @@ export class StepFlowInputOffcanvasComponent {
       }
     }
 
-    if (this.order?.currentStep === 'Montagem Final') {
-      const itemsPayload = this.itemsForm.value.map((item: any) => ({
-        id: item.id,
-        producedQuantity: item.producedQuantity,
-      }));
-
-      formData.append('itemsJson', JSON.stringify(itemsPayload));
-    }
-
     if (this.order?.currentStep === 'Montagem Final' || this.order?.currentStep === 'Expedição') {
       this.files()
         .filter(uploaded => uploaded.kind === 'image')
@@ -469,7 +430,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onNextStep(): void {
-    if (this.reprocessLoading) return;
+    if (this.reprocessLoading || this.quantityMutationLoading || this.volumeMutationLoading) return;
     if (!this.isAdmin && this.order?.currentStep === 'Montagem Final' && this.order.volumes.length === 0) {
       this.shippingValidationForNextStep = true;
       this.toasterService.error('Cadastre ao menos um volume antes de avançar.');
@@ -488,7 +449,6 @@ export class StepFlowInputOffcanvasComponent {
 
   private hasUnsavedCurrentStepChanges(): boolean {
     return this.getComparableFormValue() !== this.initialCurrentStepFormValue
-      || this.haveProducedQuantitiesChanged()
       || this.haveChecklistSelectionChanges()
       || this.files().length > 0;
   }
@@ -527,8 +487,10 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected saveVolume(volume: StepFlowVolume): void {
-    if (!this.order || this.volumeMutationLoading) return;
+    if (!this.order || this.volumeMutationLoading || this.quantityMutationLoading || this.saveLoading || this.nextStepLoading) return;
 
+    const orderId = this.order.id;
+    const editingIndex = this.editingVolumeIndex;
     this.volumeMutationLoading = true;
     const request = volume.id === null
       ? this.stepFlowService.createVolume(this.order.id, volume)
@@ -539,12 +501,12 @@ export class StepFlowInputOffcanvasComponent {
       this.cdf.detectChanges();
     })).subscribe({
       next: persistedVolume => {
-        if (!this.order) return;
+          if (!this.order || this.order.id !== orderId) return;
         const volumes = [...this.order.volumes];
-        if (this.editingVolumeIndex === null) {
+          if (editingIndex === null) {
           volumes.push(persistedVolume);
         } else {
-          volumes[this.editingVolumeIndex] = persistedVolume;
+            volumes[editingIndex] = persistedVolume;
         }
         this.order = { ...this.order, volumes };
         this.shippingValidationForNextStep = false;
@@ -558,7 +520,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected deleteVolume(index: number): void {
-    if (!this.order || this.volumeMutationLoading) return;
+    if (!this.order || this.volumeMutationLoading || this.quantityMutationLoading || this.saveLoading || this.nextStepLoading) return;
     const volume = this.order.volumes[index];
     if (volume.id === null) return;
 
@@ -588,14 +550,6 @@ export class StepFlowInputOffcanvasComponent {
     }
 
     return value ?? null;
-  }
-
-  private haveProducedQuantitiesChanged(): boolean {
-    return this.itemsFormControls.some(itemGroup => {
-      const id = itemGroup.get('id')?.value as number;
-      const producedQuantity = itemGroup.get('producedQuantity')?.value as number;
-      return producedQuantity !== this.initialProducedQuantities.get(id);
-    });
   }
 
   private getSelectedChecklistFlowIds(): string[] {
@@ -772,6 +726,7 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onOpenEditQuantityModal(itemGroup: FormGroup): void {
+    if (this.quantityMutationLoading || this.volumeMutationLoading || this.saveLoading || this.nextStepLoading) return;
     this.editingItem = {
       id: itemGroup.get('id')?.value,
       code: itemGroup.get('code')?.value,
@@ -784,21 +739,33 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onCloseEditQuantityModal(): void {
+    if (this.quantityMutationLoading) return;
     this.showEditQuantityModal = false;
     this.editingItem = null;
   }
 
   protected onSaveEditQuantity(newQuantity: number): void {
-    const control = this.itemsFormControls.find(
-      group => group.get('id')?.value === this.editingItem?.id
-    );
-
-    if (control) {
-      control.get('producedQuantity')?.setValue(newQuantity);
-      control.get('producedQuantity')?.markAsDirty();
-    }
-
-    this.onCloseEditQuantityModal();
+    if (!this.order || !this.editingItem || this.order.currentStep !== 'Montagem Final'
+      || this.quantityMutationLoading || this.volumeMutationLoading || this.saveLoading || this.nextStepLoading) return;
+    const orderId = this.order.id;
+    const itemId = this.editingItem.id;
+    this.quantityMutationLoading = true;
+    this.stepFlowService.updateItemQuantity(orderId, itemId, newQuantity).pipe(finalize(() => {
+      this.quantityMutationLoading = false;
+      this.cdf.detectChanges();
+    })).subscribe({
+      next: item => {
+        if (!this.order || this.order.id !== orderId) return;
+        this.order = { ...this.order, items: this.order.items.map(current => current.id === item.id ? item : current) };
+        const control = this.itemsFormControls.find(group => group.get('id')?.value === item.id);
+        control?.patchValue({ quantity: item.quantity, producedQuantity: item.producedQuantity });
+        control?.markAsPristine();
+        this.showEditQuantityModal = false;
+        this.editingItem = null;
+        this.toasterService.success('Quantidade salva com sucesso.');
+      },
+      error: error => this.toasterService.error(error.error?.error || error.error?.message || 'Erro ao salvar quantidade.'),
+    });
   }
 
   // file input
