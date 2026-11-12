@@ -63,6 +63,39 @@ describe('SerialPlatesComponent API integration', () => {
     expect(fixture.nativeElement.textContent).toContain('31');
   });
 
+  it('uses selected columns for preview, export data and missing-field warnings', () => {
+    initialize(); component.toggleAll(true);
+    component.settings = { ...settings, crea: '', reportColumns: ['serial', 'manufactured'] };
+    expect(component.missing()).toEqual([]);
+    const report = component.reportData();
+    expect(report.columns).toEqual(['Nº Série', 'Fabricação']);
+    expect(report.rows[0].length).toBe(2);
+    expect(report.rows[0][0]).toBe('18918');
+    expect(report.metadata).toEqual([]);
+    expect(report.columnWidths!.reduce((sum, width) => sum + width, 0)).toBeCloseTo(100);
+    component.settings.reportColumns = ['serial', 'voltage'];
+    expect(component.missing()).toEqual(['18918: tensão.']);
+    component.settings.reportColumns = ['crea'];
+    expect(component.missing()).toEqual(['Informe o CREA nas configurações.']);
+  });
+
+  it('lists all report columns in settings, preserves cancellation and persists the selection', async () => {
+    initialize(); fixture.detectChanges(); await fixture.whenStable();
+    component.open('settings'); fixture.detectChanges(); await fixture.whenStable();
+    const checkboxes = Array.from(fixture.nativeElement.querySelectorAll('.report-column-options input')) as HTMLInputElement[];
+    expect(checkboxes.length).toBe(6); expect(checkboxes.every(input => input.checked)).toBeTrue();
+    checkboxes[3].click(); fixture.detectChanges(); await fixture.whenStable();
+    expect(component.settingsDraft.reportColumns).not.toContain('voltage');
+    expect(component.reportData().columns).toContain('Tensão');
+    const saving = component.saveSettings();
+    const request = http.expectOne(request => request.method === 'PUT' && request.url.endsWith('/settings'));
+    expect(request.request.body.reportColumns).toEqual(['serial', 'description', 'manufactured', 'crea', 'weight']);
+    request.flush(request.request.body); await saving;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [row], totalElements: 1, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
+    expect(component.reportData().columns).not.toContain('Tensão');
+  });
+
   it('offers returned status before finalized and removes the retired status from edit options', async () => {
     initialize(); fixture.detectChanges(); await fixture.whenStable();
     expect(component.summaries.map(item => item.status)).toEqual(['Criado', 'Programado', 'Recebido', 'Devolvido', 'Finalizado']);

@@ -4,7 +4,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, FormControlDirective, InputGroupComponent, InputGroupTextDirective, ModalModule } from '@coreui/angular';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
-import { SERIAL_PLATES_MONTHS, STATUSES } from '../../../../app/config/serial-plates.config';
+import { SERIAL_PLATES_MONTHS, STATUSES, SERIAL_PLATES_REPORT_KEYS, SERIAL_PLATES_REPORT_COLUMNS } from '../../../../app/config/serial-plates.config';
 import { SerialPlate, SerialPlateDialog, SerialPlateCreateDraft, SerialPlateBatchFields, PlatePatch, PlateSettings, ErpOrderItem } from '../../../../app/interface/serial-plates.interface';
 import { ReportPreviewData } from '../../../../app/interface/report-preview.interface';
 import { ChecklistIconComponent } from '../../../icons/checklist-icon/checklist-icon.component';
@@ -51,6 +51,17 @@ export class SerialPlatesModalComponent {
   @Output() public batchReadyStockChange = new EventEmitter<boolean>();
 
   public readonly months = SERIAL_PLATES_MONTHS;
+  public readonly reportColumnOptions = SERIAL_PLATES_REPORT_KEYS.map((key, index) => ({ key, label: SERIAL_PLATES_REPORT_COLUMNS[index] }));
+
+  public toggleReportColumn(key: typeof SERIAL_PLATES_REPORT_KEYS[number], checked: boolean): void {
+    const selected = new Set(this.settingsDraft.reportColumns ?? SERIAL_PLATES_REPORT_KEYS);
+    checked ? selected.add(key) : selected.delete(key);
+    this.settingsDraft.reportColumns = SERIAL_PLATES_REPORT_KEYS.filter(column => selected.has(column));
+  }
+
+  public reportColumnChecked(key: typeof SERIAL_PLATES_REPORT_KEYS[number]): boolean {
+    return (this.settingsDraft.reportColumns ?? SERIAL_PLATES_REPORT_KEYS).includes(key);
+  }
   public readonly statuses = STATUSES;
 
   public constructor(private readonly data: SerialPlatesService) {
