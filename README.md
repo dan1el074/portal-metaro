@@ -8,7 +8,6 @@ e o aplicativo Android da solução.
   <img width="1633" height="915" alt="Captura de tela 2026-11-09 083142" src="https://github.com/user-attachments/assets/7da878d5-8a82-4690-a85b-9563e7071636" />
   <img width="1633" height="916" alt="Captura de tela 2026-11-09 083024" src="https://github.com/user-attachments/assets/e50a3c1a-d88a-4b0b-9ef8-6ea64252c7ce" />
   <img width="1633" height="915" alt="Captura de tela 2026-11-09 082912" src="https://github.com/user-attachments/assets/741bb84d-0939-4dcb-9c09-6a317e860244" />
-  <img width="1632" height="916" alt="Captura de tela 2026-11-09 083338" src="https://github.com/user-attachments/assets/ae4247fb-9e89-4864-875b-7524bbd8bdd5" />
 </p>
 
 ## Componentes
