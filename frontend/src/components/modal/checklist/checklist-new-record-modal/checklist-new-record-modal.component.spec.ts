@@ -145,4 +145,25 @@ describe('New checklist serial selection', () => {
     expect(button.disabled).toBeFalse(); button.click(); await fixture.whenStable();
     expect(emitted).toHaveBeenCalledWith(jasmine.objectContaining({ confirmWithoutSerial: false, serial: undefined }));
   });
+  it('asks before creating ready stock KIT without a serial and preserves the form when cancelled', async () => {
+    template.name = 'KIT';
+    (control('Pronta Entrega') as HTMLInputElement).click();
+    await fixture.whenStable();
+    http.expectOne(request => request.url.endsWith('/available-serials')).flush([]);
+    await fixture.whenStable();
+    const emitted = jasmine.createSpy('created'); fixture.componentInstance.createRecord.subscribe(emitted);
+    const create = () => Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(button => button.textContent?.trim() === 'Criar checklist')!;
+    expect(create().disabled).toBeFalse(); create().click();
+    let modal = await waitForConfirmation();
+    expect(emitted).not.toHaveBeenCalled();
+    Array.from(modal.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Cancelar')!.click();
+    await new Promise(resolve => setTimeout(resolve, 350)); await fixture.whenStable();
+    expect((control('Pronta Entrega') as HTMLInputElement).checked).toBeTrue();
+    expect(emitted).not.toHaveBeenCalled();
+    create().click(); modal = await waitForConfirmation();
+    Array.from(modal.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Continuar')!.click();
+    await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
+    expect(emitted).toHaveBeenCalledOnceWith(jasmine.objectContaining({ readyStock: true, serial: undefined, confirmWithoutSerial: false }));
+  });
+
 });

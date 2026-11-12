@@ -86,8 +86,8 @@ class KanbanExclusionClientTests {
 
         var result = client.deleteManufacturingOrder(401614);
 
-        assertThat(result.deleted()).isTrue();
-        assertThat(result.message()).isEqualTo("Ordem de fabricação de ID 401614 excluída com sucesso.");
+        assertThat(result.isDeleted()).isTrue();
+        assertThat(result.getMessage()).isEqualTo("Ordem de fabricação de ID 401614 excluída com sucesso.");
         server.verify();
     }
 
@@ -108,8 +108,8 @@ class KanbanExclusionClientTests {
 
         var result = client.deleteManufacturingOrder(1);
 
-        assertThat(result.deleted()).isFalse();
-        assertThat(result.message()).isEqualTo(
+        assertThat(result.isDeleted()).isFalse();
+        assertThat(result.getMessage()).isEqualTo(
                 "O id informado 1, não está vinculado a nenhuma ordem de fabricação"
         );
         server.verify();

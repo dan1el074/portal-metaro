@@ -17,21 +17,6 @@ public class ChecklistRecord {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "flow_id")
-    private ChecklistFlow flow;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "template_id")
-    private ChecklistTemplate template;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "creator_id")
-    private User creator;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id")
-    private User owner;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "finisher_id")
-    private User finisher;
     @Enumerated(EnumType.STRING)
     private ChecklistStatus status;
     private boolean automatic;
@@ -49,4 +34,30 @@ public class ChecklistRecord {
     @Version
     @Column(name = "lock_version")
     private long lockVersion;
+    @Column(columnDefinition = "TEXT")
+    private String listingTitle;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "flow_id")
+    private ChecklistFlow flow;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "template_id")
+    private ChecklistTemplate template;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "creator_id")
+    private User creator;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "finisher_id")
+    private User finisher;
+
+    @PrePersist
+    @PreUpdate
+    public void refreshListingTitle() {
+        listingTitle = br.com.metaro.portal.modules.quality.checklist.service.ChecklistRecordTitle.render(
+                flow.getPlanJson(), template.getId(), status == ChecklistStatus.JUSTIFIED ? "{}" : answersJson, createdAt, id,
+                flow.getSerialNumber(), flow.getOrderNumber(), flow.getClientName(), flow.getCommercialItem(), flow.getSalesperson());
+    }
 }

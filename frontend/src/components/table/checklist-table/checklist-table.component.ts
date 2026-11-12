@@ -16,6 +16,7 @@ import { ChecklistIconComponent } from '../../icons/checklist-icon/checklist-ico
 export class ChecklistTableComponent {
   @Input() data: ChecklistTableRow[] = [];
   @Input() loading = false;
+  @Input() perPage = 10;
   @Input() searchValue = '';
   @Input() selectedStatus = '';
   @Input() sorterValue: { column?: string; state?: 'asc' | 'desc' } = {};
@@ -58,7 +59,7 @@ export class ChecklistTableComponent {
       label,
       _labelTemplateId: 'all',
       _style: { backgroundColor: 'rgba(var(--cui-emphasis-color-rgb), 0.04)', whiteSpace: 'nowrap' },
-      sorter: () => 0,
+      sorter: true,
       filter: false,
     };
   }

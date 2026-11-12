@@ -9,7 +9,7 @@
           <label><span>Ordem de fabricação@if (admin) { (opcional) } @else { <span class="required-marker">*</span> }</span><input cFormControl maxlength="80" [(ngModel)]="createDraft.of" placeholder="Informe a OF"></label>
           <label>Nº Pedido (opcional)<input cFormControl [ngModel]="createDraft.order" (ngModelChange)="createDraft.order = $event; createDraft.orderItem = ''" (blur)="createErpRequest.emit()" placeholder="Opcional"></label>
           @if (createDraft.order.trim() && orderItems(createDraft.order).length) {
-            <label class="span-all">Item do pedido<select class="form-select" [(ngModel)]="createDraft.orderItem"><option value="">Primeiro item do pedido</option>@for (item of orderItems(createDraft.order); track item.id) { <option [value]="item.id">{{ item.label || item.description }}</option> }</select></label>
+            <label class="span-all">Item do pedido<select class="form-select" [(ngModel)]="createDraft.orderItem"><option value="">Selecionar</option>@for (item of orderItems(createDraft.order); track item.id) { <option [value]="item.id">{{ item.label || item.description }}</option> }</select></label>
           }
         </div>
         <p class="helper-text">Sem pedido, preencha os dados manualmente no modal de edição. Um pedido informado carrega os dados para todos os novos registros.</p>
@@ -88,7 +88,7 @@
       } @else { <span></span> }
       <div class="item-modal-actions">
         <button cButton color="secondary" variant="outline" (click)="closeRequest.emit()">{{ dialog === 'report' || !canEdit ? 'Fechar' : 'Cancelar' }}</button>
-        @if (canEdit && dialog === 'new') { <button cButton color="primary" [disabled]="busy" (click)="createRequest.emit()"><app-checklist-icon name="plus" /> Criar registros</button> }
+        @if (canEdit && dialog === 'new') { <button cButton color="primary" [disabled]="busy || (!!createDraft.order.trim() && !createDraft.orderItem)" (click)="createRequest.emit()"><app-checklist-icon name="plus" /> Criar registros</button> }
         @if (canEdit && dialog === 'edit') { <button cButton color="primary" [disabled]="busy" (click)="saveRequest.emit()">Salvar</button> }
         @if (canEdit && dialog === 'batch') { <button cButton color="primary" [disabled]="busy" (click)="batchRequest.emit()">Salvar</button> }
         @if (canEdit && dialog === 'settings') { <button cButton color="primary" [disabled]="busy" (click)="settingsRequest.emit()">Salvar configurações</button> }

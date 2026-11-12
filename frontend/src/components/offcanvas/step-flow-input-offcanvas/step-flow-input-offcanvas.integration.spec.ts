@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
+import { ReprocessStepFlowModalComponent } from '../../modal/step-flow/reprocess-step-flow-modal/reprocess-step-flow-modal.component';
 import { StepFlowInputOffcanvasComponent } from './step-flow-input-offcanvas.component';
 import { QuantityStepFlowModalComponent } from '../../modal/step-flow/quantity-step-flow-modal/quantity-step-flow-modal.component';
 import { ToastrService } from '../../../app/services/toast.service';
@@ -22,8 +23,9 @@ describe('Step flow quantities remain independent when editing linked checklists
   beforeEach(async () => {
     TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
       { provide: ToastrService, useValue: jasmine.createSpyObj('ToastrService', ['error', 'success', 'warning']) },
-      { provide: BackNavigationService, useValue: jasmine.createSpyObj('BackNavigationService', ['register', 'unregister']) },
+      { provide: BackNavigationService, useValue: jasmine.createSpyObj('BackNavigationService', ['register', 'unregister', 'runAfterOverlayClose']) },
     ] });
+    (TestBed.inject(BackNavigationService).runAfterOverlayClose as jasmine.Spy).and.callFake((action: () => void) => action());
     fixture = TestBed.createComponent(StepFlowInputOffcanvasComponent);
     fixture.componentRef.setInput('isAdmin', false); fixture.componentRef.setInput('steps', []);
     http = TestBed.inject(HttpTestingController); fixture.detectChanges();
@@ -173,6 +175,35 @@ describe('Step flow quantities remain independent when editing linked checklists
     await fixture.whenStable();
     expect(button.disabled).toBeFalse();
     expect(fixture.nativeElement.querySelector('.sof-custom-offcanvas.visible')).not.toBeNull();
+  });
+
+  it('confirms PCP reprocessing, keeps the form on failure and refreshes the queue after success', async () => {
+    fixture.componentInstance.open(1);
+    http.expectOne(request => request.url.endsWith('/step-flow/1')).flush({ ...order, currentStep: 'PCP', nextStep: 'Frete' });
+    http.expectOne(request => request.url.endsWith('/orders/1/equipment')).flush([checklist]);
+    await fixture.whenStable();
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('.buttons-container button') as NodeListOf<HTMLButtonElement>);
+    expect(buttons.slice(0, 3).map(button => button.textContent?.trim())).toEqual(['Voltar Etapa', 'Reprocessar', 'Cancelar']);
+    buttons[1].click(); await fixture.whenStable();
+    const modal = fixture.debugElement.query(By.directive(ReprocessStepFlowModalComponent)).componentInstance as ReprocessStepFlowModalComponent;
+    expect(modal.visible).toBeTrue();
+    http.expectNone(request => request.method === 'PUT');
+    modal.close.emit(); await fixture.whenStable();
+    expect(modal.visible).toBeFalse();
+    http.expectNone(request => request.method === 'PUT');
+    buttons[1].click(); await fixture.whenStable();
+    modal.confirm.emit(); modal.confirm.emit(); await fixture.whenStable();
+    http.expectOne(request => request.method === 'PUT' && request.url.endsWith('/step-flow/1/reprocess'))
+      .flush({ message: 'ERP indisponível' }, { status: 503, statusText: 'Service Unavailable' });
+    await fixture.whenStable();
+    expect(modal.visible).toBeTrue(); expect(modal.processing).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.sof-custom-offcanvas.visible')).not.toBeNull();
+    const reload = jasmine.createSpy('reload'); fixture.componentInstance.reloadOrders.subscribe(reload);
+    modal.confirm.emit();
+    http.expectOne(request => request.url.endsWith('/step-flow/1/reprocess')).flush({ ...order, items: [{ ...order.items[0], producedQuantity: 0 }] });
+    await fixture.whenStable();
+    expect(reload).toHaveBeenCalledOnceWith();
+    expect(fixture.nativeElement.querySelector('.sof-custom-offcanvas.visible')).toBeNull();
   });
 
 });

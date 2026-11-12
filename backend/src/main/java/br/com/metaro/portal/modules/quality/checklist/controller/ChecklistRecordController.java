@@ -20,6 +20,22 @@ import java.util.List;
 public class ChecklistRecordController {
     private final ChecklistRecordService service;
     private final ChecklistSerialPlateService serialPlateService;
+    private final br.com.metaro.portal.modules.quality.checklist.service.ChecklistListingService listing;
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
+    @GetMapping("/table")
+    public ResponseEntity<Page<ChecklistTableRowDto>> table(Pageable pageable,
+            @RequestParam(required = false) Long categoryId, @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "") String status, @RequestParam(defaultValue = "false") boolean consultation,
+            @RequestParam(defaultValue = "false") boolean actionable) {
+        return ResponseEntity.ok(listing.list(pageable, categoryId, search, status, consultation, actionable));
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
+    @GetMapping("/counts")
+    public ResponseEntity<java.util.Map<String, Long>> counts(@RequestParam(defaultValue = "false") boolean consultation) {
+        return ResponseEntity.ok(listing.counts(consultation));
+    }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
     @GetMapping("/available-serials")

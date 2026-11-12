@@ -62,6 +62,14 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void requiresAnExplicitItemWhenCreatingPlatesWithAnOrder() {
+        var input = draft(1); input.setOrder("900");
+        assertThatThrownBy(() -> service.createPlates(input)).hasMessageContaining("Selecione um item do pedido");
+        input.setOrder(" ");
+        assertThat(service.createPlates(input)).hasSize(1);
+    }
+
+    @Test
     void onlyPortalAdministratorCanCreateWithoutOfAndOperatorsCanLaterUpdateThosePlates() {
         User admin = users.findAll().getFirst();
         Role adminRole = new Role(); adminRole.setId(-1L); adminRole.setAuthority("ROLE_ADMIN");

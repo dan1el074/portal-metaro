@@ -1,0 +1,15 @@
+<c-modal modalBackNavigation alignment="center" backdrop="static" [keyboard]="!processing" [visible]="visible" (visibleChange)="!$event && onClose()">
+  <c-modal-header>
+    <h5 cModalTitle>Reprocessar pedido #{{ orderNumber }}</h5>
+    <button cButtonClose type="button" aria-label="Fechar" [disabled]="processing" (click)="onClose()"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <p>Esta ação consultará novamente o pedido no ERP e atualizará as informações recebidas dessa integração.</p>
+    <p><strong>A contagem de itens a produzir será zerada.</strong> O pedido retornará à etapa <strong>Montagem Final</strong>, onde as quantidades deverão ser reconfiguradas.</p>
+    <p class="mb-0">Alterações ainda não salvas serão descartadas. Deseja continuar?</p>
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton color="secondary" variant="outline" type="button" [disabled]="processing" (click)="onClose()">Cancelar</button>
+    <button cButton color="primary" type="button" [disabled]="processing" [attr.aria-busy]="processing" (click)="confirm.emit()">{{ processing ? 'Reprocessando...' : 'Reprocessar' }}</button>
+  </c-modal-footer>
+</c-modal>

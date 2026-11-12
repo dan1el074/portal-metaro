@@ -727,6 +727,7 @@ public class ChecklistRecordService {
     }
 
     private void addAudit(ChecklistRecord record, User actor, String action, String details) {
+        record.refreshListingTitle();
         ChecklistAudit audit = new ChecklistAudit();
         audit.setRecord(record);
         audit.setActor(actor);

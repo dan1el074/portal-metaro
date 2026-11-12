@@ -431,6 +431,10 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public async create(): Promise<void> {
     if (!this.canEdit() || this.busy) return;
+    if (this.createDraft.order.trim() && !this.createDraft.orderItem) {
+      this.error = 'Selecione um item do pedido ou limpe o campo Nº Pedido para continuar.';
+      return;
+    }
     if (!Number.isInteger(this.createDraft.quantity) || this.createDraft.quantity < 1 || this.createDraft.quantity > 500 || (!this.admin && !this.createDraft.of.trim())) {
       this.error = this.admin ? 'Informe uma quantidade inteira entre 1 e 500.' : 'Informe a OF e uma quantidade inteira entre 1 e 500.';
       return;

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ButtonDirective, CardBodyComponent, CardComponent, ContainerComponent, DropdownComponent, DropdownItemDirective, DropdownItemPlainDirective, DropdownMenuDirective, DropdownToggleDirective } from '@coreui/angular';
 import { SmartPaginationComponent } from '@coreui/angular-pro';
@@ -13,7 +13,8 @@ import { ChecklistEquipmentModalComponent } from '../../../../components/modal/c
 import { ChecklistAccessModalComponent } from '../../../../components/modal/checklist/checklist-access-modal/checklist-access-modal.component';
 import { ChecklistCatalogModalComponent } from '../../../../components/modal/checklist/checklist-catalog-modal/checklist-catalog-modal.component';
 import { ChecklistNewRecordModalComponent } from '../../../../components/modal/checklist/checklist-new-record-modal/checklist-new-record-modal.component';
-import { ChecklistRecordCreate } from '../../../services/checklist.service';
+import { forkJoin, Subject, Subscription, debounceTime } from 'rxjs';
+import { ChecklistRecordCreate, ChecklistService } from '../../../services/checklist.service';
 import { ToastrService } from '../../../services/toast.service';
 
 type ChecklistView = 'admin' | 'operator' | 'consultation';
@@ -44,7 +45,7 @@ type ChecklistView = 'admin' | 'operator' | 'consultation';
   styleUrl: './checklist.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChecklistComponent implements OnInit {
+export class ChecklistComponent implements OnInit, OnDestroy {
   @ViewChild('categories') private categories!: ChecklistCategoryModalComponent;
   @ViewChild('equipmentModal') private equipmentModal!: ChecklistEquipmentModalComponent;
   @ViewChild('accessModal') private accessModal!: ChecklistAccessModalComponent;
@@ -55,6 +56,20 @@ export class ChecklistComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly backNavigation = inject(BackNavigationService);
   private readonly toaster = inject(ToastrService);
+  private readonly api = inject(ChecklistService);
+  protected readonly pageRows = signal<ChecklistTableRow[]>([]);
+  protected readonly todoRows = signal<Array<ChecklistTableRow & { order?: string }>>([]);
+  protected readonly pages = signal(0);
+  protected readonly loadingRows = signal(false);
+  protected readonly counts = signal<Record<string, number>>({});
+  protected todoPage = 1;
+  protected readonly todoPages = signal(0);
+  protected readonly todoTotal = signal(0);
+  private request?: Subscription;
+  private todoRequest?: Subscription;
+  private readonly searches = new Subject<void>();
+  private readonly searchSubscription = this.searches.pipe(debounceTime(300)).subscribe(() => this.refreshRows());
+
   private categoryHistoryRegistered = false;
   protected currentView: ChecklistView = 'consultation';
   protected readonly views: Array<{ value: ChecklistView; label: string }> = [
@@ -70,22 +85,117 @@ export class ChecklistComponent implements OnInit {
   protected itemsPerPage = 10;
   protected readonly reloading = signal(false);
 
+  public ngOnDestroy(): void {
+    this.request?.unsubscribe();
+    this.todoRequest?.unsubscribe();
+    this.searchSubscription.unsubscribe();
+    this.searches.complete();
+  }
+
+  protected refreshRows(): void {
+    this.request?.unsubscribe();
+    this.loadingRows.set(true);
+
+    this.request = forkJoin({
+      rows: this.api.listRecordRows({ page: this.page - 1, size: this.itemsPerPage, categoryId: this.activeCategoryId,
+        search: this.search, status: this.status, sort: `${this.sorter.column || 'updated'},${this.sorter.state || 'desc'}`,
+        consultation: this.currentView === 'consultation' }),
+      counts: this.api.recordCounts(this.currentView === 'consultation'),
+    }).subscribe(
+      {
+        next: result => {
+          this.pageRows.set(result.rows.content);
+          this.pages.set(result.rows.totalPages);
+          this.counts.set(result.counts);
+          this.loadingRows.set(false);
+          this.store.warning.set('');
+
+          if (this.page > Math.max(1, result.rows.totalPages)) {
+            this.page = Math.max(1, result.rows.totalPages);
+            this.refreshRows();
+          }
+        },
+        error: () => {
+          this.loadingRows.set(false);
+          this.pageRows.set([]);
+          this.store.warning.set('Não foi possível carregar os checklists do servidor. Tente novamente.');
+        }
+      }
+    );
+  }
+
+  protected changeSearch(value: string): void {
+    this.search = value; this.page = 1; this.request?.unsubscribe(); this.searches.next();
+  }
+
+  protected changeStatus(value: string): void {
+    this.status = value; this.page = 1; this.refreshRows();
+  }
+
+  protected changeSort(value: any): void {
+    this.sorter = value; this.page = 1; this.refreshRows();
+  }
+
+  protected changeSize(value: number): void {
+    this.itemsPerPage = value; this.page = 1; this.refreshRows();
+  }
+
+  protected changePage(value: number): void {
+    if (value !== this.page) { this.page = value; this.refreshRows(); }
+  }
+
+  protected loadTodos(page = 1): void {
+    this.todoPage = page; this.todoRequest?.unsubscribe();
+
+    if (this.currentView !== 'operator') return;
+
+    this.todoRequest = this.api.listRecordRows({ page: page - 1, size: 10, actionable: true }).subscribe({
+      next: result => { this.todoRows.set(result.content); this.todoPages.set(result.totalPages); this.todoTotal.set(result.totalElements); },
+      error: () => { this.todoRows.set([]); this.store.warning.set('Não foi possível carregar os checklists do servidor. Tente novamente.'); },
+    });
+  }
+
+  protected async openNewRecord(): Promise<void> {
+    try {
+      await this.store.load(true); this.newRecordModal.open();
+    } catch {
+      this.toaster.warning('Não foi possível carregar os dados para criar o checklist.');
+    }
+  }
+
   protected async reload(): Promise<void> {
     if (this.reloading()) return;
+
     this.reloading.set(true);
-    try { await this.store.load(true); }
-    catch { /* The alert keeps the server error and allows another attempt. */ }
-    finally { this.reloading.set(false); }
+
+    try {
+      await this.store.load(true, true);
+      this.refreshRows();
+      this.loadTodos();
+    } catch {
+      /* The alert keeps the server error and allows another attempt. */
+    } finally {
+      this.reloading.set(false);
+    }
   }
 
   public async ngOnInit(): Promise<void> {
     this.currentView = this.store.admin ? 'admin' : this.store.operator ? 'operator' : 'consultation';
-    await this.store.load().catch(() => undefined);
+
+    try {
+      await this.store.load(false, true);
+      this.refreshRows();
+      this.loadTodos();
+    } catch {
+      /* The reload action retries configuration and records together. */
+    }
   }
 
   protected setView(view: ChecklistView): void {
     this.currentView = view;
     this.page = 1;
+    this.refreshRows();
+    this.loadTodos();
   }
 
   protected viewLabel(): string {
@@ -95,95 +205,42 @@ export class ChecklistComponent implements OnInit {
   protected selectCategory(id: string): void {
     if (id && !this.categoryHistoryRegistered) {
       this.categoryHistoryRegistered = true;
+
       this.backNavigation.register(() => {
         this.categoryHistoryRegistered = false;
         this.categoryId = '';
         this.page = 1;
+        this.refreshRows();
       });
     } else if (!id && this.categoryHistoryRegistered) {
       this.categoryHistoryRegistered = false;
       this.categoryId = '';
       this.page = 1;
       this.backNavigation.unregister();
+      this.refreshRows();
+
       return;
     }
 
     this.categoryId = id;
     this.page = 1;
+    this.refreshRows();
   }
 
   protected get activeCategoryId(): string {
     const categories = this.store.state().categories;
-    return categories.some(category => category.id === this.categoryId)
-      ? this.categoryId : categories[0]?.id ?? '';
-  }
-
-  protected get todos() {
-    return this.store.state().records.filter((record) => {
-      return this.store.editable(record);
-    });
-  }
-
-  protected get rows(): ChecklistTableRow[] {
-    const term = this.search.trim().toLocaleLowerCase();
-    const rows = this.store
-      .state()
-      .records.filter((record) => this.store.visible(record))
-      .filter((record) => this.currentView !== 'consultation' || record.status !== 'Rascunho')
-      .map((record) => {
-        const snapshot = this.store.snapshot(record);
-        const flow = this.store.flow(record);
-        return {
-          id: record.id,
-          number: this.store.state().records.findIndex((item) => item.id === record.id) + 1,
-          title: this.store.title(record),
-          category: snapshot.category.name,
-          categoryId: snapshot.category.id,
-          model: snapshot.template.name,
-          equipment: snapshot.equipment,
-          equipmentId: snapshot.template.equipmentId,
-          serial: flow.serial,
-          status: record.status,
-          updated: record.updated,
-        };
-      })
-      .filter((row) => {
-        return (row.categoryId === this.activeCategoryId) &&
-        (!this.status || row.status === this.status) &&
-        (!term || `${row.title} ${row.model} ${row.serial}`.toLocaleLowerCase().includes(term));
-      });
-
-    const column = this.sorter.column as keyof ChecklistTableRow | undefined;
-
-    if (column) {
-      return rows.sort((a, b) => {
-        return String(a[column]).localeCompare(String(b[column])) * (this.sorter.state === 'asc' ? 1 : -1);
-      });
-    }
-    return rows;
-  }
-
-  protected get pageRows(): ChecklistTableRow[] {
-    return this.rows.slice(
-      (this.page - 1) * this.itemsPerPage,
-      this.page * this.itemsPerPage,
-    );
-  }
-
-  protected get pages(): number {
-    return Math.ceil(this.rows.length / this.itemsPerPage);
+    return categories.some(category => category.id === this.categoryId) ? this.categoryId : categories[0]?.id ?? '';
   }
 
   protected count(categoryId: string): number {
-    return this.store.state().records.filter((record) => {
-      return this.store.visible(record) && this.store.snapshot(record).category.id === categoryId
-    }).length;
+    return this.counts()[categoryId] ?? 0;
   }
 
   protected clearFilters(): void {
     this.search = '';
     this.status = '';
     this.page = 1;
+    this.refreshRows();
   }
 
   protected openRecord(id: string): void {

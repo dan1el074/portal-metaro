@@ -1,5 +1,7 @@
 package br.com.metaro.portal.config.ratelimit;
 
+import br.com.metaro.portal.config.ratelimit.dto.RateLimitDecisionDto;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -75,17 +77,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
         long now = nanoTime.getAsLong();
         String clientId = resolveClientId(request);
         TokenBucket bucket = buckets.get(clientId, ignored -> new TokenBucket(properties.getCapacity(), now));
-        Decision decision = bucket.consume(now, properties.getCapacity(), properties.getRefillPeriod().toNanos());
+        RateLimitDecisionDto decision = bucket.consume(now, properties.getCapacity(), properties.getRefillPeriod().toNanos());
 
         response.setHeader(LIMIT_HEADER, Long.toString(properties.getCapacity()));
-        response.setHeader(REMAINING_HEADER, Long.toString(decision.remainingTokens()));
+        response.setHeader(REMAINING_HEADER, Long.toString(decision.getRemainingTokens()));
 
-        if (decision.allowed()) {
+        if (decision.isAllowed()) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        long retryAfterSeconds = Math.max(1, (long) Math.ceil(decision.retryAfterNanos() / 1_000_000_000d));
+        long retryAfterSeconds = Math.max(1, (long) Math.ceil(decision.getRetryAfterNanos() / 1_000_000_000d));
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
@@ -114,32 +116,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return "user:" + authentication.getName();
         }
         return "ip:" + request.getRemoteAddr();
-    }
-
-    private static final class TokenBucket {
-        private double tokens;
-        private long lastRefillNanos;
-
-        private TokenBucket(long capacity, long now) {
-            this.tokens = capacity;
-            this.lastRefillNanos = now;
-        }
-
-        private synchronized Decision consume(long now, long capacity, long refillPeriodNanos) {
-            long elapsed = Math.max(0, now - lastRefillNanos);
-            tokens = Math.min(capacity, tokens + ((double) elapsed * capacity / refillPeriodNanos));
-            lastRefillNanos = now;
-
-            if (tokens >= 1) {
-                tokens -= 1;
-                return new Decision(true, (long) Math.floor(tokens), 0);
-            }
-
-            long retryAfterNanos = (long) Math.ceil((1 - tokens) * refillPeriodNanos / capacity);
-            return new Decision(false, 0, retryAfterNanos);
-        }
-    }
-
-    private record Decision(boolean allowed, long remainingTokens, long retryAfterNanos) {
     }
 }

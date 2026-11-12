@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class StepFlowServiceTests {
@@ -375,6 +376,43 @@ class StepFlowServiceTests {
                     .isInstanceOf(UnprocessableEntityException.class);
         }
         assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+    }
+
+    @Test
+    void qualityOperatorsCanEditFinalAssemblyButCannotEditPcp() throws Exception {
+        UserService users = mock(UserService.class);
+        when(users.authenticate()).thenReturn(operatorFrom("Qualidade"));
+        StepFlowService service = serviceWith(mock(OrderRepository.class), users);
+        Order order = orderWithAllSteps(Instant.now());
+        OrderInputDto input = new OrderInputDto(); input.setComment("Conferido pela Qualidade.");
+        ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order);
+        assertThat(order.getSteps().getFirst().getMessages()).hasSize(1);
+        order.setCurrentStep(StepType.PCP);
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void reprocessingRequiresPcpDepartmentAndAnOpenPcpStage() {
+        UserService users = mock(UserService.class);
+        OrderRepository repository = mock(OrderRepository.class);
+        StepFlowService service = serviceWith(repository, users);
+        StepFlowErpOrderService erp = mock(StepFlowErpOrderService.class);
+        ReflectionTestUtils.setField(service, "erpOrders", erp);
+        Order order = orderWithAllSteps(Instant.now());
+        order.setCurrentStep(StepType.PCP);
+        when(repository.findLockedById(1L)).thenReturn(Optional.of(order));
+        when(users.authenticate()).thenReturn(operatorFrom("Qualidade"));
+        assertThatThrownBy(() -> service.reprocess(1L)).isInstanceOf(ForbiddenException.class);
+        when(users.authenticate()).thenReturn(operatorFrom("PCP"));
+        for (OrderStatus status : List.of(OrderStatus.CANCELLED, OrderStatus.COMPLETED)) {
+            order.setStatus(status);
+            assertThatThrownBy(() -> service.reprocess(1L)).isInstanceOf(UnprocessableEntityException.class);
+        }
+        order.setStatus(OrderStatus.IN_PROGRESS); order.setCurrentStep(StepType.FINAL_ASSEMBLY);
+        User admin = new User(); Role role = new Role(); role.setAuthority("ROLE_ADMIN"); admin.addRole(role);
+        when(users.authenticate()).thenReturn(admin);
+        assertThatThrownBy(() -> service.reprocess(1L)).isInstanceOf(UnprocessableEntityException.class);
+        verifyNoInteractions(erp);
     }
 
     private User operatorFrom(String department) {
