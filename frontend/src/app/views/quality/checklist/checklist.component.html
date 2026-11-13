@@ -41,7 +41,7 @@
   @if (currentView === 'operator') {
     <c-card class="todo-card"><c-card-body><div class="section-heading"><div><h2>Lista de afazeres <span>{{ todoTotal() }}</span></h2><p>Checklists disponíveis nas suas categorias.</p></div></div>
       <div class="todo-grid">@for (record of todoRows(); track record.id) { <button type="button" (click)="openRecord(record.id)"><strong>{{ record.category }}</strong><span>{{ record.title }}</span><small>Pedido: {{ record.order || '—' }} · Série: {{ record.serial || '—' }}</small><small>{{ record.status }} · {{ record.updated | date:'dd/MM/yyyy HH:mm':'-0300' }}</small></button> } @empty { <p class="empty-state">Nenhum checklist pendente.</p> }</div>
-    @if(todoPages() > 1) { <c-smart-pagination [activePage]="todoPage" [pages]="todoPages()" (activePageChange)="loadTodos($event)" /> }</c-card-body></c-card>
+    @if(todoPages() > 1) { <div class="todo-pagination"><c-smart-pagination [activePage]="todoPage" [pages]="todoPages()" (activePageChange)="loadTodos($event)" /></div> }</c-card-body></c-card>
   }
 
   <c-card class="records-card">
@@ -51,7 +51,7 @@
     </nav>
     <div class="content-panel">
       <app-checklist-table [data]="pageRows()" [loading]="loadingRows()" [perPage]="itemsPerPage" [searchValue]="search" [selectedStatus]="status" [sorterValue]="sorter" (openRecord)="openRecord($event)" (filterChange)="changeSearch($event)" (statusChange)="changeStatus($event)" (sorterChange)="changeSort($event)" (itemsPerPageChange)="changeSize($event)" (clearAll)="clearFilters()" />
-      @if (pages() > 1) { <div class="pagination-wrap"><c-smart-pagination [activePage]="page" [pages]="pages()" (activePageChange)="changePage($event)" /></div> }
+      @if (pages() > 1) { <c-smart-pagination class="step-flow-table" [activePage]="page" [pages]="pages()" (activePageChange)="changePage($event)" /> }
     </div>
   </c-card>
 </c-container>
