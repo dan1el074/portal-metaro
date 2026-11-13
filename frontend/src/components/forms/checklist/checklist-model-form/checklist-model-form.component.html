@@ -109,8 +109,8 @@
                 </div>
               </div>
               <div class="row-actions">
-                <button cButton class="icon-action-button" color="light" size="sm" (click)="move(section.questions, questionIndex, -1)" cTooltip="Mover item para cima" cTooltipPlacement="top" aria-label="Mover item para cima"><app-checklist-icon name="chevron-up" /></button>
-                <button cButton class="icon-action-button" color="light" size="sm" (click)="move(section.questions, questionIndex, 1)" cTooltip="Mover item para baixo" cTooltipPlacement="top" aria-label="Mover item para baixo"><app-checklist-icon name="chevron-down" /></button>
+                <button cButton class="icon-action-button item-order-button" color="light" size="sm" (click)="move(section.questions, questionIndex, -1)" cTooltip="Mover item para cima" cTooltipPlacement="top" aria-label="Mover item para cima"><app-checklist-icon name="chevron-up" /></button>
+                <button cButton class="icon-action-button item-order-button" color="light" size="sm" (click)="move(section.questions, questionIndex, 1)" cTooltip="Mover item para baixo" cTooltipPlacement="top" aria-label="Mover item para baixo"><app-checklist-icon name="chevron-down" /></button>
                 <button cButton class="icon-action-button delete-action-button" color="danger" variant="ghost" size="sm" (click)="removeQuestion(sectionIndex, questionIndex)" cTooltip="Excluir item" cTooltipPlacement="top" aria-label="Excluir item"><app-checklist-icon name="trash" /></button>
               </div>
             </div>
