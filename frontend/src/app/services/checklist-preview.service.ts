@@ -107,7 +107,7 @@ export class ChecklistPreviewService {
       if (problem) log.details = `Não conformidade: ${problem.item} — ${problem.code || problem.defect}.`;
       log.id = String(log.id);
       log.displayDetails = ['SERIAL_PLATE_UPDATED', 'ORDER_UPDATED', 'SERIAL_UPDATED', 'REOPENED', 'CANCELLED',
-        'DELEGATED', 'TREATED', 'PROBLEM_TREATED', 'TREATMENT_REVERSED', 'CATEGORY_SKIPPED', 'CHECKLIST_SKIPPED', 'SERIAL_WAIVED']
+        'DELEGATED', 'TREATED', 'PROBLEM_TREATED', 'TREATMENT_REVERSED', 'CATEGORY_SKIPPED', 'CHECKLIST_SKIPPED', 'SERIAL_WAIVED', 'FINISHED_WITH_OPEN_MEMORANDOS']
         .includes(log.action) ? log.details : undefined;
       if (log.action === 'SERIAL_PLATE_UPDATED') {
         const orderChange = log.details?.match(/(?:^|[.;]\s*)Pedido: ([^;]+) → ([^;]+)/);
@@ -224,7 +224,7 @@ export class ChecklistPreviewService {
     return (
       r.status !== 'Rascunho' ||
       this.admin ||
-      (this.operator && r.creatorId === this.user.id)
+      (this.operator && (r.ownerId ?? r.creatorId) === this.user.id)
     );
   }
 
@@ -427,7 +427,7 @@ export class ChecklistPreviewService {
     return record;
   }
 
-  async saveRecord(record: Checklist, flow: Flow, finish: boolean): Promise<Checklist> {
+  async saveRecord(record: Checklist, flow: Flow, finish: boolean, confirmOpenMemorandos = false): Promise<Checklist> {
     const old = this.state().records.find((item) => item.id === record.id);
     const snapshot = flow.plan.find(
       (s) => s.template.id === record.templateId,
@@ -463,7 +463,7 @@ export class ChecklistPreviewService {
     } finally {
       this.uploadState.set(null);
     }
-    const saved = this.normalizeRecord(await firstValueFrom(this.api.saveRecord({ ...target, answers: record.answers, fields: record.fields, departments: record.departments }, finish)));
+    const saved = this.normalizeRecord(await firstValueFrom(this.api.saveRecord({ ...target, answers: record.answers, fields: record.fields, departments: record.departments }, finish, confirmOpenMemorandos)));
     const savedFlow = this.normalizeFlow(await firstValueFrom(this.api.getFlow(saved.id)));
     this.state.update((data) => ({
       ...data,
@@ -530,7 +530,7 @@ export class ChecklistPreviewService {
     await firstValueFrom(this.api.completeVideo(recordId, info.evidence.id));
   }
   private auditAction(action: string): string {
-    return ({ SERIAL_WAIVED: 'Série dispensada pelo administrador', SERIAL_PLATE_UPDATED: 'Dados atualizados pelo PCP', CREATED: 'Checklist iniciado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Checklist finalizado', FINISHED_INPUT: 'Checklist finalizado', CLAIMED: 'Assumiu o preenchimento do checklist', DELEGATED: 'Delegou o checklist para outro operador', REOPENED: 'Checklist reaberto para edição', CANCELLED: 'Cancelou o fluxo de checklist', TREATED: 'Tratado', PROBLEM_TREATED: 'Tratou uma não conformidade (NOK)', TREATMENT_REVERSED: 'Reverteu o tratamento de uma não conformidade', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist justificado', GENERATED: 'Checklist gerado automaticamente pelo fluxo' } as Record<string, string>)[action] ?? action;
+    return ({ FINISHED_WITH_OPEN_MEMORANDOS: 'Confirmou a finalização com memorandos não aprovados', SERIAL_WAIVED: 'Série dispensada pelo administrador', SERIAL_PLATE_UPDATED: 'Dados atualizados pelo PCP', CREATED: 'Checklist iniciado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Checklist finalizado', FINISHED_INPUT: 'Checklist finalizado', CLAIMED: 'Assumiu o preenchimento do checklist', DELEGATED: 'Delegou o checklist para outro operador', REOPENED: 'Checklist reaberto para edição', CANCELLED: 'Cancelou o fluxo de checklist', TREATED: 'Tratado', PROBLEM_TREATED: 'Tratou uma não conformidade (NOK)', TREATMENT_REVERSED: 'Reverteu o tratamento de uma não conformidade', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist justificado', GENERATED: 'Checklist gerado automaticamente pelo fluxo' } as Record<string, string>)[action] ?? action;
   }
   private nextSnapshot(flow: Flow, templateId: string) {
     let index = flow.plan.findIndex((s) => s.template.id === templateId) + 1;

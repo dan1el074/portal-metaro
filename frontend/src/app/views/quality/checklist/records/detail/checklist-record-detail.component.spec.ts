@@ -48,7 +48,7 @@ describe('Checklist detail loading, history and deletion', () => {
       visible: () => true, editable: () => false, title: (record: any) => 'Checklist ' + record.id,
       clientNokHistoryEnabled: () => false, deleteDraft: jasmine.createSpy(),
     };
-    api = { listLinkedStepFlows: jasmine.createSpy().and.returnValue(of([
+    api = { listRelatedMemorandos: jasmine.createSpy().and.returnValue(of([])), listLinkedStepFlows: jasmine.createSpy().and.returnValue(of([
       { id: 10, order: '900', status: 'Concluído', currentStep: 'Expedição', linked: false },
       { id: 11, order: '901', status: 'Andamento', currentStep: 'PCP', linked: true },
     ])) };
@@ -72,6 +72,32 @@ describe('Checklist detail loading, history and deletion', () => {
     fixture.detectChanges();
   }
 
+
+  it('shows memorandum links even when there are no linked step flows', async () => {
+    api.listLinkedStepFlows.and.returnValue(of([]));
+    api.listRelatedMemorandos.and.returnValue(of([{ id: 261, number: 406, title: 'Componente elétrico', createAt: '2026-11-16T12:00:00Z', status: 'PUBLISH' }]));
+    params.next(convertToParamMap({ id: '2' })); await settle();
+    const link = fixture.nativeElement.querySelector('.memorando-alert a');
+    expect(link.getAttribute('href')).toBe('/general/memorando/261');
+    expect(link.textContent).toContain('406/2026');
+    expect(link.textContent).toContain('Componente elétrico');
+    expect(fixture.nativeElement.querySelector('.linked-step-flow-list')).toBeNull();
+  });
+
+  it('hides the memorandum card when no documents match', () => {
+    expect(fixture.nativeElement.querySelector('.memorando-alert')).toBeNull();
+  });
+
+  it('ignores stale memorandum responses after changing checklists', async () => {
+    const pending = new Subject<any[]>();
+    api.listRelatedMemorandos.and.returnValue(pending);
+    params.next(convertToParamMap({ id: '2' })); await settle();
+    api.listRelatedMemorandos.and.returnValue(of([]));
+    params.next(convertToParamMap({ id: '1' })); await settle();
+    pending.next([{ id: 261, number: 406, title: 'Outro checklist', status: 'PUBLISH' }]);
+    pending.complete(); await settle();
+    expect(fixture.nativeElement.querySelector('.memorando-alert')).toBeNull();
+  });
 
   it('shows current and past step flow links and the PCP audit details', () => {
     expect(fixture.nativeElement.querySelectorAll('.linked-step-flow-list a').length).toBe(2);

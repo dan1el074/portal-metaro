@@ -46,7 +46,7 @@ export class SerialPlatesDomainService {
     patch.order = patch.readyStock ? '' : patch.order?.trim();
     patch.of = patch.of?.trim();
 
-    if (!patch.order) patch.orderItem = '';
+    if (!patch.order) patch.orderItemCode = '';
     if (patch.readyStock) patch.client = '';
 
     return patch;
@@ -59,11 +59,11 @@ export class SerialPlatesDomainService {
       if (fields[key]) Object.assign(patch, { [key]: batch[key] ?? (key === 'readyStock' ? false : key === 'weight' ? null : '') });
     }
 
-    if (fields.order) patch.orderItem = batch.orderItem ?? '';
+    if (fields.order) patch.orderItemCode = batch.orderItemCode ?? '';
 
     if (patch.readyStock === true) {
       patch.order = '';
-      patch.orderItem = '';
+      patch.orderItemCode = '';
       patch.client = '';
     }
 

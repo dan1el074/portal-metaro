@@ -34,9 +34,11 @@ public class ChecklistSerialPlateService {
     private final ErpOrderQueryService erp;
 
     @Transactional(readOnly = true)
-    public List<ChecklistSerialOptionDto> listAvailable(String order, boolean readyStock) {
+    public List<ChecklistSerialOptionDto> listAvailable(String order, String item, boolean readyStock) {
         if (!readyStock && (order == null || !order.matches("[0-9]{1,15}"))) return List.of();
-        return plateRepository.findAvailableForChecklist(readyStock ? "" : canonicalOrder(order), readyStock).stream()
+        if (!readyStock && itemCode(item).isEmpty()) return List.of();
+        List<SerialPlate> plates = plateRepository.findAvailableForChecklist(readyStock ? "" : canonicalOrder(order), readyStock);
+        return plates.stream().filter(plate -> readyStock || matchesItem(plate, item))
                 .map(plate -> new ChecklistSerialOptionDto(plate.getSerial().toString(), plate.getDescription())).toList();
     }
 
@@ -57,6 +59,12 @@ public class ChecklistSerialPlateService {
         }
         if (!eligible(plate, flow.getOrderNumber(), readyStock)) {
             throw invalid("O número de série não está disponível para este pedido ou para Pronta Entrega.");
+        }
+        if (!readyStock && !matchesItem(plate, flow.getCommercialItem())) {
+            throw invalid("O número de série não pertence ao item selecionado do pedido.");
+        }
+        if (!readyStock) {
+            plate.setOrderItemCode(itemCode(flow.getCommercialItem()));
         }
         flow.setSerialPlateId(serial);
         flow.setSerialNumber(serial.toString());
@@ -88,7 +96,7 @@ public class ChecklistSerialPlateService {
         flow = flowRepository.findLockedById(flow.getId()).orElseThrow();
         String newOrder = plate.getReadyStock() ? "" : canonicalOrder(plate.getOrder());
         boolean orderChanged = !canonicalOrder(flow.getOrderNumber()).equals(newOrder);
-        if (!plate.getReadyStock() && (newOrder.isBlank() || plate.getOrderItem().isBlank() || plate.getClient().isBlank())) {
+        if (!plate.getReadyStock() && (newOrder.isBlank() || plate.getOrderItemCode().isBlank() || plate.getClient().isBlank())) {
             throw invalid("A série possui checklist vinculado. Informe pedido, cliente e item válidos ou marque Pronta Entrega.");
         }
         if (orderChanged && !bindingRepository.findByFlowId(flow.getId()).isEmpty()) {
@@ -148,6 +156,11 @@ public class ChecklistSerialPlateService {
     }
 
     private String resolveCommercialItem(ErpOrderDto order, SerialPlate plate, String label) {
+        if (!itemCode(plate.getOrderItemCode()).isEmpty()) {
+            var codedItem = order.getItems().stream()
+                    .filter(item -> itemCode(item.getCode()).equals(itemCode(plate.getOrderItemCode()))).findFirst();
+            if (codedItem.isPresent()) return codedItem.get().getCode() + " - " + codedItem.get().getDescription();
+        }
         var matches = order.getItems().stream().filter(item ->
                 label.equalsIgnoreCase(item.getCode() + " - " + item.getDescription())
                 || label.equalsIgnoreCase(item.getDescription() + " - " + plate.getDescription())
@@ -183,8 +196,19 @@ public class ChecklistSerialPlateService {
 
     private boolean eligible(SerialPlate plate, String order, boolean readyStock) {
         return readyStock ? plate.getReadyStock() : !plate.getReadyStock()
-                && !plate.getOrder().isBlank() && !plate.getOrderItem().isBlank() && !plate.getClient().isBlank()
+                && !plate.getOrder().isBlank() && !plate.getClient().isBlank()
                 && canonicalOrder(plate.getOrder()).equals(canonicalOrder(order));
+    }
+
+    private boolean matchesItem(SerialPlate plate, String item) {
+        String storedCode = itemCode(plate.getOrderItemCode());
+        return !storedCode.isEmpty() && storedCode.equals(itemCode(item));
+    }
+
+    private String itemCode(String value) {
+        if (value == null) return "";
+        String code = value.trim().split("\\s+-\\s*", 2)[0].trim().toUpperCase(Locale.ROOT);
+        return code.matches("[0-9]+") ? code.replaceFirst("^0+(?!$)", "") : code;
     }
 
     private String canonicalOrder(String value) {

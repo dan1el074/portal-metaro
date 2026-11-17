@@ -165,10 +165,10 @@
   }
 </div>
 <div class="page-actions">
-  <button cButton color="secondary" variant="outline" (click)="cancel.emit()">
-    Cancelar</button><button cButton color="secondary" (click)="saveRecord.emit(false)">
+  <button cButton color="secondary" variant="outline" [disabled]="saving" (click)="cancel.emit()">
+    Cancelar</button><button cButton color="secondary" [disabled]="saving" (click)="saveRecord.emit(false)">
     <app-checklist-icon name="save" /> Salvar rascunho</button><button cButton color="primary"
-    (click)="saveRecord.emit(true)">
+    [disabled]="saving" [attr.aria-busy]="saving" (click)="saveRecord.emit(true)">
     <app-checklist-icon name="circle-check" /> Finalizar
   </button>
 </div>

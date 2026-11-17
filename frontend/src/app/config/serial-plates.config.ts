@@ -2,7 +2,7 @@ import type { PlatePatch, PlateSettings } from '../interface/serial-plates.inter
 
 export const STATUSES = ['Criado', 'Programado', 'Recebido', 'Devolvido', 'Finalizado'] as const;
 export const FIELD_LABELS: Record<keyof PlatePatch, string> = {
-  of: 'OF', order: 'Nº Pedido', orderItem: 'Item do pedido', readyStock: 'Pronta Entrega (PE)', client: 'Cliente', description: 'Modelo', capacity: 'Capacidade',
+  of: 'OF', order: 'Nº Pedido', orderItemCode: 'Item do pedido', readyStock: 'Pronta Entrega (PE)', client: 'Cliente', description: 'Modelo', capacity: 'Capacidade',
   voltage: 'Voltagem', weight: 'kg/un', provider: 'Prestador de serviço', status: 'Status',
   notes: 'Observações', manufactured: 'Data de fabricação',
 };

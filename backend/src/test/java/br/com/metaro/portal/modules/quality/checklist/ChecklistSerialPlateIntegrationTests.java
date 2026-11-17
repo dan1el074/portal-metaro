@@ -160,7 +160,7 @@ class ChecklistSerialPlateIntegrationTests {
         SerialPlate plate = new SerialPlate(); plate.setSerial(serial); plate.setOf("OF-1");
         plate.setManufactured("2026-10"); plate.setUpdated(Instant.now()); plate.setDescription("Modelo A");
         plate.setReadyStock(pe);
-        if (!pe) { plate.setOrder("900"); plate.setOrderItem("original"); plate.setClient("Antigo"); }
+        if (!pe) { plate.setOrder("900"); plate.setOrderItemCode("MESA"); plate.setClient("Antigo"); }
         return plateRepository.saveAndFlush(plate);
     }
 
@@ -176,18 +176,99 @@ class ChecklistSerialPlateIntegrationTests {
     }
 
     @Test
-    void filtersOnlyByOrderAndReservesSeriesUntilCancellation() {
-        plate(900001, false); SerialPlate otherItem = plate(900002, false); otherItem.setOrderItem("different-item");
+    void filtersByOrderAndItemAndReservesSeriesUntilCancellation() {
+        plate(900001, false); SerialPlate otherItem = plate(900002, false); otherItem.setOrderItemCode("different-item");
         plate(900003, true); SerialPlate incomplete = plate(900004, false); incomplete.setClient("");
-        assertThat(serials.listAvailable("900", false)).extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900001", "900002");
-        assertThat(serials.listAvailable("", true)).extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900003");
+        assertThat(serials.listAvailable("900", "MESA", false)).extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900001");
+        assertThat(serials.listAvailable("", "", true)).extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900003");
         ChecklistRecordDto record = records.createRecord(input("900001", false));
-        assertThat(serials.listAvailable("900", false)).extracting(ChecklistSerialOptionDto::getSerial).doesNotContain("900001");
+        assertThat(serials.listAvailable("900", "MESA", false)).extracting(ChecklistSerialOptionDto::getSerial).doesNotContain("900001");
         ChecklistReasonDto reason = new ChecklistReasonDto(); reason.setReason("Cancelamento de teste");
         records.cancelFlow(record.getId(), reason);
         entityManager.flush();
-        assertThat(serials.listAvailable("900", false)).extracting(ChecklistSerialOptionDto::getSerial).contains("900001");
+        assertThat(serials.listAvailable("900", "MESA", false)).extracting(ChecklistSerialOptionDto::getSerial).contains("900001");
         records.createRecord(input("900001", false));
+    }
+
+    @Test
+    void requiresTheItemAndMatchesItsCodeInsteadOfItsDescriptionOrNumericPrefix() {
+        plate(900001, false).setOrderItemCode("0060310");
+        plate(900002, false).setOrderItemCode("6031");
+        plate(900003, false).setOrderItemCode("160310");
+        plate(900004, false).setOrder("901"); entityManager.flush();
+        assertThat(serials.listAvailable("900", "", false)).isEmpty();
+        assertThat(serials.listAvailable("900", "60310 - Descrição diferente", false))
+                .extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900001");
+    }
+
+    @Test
+    void usesCommercialCodesEvenWhenModelsAreIdentical() {
+        ErpOrderDto order = erpOrder(900, "Antigo");
+        order.addItem(new ErpOrderItemDto("OUTRO", "Outro equipamento", 0d, "UN", 1, 0));
+        when(erp.findProductionOrderByNumber(900, ErpSource.FOCCO)).thenReturn(Optional.of(order));
+        FoccoPlateLineDto first = plateLine("Mesa"); FoccoPlateLineDto second = plateLine("Outro equipamento"); second.setItemCode("OUTRO");
+        when(focco.findPlateOrder(900)).thenReturn(List.of(first, second));
+        var snapshots = new br.com.metaro.portal.modules.pcp.serialplates.service.SerialPlateErpService(focco).findOrder("900").getItems();
+        plate(900001, false).setOrderItemCode(snapshots.getFirst().getItemCode());
+        plate(900002, false).setOrderItemCode(snapshots.get(1).getItemCode()); entityManager.flush();
+        assertThat(serials.listAvailable("900", "MESA", false)).extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900001");
+        assertThat(serials.listAvailable("900", "OUTRO", false)).extracting(ChecklistSerialOptionDto::getSerial).containsExactly("900002");
+        records.createRecord(input("900001", false));
+    }
+
+    @Test
+    void usesTheExplicitCodeWhenMultipleCommercialItemsHaveTheSameDescription() {
+        ErpOrderDto order = erpOrder(900, "Antigo");
+        order.addItem(new ErpOrderItemDto("OUTRO", "Mesa", 0d, "UN", 1, 0));
+        when(erp.findProductionOrderByNumber(900, ErpSource.FOCCO)).thenReturn(Optional.of(order));
+        when(focco.findPlateOrder(900)).thenReturn(List.of(plateLine("Mesa")));
+        var snapshot = new br.com.metaro.portal.modules.pcp.serialplates.service.SerialPlateErpService(focco).findOrder("900").getItems().getFirst();
+        plate(900001, false).setOrderItemCode(snapshot.getItemCode()); entityManager.flush();
+        assertThat(serials.listAvailable("900", "MESA", false)).hasSize(1);
+        assertThat(serials.listAvailable("900", "OUTRO", false)).isEmpty();
+    }
+
+    @Test
+    void rejectsASeriesFromADifferentItemWhenCreatingTheChecklist() {
+        plate(900001, false).setOrderItemCode("OUTRO"); entityManager.flush();
+        assertThatThrownBy(() -> records.createRecord(input("900001", false)))
+                .hasMessageContaining("não pertence ao item selecionado");
+    }
+
+    private FoccoPlateLineDto plateLine(String description) {
+        FoccoPlateLineDto line = new FoccoPlateLineDto(); line.setItemCode("MESA"); line.setOrderNumber(900L); line.setClient("Antigo");
+        line.setDescription(description); line.setModel("Modelo A"); line.setVoltage("380V");
+        return line;
+    }
+
+    @Test
+    void returnsFiveSeriesForOrder765UsingTheCommercialCodeDespiteDifferentDescriptions() {
+        FoccoPlateLineDto line = plateLine("PA NIVELADORA DE DOCA AVANCADA (NDA)");
+        line.setOrderNumber(765L); line.setModel("NDA MG 202020 FIX \"B\"");
+        when(focco.findPlateOrder(765)).thenReturn(List.of(line));
+        for (long serial = 900001; serial <= 900005; serial++) {
+            SerialPlate plate = plate(serial, false); plate.setOrder("765"); plate.setOrderItemCode("60289");
+        }
+        line.setItemCode("60289"); entityManager.flush();
+        assertThat(serials.listAvailable("765", "60289", false)).extracting(ChecklistSerialOptionDto::getSerial)
+                .containsExactly("900001", "900002", "900003", "900004", "900005");
+        assertThat(plates.getPlate(900001L).getOrderItemCode()).isEqualTo("60289");
+        assertThat(serials.listAvailable("765", "60288", false)).isEmpty();
+        ErpOrderDto commercialOrder = new ErpOrderDto(765, "Antigo", "CNPJ", "", "Vendedor", null, null, "", 0d, 0d, 0d);
+        commercialOrder.addItem(new ErpOrderItemDto("60289", "NDA MG 202020 FIX \"B\"", 0d, "UN", 5, 0));
+        when(erp.findProductionOrderByNumber(765, ErpSource.FOCCO)).thenReturn(Optional.of(commercialOrder));
+        ChecklistRecordCreateDto input = input("900001", false); input.setOrder("765"); input.setItem("60289");
+        records.createRecord(input); entityManager.flush();
+        assertThat(plateRepository.findById(900001L).orElseThrow().getOrderItemCode()).isEqualTo("60289");
+    }
+
+    @Test
+    void usesThePersistedCodeWithoutLookingUpEquipmentDescriptionsAgain() {
+        SerialPlate plate = plate(900001, false); plate.setOrderItemCode("60289");
+        entityManager.flush();
+        assertThat(serials.listAvailable("900", "60289", false)).hasSize(1);
+        assertThat(serials.listAvailable("900", "60288", false)).isEmpty();
+        verify(focco, never()).findPlateOrder(anyLong());
     }
 
     @Test
@@ -195,7 +276,7 @@ class ChecklistSerialPlateIntegrationTests {
         plate(900001, true);
         ChecklistRecordDto record = records.createRecord(input("900001", true));
         records.deleteDraft(record.getId()); entityManager.flush();
-        assertThat(serials.listAvailable("", true)).extracting(ChecklistSerialOptionDto::getSerial).contains("900001");
+        assertThat(serials.listAvailable("", "", true)).extracting(ChecklistSerialOptionDto::getSerial).contains("900001");
     }
 
     @Test
@@ -402,15 +483,15 @@ class ChecklistSerialPlateIntegrationTests {
     }
 
     private SerialPlateMutationDto relocation(SerialPlate plate, boolean confirm) {
-        FoccoPlateLineDto line = new FoccoPlateLineDto(); line.setOrderNumber(901L); line.setClient("Novo");
+        FoccoPlateLineDto line = new FoccoPlateLineDto(); line.setItemCode("MESA"); line.setOrderNumber(901L); line.setClient("Novo");
         line.setDescription("Mesa"); line.setModel("Modelo B"); line.setVoltage("380V");
         when(focco.findPlateOrder(901L)).thenReturn(List.of(line));
         SerialPlatePatchDto patch = new SerialPlatePatchDto(); patch.setOrder("901");
         SerialPlateMutationDto dto = new SerialPlateMutationDto(); dto.setPatch(patch);
-        dto.setVersions(Map.of(plate.getSerial().toString(), plate.getVersion())); dto.setFields(List.of("order", "orderItem"));
+        dto.setVersions(Map.of(plate.getSerial().toString(), plate.getVersion())); dto.setFields(List.of("order", "orderItemCode"));
         dto.setConfirmRelocation(confirm);
-        // Match the public ERP item fingerprint, exactly as the browser does.
-        patch.setOrderItem(new br.com.metaro.portal.modules.pcp.serialplates.service.SerialPlateErpService(focco).findOrder("901").getItems().getFirst().getId());
+        // Use the ERP item code, exactly as the browser does.
+        patch.setOrderItemCode(new br.com.metaro.portal.modules.pcp.serialplates.service.SerialPlateErpService(focco).findOrder("901").getItems().getFirst().getItemCode());
         return dto;
     }
 
@@ -450,7 +531,7 @@ class ChecklistSerialPlateIntegrationTests {
         SerialPlate plate = plate(900001, false); ChecklistRecordDto record = finish(records.createRecord(input("900001", false)));
         Order order = bind(record, OrderStatus.IN_PROGRESS, StepType.FREIGHT);
         SerialPlateMutationDto dto = relocation(plate, false);
-        FoccoPlateLineDto line = new FoccoPlateLineDto(); line.setOrderNumber(900L); line.setClient("Antigo");
+        FoccoPlateLineDto line = new FoccoPlateLineDto(); line.setItemCode("MESA"); line.setOrderNumber(900L); line.setClient("Antigo");
         line.setDescription("Mesa"); line.setModel("Modelo B"); line.setVoltage("380V");
         when(focco.findPlateOrder(900L)).thenReturn(List.of(line)); dto.getPatch().setOrder("900");
         assertThat(plates.previewRelocation(dto)).isEmpty();
@@ -503,7 +584,7 @@ class ChecklistSerialPlateIntegrationTests {
                 }
             }
             assertThat(created).hasSize(1); assertThat(conflicts).isEqualTo(1);
-            assertThat(serials.listAvailable("", true)).extracting(ChecklistSerialOptionDto::getSerial).doesNotContain("900010");
+            assertThat(serials.listAvailable("", "", true)).extracting(ChecklistSerialOptionDto::getSerial).doesNotContain("900010");
         } finally {
             executor.shutdownNow();
             for (Long id : created) records.deleteDraft(id);
@@ -522,7 +603,7 @@ class ChecklistSerialPlateIntegrationTests {
         ChecklistRecordDto next = records.createRecord(dto);
         assertThat(next.getFlowId()).isEqualTo(previous.getFlowId());
         assertThat(records.getFlow(next.getFlowId()).getSerialPlateId()).isEqualTo(900001L);
-        assertThat(serials.listAvailable("", true)).isEmpty();
+        assertThat(serials.listAvailable("", "", true)).isEmpty();
     }
 
     private Order emptyOrder() {
@@ -715,13 +796,13 @@ class ChecklistSerialPlateIntegrationTests {
     }
 
     @Test
-    void ambiguousCommercialCodesDoNotPreventRelocatingSelectedPlateItem() {
+    void selectsTheCommercialItemByCodeEvenWhenDescriptionsAreEqual() {
         SerialPlate plate = plate(900001, false); ChecklistRecordDto record = finish(records.createRecord(input("900001", false)));
         bind(record, OrderStatus.IN_PROGRESS, StepType.FREIGHT);
         ErpOrderDto order = erpOrder(901, "Novo"); order.addItem(new ErpOrderItemDto("OUTRA", "Mesa", 0d, "UN", 2, 0));
         when(erp.findProductionOrderByNumber(901, ErpSource.FOCCO)).thenReturn(Optional.of(order));
         plates.updatePlates(relocation(plate, true)); entityManager.flush();
-        assertThat(records.getFlow(record.getFlowId()).getItem()).isEqualTo(new br.com.metaro.portal.modules.pcp.serialplates.service.SerialPlateErpService(focco).findOrder("901").getItems().getFirst().getLabel());
+        assertThat(records.getFlow(record.getFlowId()).getItem()).isEqualTo("MESA - Mesa");
         assertThat(bindings.findByFlowId(record.getFlowId())).isEmpty();
     }
 

@@ -8,9 +8,6 @@ import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityExceptio
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 @Service
@@ -29,17 +26,30 @@ public class SerialPlateErpService {
                 throw new FoccoIntegrationException("O FoccoERP retornou dados inconsistentes para o pedido.");
             }
             SerialPlateOrderItemDto item = new SerialPlateOrderItemDto();
+            item.setItemCode(text(line.getItemCode()));
+            if (item.getItemCode().isEmpty() || item.getItemCode().length() > 64) {
+                throw new FoccoIntegrationException("O FoccoERP não retornou um código de item válido para o pedido.");
+            }
             item.setDescription(text(line.getModel()));
             item.setOrderDescription(text(line.getDescription()));
             item.setLabel(text(line.getDescription()) + " — " + item.getDescription());
             item.setVoltage(text(line.getVoltage()));
             item.setCapacity(decimal(line.getCapacity(), "TON"));
             item.setWeight(decimal(line.getWeight(), "KG"));
-            // The export has no item code: identify the equipment snapshot, never its response position.
-            item.setId(fingerprint(Arrays.asList(text(line.getDescription()), item.getDescription(), item.getVoltage(), item.getCapacity(), item.getWeight()).stream().map(value -> Objects.toString(value, "")).map(value -> value.length() + ":" + value).collect(java.util.stream.Collectors.joining())));
-            items.putIfAbsent(item.getId(), item);
+            SerialPlateOrderItemDto previous = items.putIfAbsent(item.getItemCode(), item);
+            if (previous != null && !sameConfiguration(previous, item)) {
+                throw new FoccoIntegrationException("O FoccoERP retornou configurações diferentes para o mesmo código de item: " + item.getItemCode() + ".");
+            }
         }
         return new SerialPlateOrderDto(customer, new ArrayList<>(items.values()));
+    }
+
+    private boolean sameConfiguration(SerialPlateOrderItemDto first, SerialPlateOrderItemDto second) {
+        return Objects.equals(first.getDescription(), second.getDescription())
+                && Objects.equals(first.getOrderDescription(), second.getOrderDescription())
+                && Objects.equals(first.getVoltage(), second.getVoltage())
+                && Objects.equals(first.getCapacity(), second.getCapacity())
+                && Objects.equals(first.getWeight(), second.getWeight());
     }
 
     private BigDecimal decimal(String value, String unit) {
@@ -52,14 +62,6 @@ public class SerialPlateErpService {
             return result.stripTrailingZeros();
         } catch (NumberFormatException exception) {
             return null;
-        }
-    }
-
-    private String fingerprint(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
         }
     }
 

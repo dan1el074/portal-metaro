@@ -75,7 +75,8 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
 
     this.loadingSerials = true;
 
-    this.serialRequest = this.api.availableSerials(this.readyStock ? '' : this.order.trim(), this.readyStock).subscribe({
+    const itemCode = this.erpOrder?.items.find(option => this.formatItem(option) === this.item)?.code ?? '';
+    this.serialRequest = this.api.availableSerials(this.readyStock ? '' : this.order.trim(), this.readyStock, itemCode).subscribe({
       next: options => { this.availableSerials = options; this.loadingSerials = false; this.cdr.markForCheck(); },
       error: () => { this.serialError = 'Não foi possível consultar os números de série. Tente novamente.'; this.loadingSerials = false; this.cdr.markForCheck(); },
     });

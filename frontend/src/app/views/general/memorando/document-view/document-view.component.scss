@@ -420,10 +420,19 @@ svg {
   li { position: relative; display: flex; gap: 13px; padding: 0 0 16px; }
   li:last-child { padding-bottom: 0; }
   li > i { position: relative; z-index: 1; width: 9px; height: 9px; flex: 0 0 9px; margin-top: 4px; border-radius: 50%; background: var(--cui-primary); box-shadow: 0 0 0 3px var(--cui-body-bg); }
-  li > div { min-width: 0; }
+  li > div { flex: 1; min-width: 0; }
   span { color: var(--cui-secondary-color); font-size: 13px; }
   p { margin: 2px 0 0; color: var(--cui-body-color); font-size: 13px; overflow-wrap: anywhere; }
   p strong { color: var(--cui-medium-emphasis); font-weight: 600; }
+  .history-message {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+    white-space: pre-line;
+    line-height: 1.5;
+  }
   .empty-history { color: var(--cui-secondary-color); font-size: 13px; }
 }
 
@@ -607,5 +616,5 @@ svg {
   .print-history ol { margin: 14px 0 0; padding: 0; list-style: none; }
   .print-history li { padding: 8px 0; border-bottom: 1px solid #d8dbe0; break-inside: avoid; page-break-inside: avoid; }
   .print-history li > span { color: #5e6470; font-size: 9px; }
-  .print-history li p { margin: 2px 0 0; font-size: 10px; }
+  .print-history li p { margin: 2px 0 0; font-size: 10px; white-space: pre-line; overflow-wrap: anywhere; }
 }

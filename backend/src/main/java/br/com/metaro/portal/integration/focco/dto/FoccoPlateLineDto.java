@@ -9,6 +9,8 @@ import lombok.Setter;
 public class FoccoPlateLineDto {
     @JsonProperty("order_number")
     private Long orderNumber;
+    @JsonProperty("item_code")
+    private String itemCode;
     private String client;
     private String description;
     private String model;
