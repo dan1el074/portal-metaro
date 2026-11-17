@@ -9,6 +9,7 @@ import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityExceptio
 import br.com.metaro.portal.modules.quality.checklist.dto.*;
 import br.com.metaro.portal.modules.quality.checklist.entity.*;
 import br.com.metaro.portal.modules.quality.checklist.repository.*;
+import br.com.metaro.portal.modules.general.memorando.entity.MemorandoStatus;
 import br.com.metaro.portal.util.erp.ErpOrderQueryService;
 import br.com.metaro.portal.util.erp.ErpSource;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
@@ -41,6 +42,15 @@ public class ChecklistRecordService {
     private final ChecklistStepFlowService checklistStepFlowService;
     private final ChecklistEvidenceService checklistEvidenceService;
     private final ChecklistSerialPlateService serialPlateService;
+    private final ChecklistMemorandoService memorandoService;
+
+    @Transactional(readOnly = true)
+    public List<ChecklistMemorandoDto> listRelatedMemorandos(Long id) {
+        User user = userService.authenticate();
+        ChecklistRecord record = findRecord(id);
+        assertVisible(record, user);
+        return memorandoService.findRelated(record.getFlow(), user);
+    }
 
     @Transactional(readOnly = true)
     public Page<ChecklistRecordDto> listRecords(Pageable pageable) {
@@ -130,6 +140,13 @@ public class ChecklistRecordService {
         if (record.getFlow().isCancelled()) {
             throw new UnprocessableEntityException("Um fluxo de checklist cancelado não pode ser editado.");
         }
+        List<ChecklistMemorandoDto> openMemorandos = finish
+                ? memorandoService.findRelated(record.getFlow(), user).stream()
+                    .filter(memorando -> memorando.getStatus() != MemorandoStatus.APPROVED).toList()
+                : List.of();
+        if (!openMemorandos.isEmpty() && !input.isConfirmOpenMemorandos()) {
+            throw new UnprocessableEntityException("Existe ao menos um memorando aberto para esse item. Confirme a finalização para continuar. Essa ação será registrada.");
+        }
         Map<String, ChecklistAnswerDto> previousAnswers = readAnswers(record);
         Map<String, ChecklistAnswerDto> submittedAnswers = nonNull(input.getAnswers(), new HashMap<>());
         validateTreatmentIntegrity(previousAnswers, submittedAnswers);
@@ -150,6 +167,16 @@ public class ChecklistRecordService {
             }
             record.setStatus(hasUntreatedProblems(record) ? ChecklistStatus.PENDING : ChecklistStatus.FINISHED);
             addAudit(record, user, "FINISHED_INPUT", record.getStatus() == ChecklistStatus.PENDING ? "Checklist finalizado com pendências de tratamento de NOK." : "Checklist finalizado.");
+            if (!openMemorandos.isEmpty()) {
+                String references = openMemorandos.stream()
+                        .map(memorando -> "#" + memorando.getId()
+                                + (memorando.getNumber() == null ? " (rascunho)" : " (nº " + memorando.getNumber() + ")"))
+                        .collect(java.util.stream.Collectors.joining(", "));
+                addAudit(record, user, "FINISHED_WITH_OPEN_MEMORANDOS",
+                        "O usuário optou por continuar e finalizar o checklist mesmo com memorandos não aprovados para esse item. "
+                                + "Pedido: " + record.getFlow().getOrderNumber() + ". Item: " + record.getFlow().getCommercialItem()
+                                + ". Memorandos: " + references + ".");
+            }
         } else {
             addAudit(record, user, "SAVED", "Preenchimento do checklist salvo.");
         }
@@ -293,6 +320,7 @@ public class ChecklistRecordService {
     public void deleteDraft(Long id) throws java.io.IOException {
         User user = userService.authenticate();
         ChecklistRecord record = findRecord(id);
+        assertVisible(record, user);
         if (record.getStatus() != ChecklistStatus.DRAFT || !isAdministrator(user) && !record.getCreator().getId().equals(user.getId())) {
             throw new ForbiddenException("Somente o autor do rascunho ou um administrador de checklist pode excluí-lo.");
         }
@@ -743,7 +771,8 @@ public class ChecklistRecordService {
     }
 
     private void assertVisible(ChecklistRecord record, User user) {
-        if (record.getStatus() == ChecklistStatus.DRAFT && !isAdministrator(user) && !record.getCreator().getId().equals(user.getId())) {
+        if (record.getStatus() == ChecklistStatus.DRAFT && !isAdministrator(user)
+                && !(record.getOwner() == null ? record.getCreator() : record.getOwner()).getId().equals(user.getId())) {
             throw new ResourceNotFoundException();
         }
     }

@@ -17,6 +17,22 @@ describe('Checklist server context and audit normalization', () => {
   });
   afterEach(() => http.verify());
 
+  it('shows a delegated draft to its current owner instead of its original creator', () => {
+    const user = spyOn(TestBed.inject(UserService), 'getCurrentUser');
+    const record = { status: 'Rascunho', creatorId: 1, ownerId: 2 } as any;
+    user.and.returnValue({ id: 1, roles: [{ authority: 'ROLE_CHECKLIST_OPERATOR' }] } as any);
+    expect(store.visible(record)).toBeFalse();
+    user.and.returnValue({ id: 2, roles: [{ authority: 'ROLE_CHECKLIST_OPERATOR' }] } as any);
+    expect(store.visible(record)).toBeTrue();
+    user.and.returnValue({ id: 3, roles: [{ authority: 'ROLE_CHECKLIST_OPERATOR' }] } as any);
+    expect(store.visible(record)).toBeFalse();
+    user.and.returnValue({ id: 3, roles: [{ authority: 'ROLE_CHECKLIST_ADMIN' }] } as any);
+    expect(store.visible(record)).toBeTrue();
+    record.ownerId = null;
+    user.and.returnValue({ id: 1, roles: [{ authority: 'ROLE_CHECKLIST_OPERATOR' }] } as any);
+    expect(store.visible(record)).toBeTrue();
+  });
+
   it('loads configuration without all records and waits for full context when navigating during that request', async () => {
     const configuration = store.load(false, true);
     const fullContext = store.load();
@@ -45,6 +61,13 @@ describe('Checklist server context and audit normalization', () => {
     // More than one context can request the list concurrently.
     for (const request of listing.slice(0, -1)) request.flush({ content: [] });
   }
+
+  it('preserves the memorandum override observation for history-details', async () => {
+    const loaded = store.loadRecordContext('1'); flushContext('1', ['FINISHED_WITH_OPEN_MEMORANDOS']);
+    const record = await loaded;
+    expect(record.logs[0].action).toBe('Confirmou a finalização com memorandos não aprovados');
+    expect(record.logs[0].displayDetails).toBe('Detalhes do evento FINISHED_WITH_OPEN_MEMORANDOS');
+  });
 
   it('normalizes Justificado and human audit messages without discarding details from other modules', async () => {
     const actions = ['CREATED', 'CLAIMED', 'FINISHED', 'PROBLEM_TREATED', 'GENERATED', 'REOPENED', 'DELEGATED', 'TREATMENT_REVERSED', 'CANCELLED', 'SERIAL_PLATE_UPDATED'];

@@ -2,7 +2,7 @@ import { SerialPlatesService } from '../../../../app/services/serial-plates.serv
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ButtonCloseDirective, ButtonDirective, FormControlDirective, InputGroupComponent, InputGroupTextDirective, ModalModule } from '@coreui/angular';
+import { ButtonCloseDirective, ButtonDirective, FormControlDirective, InputGroupComponent, InputGroupTextDirective, ModalModule, TooltipDirective } from '@coreui/angular';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
 import { SERIAL_PLATES_MONTHS, STATUSES, SERIAL_PLATES_REPORT_KEYS, SERIAL_PLATES_REPORT_COLUMNS } from '../../../../app/config/serial-plates.config';
 import { SerialPlate, SerialPlateDialog, SerialPlateCreateDraft, SerialPlateBatchFields, PlatePatch, PlateSettings, ErpOrderItem } from '../../../../app/interface/serial-plates.interface';
@@ -12,7 +12,7 @@ import { ReportPreviewComponent } from '../../../report-preview/report-preview.c
 
 @Component({
   selector: 'app-serial-plates-modal',
-  imports: [CommonModule, FormsModule, ButtonCloseDirective, ButtonDirective, FormControlDirective, InputGroupComponent, InputGroupTextDirective, ModalModule, ModalBackNavigationDirective, ChecklistIconComponent, ReportPreviewComponent],
+  imports: [CommonModule, FormsModule, ButtonCloseDirective, ButtonDirective, FormControlDirective, InputGroupComponent, InputGroupTextDirective, ModalModule, TooltipDirective, ModalBackNavigationDirective, ChecklistIconComponent, ReportPreviewComponent],
   templateUrl: './serial-plates-modal.component.html',
   styleUrl: './serial-plates-modal.scss'
 })

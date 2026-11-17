@@ -38,6 +38,7 @@ import { checklistId as uid } from '../../../../app/shared/checklist-factory';
 export class ChecklistRecordFormComponent implements OnInit {
   @Input({ required: true }) record!: Checklist;
   @Input({ required: true }) flow!: Flow;
+  @Input() saving = false;
   @Output() changed = new EventEmitter<void>();
   @Output() saveRecord = new EventEmitter<boolean>();
   @Output() cancel = new EventEmitter<void>();

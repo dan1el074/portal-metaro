@@ -36,4 +36,5 @@ public class ChecklistRecordDto {
     private List<ChecklistAuditDto> logs = new ArrayList<>();
     private List<ChecklistRevisionDto> revisions = new ArrayList<>();
     private long version;
+    private boolean confirmOpenMemorandos;
 }

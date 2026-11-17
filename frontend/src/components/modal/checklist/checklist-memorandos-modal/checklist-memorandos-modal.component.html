@@ -1,0 +1,30 @@
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="visibleChange($event)" alignment="center" backdrop="static" scrollable class="layout-custom-alert checklist-memorandos-alert">
+  <c-modal-header class="memorandos-warning-header">
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" class="warning-icon">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="currentColor" stroke="currentColor" stroke-width="0.5"/>
+      <line x1="12" y1="9" x2="12" y2="13" stroke="var(--cui-warning)" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="12" cy="17" r="1" fill="var(--cui-warning)"/>
+    </svg>
+    <h6 cModalTitle class="header-title"><b>Atenção - memorandos relacionados</b></h6>
+  </c-modal-header>
+  <c-modal-body>
+    <span class="low-emphasis warning-text">
+      Existem memorandos vinculados ao pedido e item deste checklist. Consulte os registros antes de continuar o preenchimento.
+    </span>
+    <div class="cards-container">
+      @for (memorando of memorandos; track memorando.id) {
+        <a class="card memorando-card" [href]="memorandoUrl(memorando.id)" (click)="openMemorando($event, memorando.id)">
+          <div class="text">
+            <b>Memorando {{ memorando.number || '—' }}/{{ memorando.createAt ? (memorando.createAt | date:'yyyy':'-0300') : '—' }}</b>
+            <span class="low-emphasis">{{ memorando.title }}</span>
+          </div>
+          <div class="label"><span class="yellow" [class.approved]="memorando.status === 'APPROVED'">{{ statuses[memorando.status] }}</span></div>
+        </a>
+      }
+    </div>
+  </c-modal-body>
+  <c-modal-footer>
+    <span class="low-emphasis">Este aviso não pode ser dispensado até confirmação.</span>
+    <button cButton type="button" color="primary" (click)="close()">Entendido</button>
+  </c-modal-footer>
+</c-modal>

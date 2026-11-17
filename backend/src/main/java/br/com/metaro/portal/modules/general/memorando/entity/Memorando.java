@@ -33,6 +33,8 @@ public class Memorando {
     private String description;
     @Column(columnDefinition = "TEXT")
     private String reason;
+    @Column(columnDefinition = "TEXT")
+    private String publishedSnapshotJson;
     @Column(columnDefinition = "TIMESTAMP WITHOUT TIME ZONE")
     private Instant createAt;
     @Enumerated(EnumType.STRING)

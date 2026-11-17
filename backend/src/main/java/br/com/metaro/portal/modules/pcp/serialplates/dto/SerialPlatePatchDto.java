@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 public class SerialPlatePatchDto {
     private String of;
     private String order;
-    private String orderItem;
+    private String orderItemCode;
     private Boolean readyStock;
     private String client;
     private String description;

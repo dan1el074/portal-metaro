@@ -51,7 +51,7 @@ export class SerialPlatesComponent implements OnDestroy {
   private readonly authorities = this.user?.roles.map(role => role.authority) ?? [];
   public readonly admin = this.authorities.includes('ROLE_ADMIN');
   public readonly operator = this.authorities.some(role => ['ROLE_ADMIN', 'ROLE_SERIAL_PLATES_OPERATOR'].includes(role));
-  public createDraft: SerialPlateCreateDraft = { quantity: 1, of: '', order: '', orderItem: '' };
+  public createDraft: SerialPlateCreateDraft = { quantity: 1, of: '', order: '', orderItemCode: '' };
   public view: 'operator' | 'consultation' = this.operator ? 'operator' : 'consultation';
   public records: SerialPlate[] = [];
   public totalElements = 0;
@@ -78,7 +78,7 @@ export class SerialPlatesComponent implements OnDestroy {
   public error = '';
   public edit: SerialPlate | null = null;
   private loadedOrder = '';
-  private loadedOrderItem = '';
+  private loadedOrderItemCode = '';
   public historyRecord: SerialPlate | null = null;
   public batch: PlatePatch = {};
   public batchOrderItems: ErpOrderItem[] = [];
@@ -252,7 +252,7 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public changeBatchOrder(value: string): void {
     this.batch.order = value;
-    this.batch.orderItem = '';
+    this.batch.orderItemCode = '';
     this.batchOrderItems = [];
   }
 
@@ -262,7 +262,7 @@ export class SerialPlatesComponent implements OnDestroy {
     const order = batch.order?.trim() ?? '';
     if (!order) return;
     this.batchOrderItems = [];
-    this.batch.orderItem = '';
+    this.batch.orderItemCode = '';
     try {
       const result = await this.request(this.data.searchOrder(order));
       if (this.batch === batch && this.batchFields.order && batch.order?.trim() === order
@@ -284,7 +284,7 @@ export class SerialPlatesComponent implements OnDestroy {
     if (checked) {
       this.batchFields.order = false;
       this.batch.order = '';
-      this.batch.orderItem = '';
+      this.batch.orderItemCode = '';
       this.batchOrderItems = [];
     }
   }
@@ -317,7 +317,7 @@ export class SerialPlatesComponent implements OnDestroy {
       this.createDraft.quantity = 1;
       this.createDraft.of = '';
       this.createDraft.order = '';
-      this.createDraft.orderItem = '';
+      this.createDraft.orderItemCode = '';
     }
 
     if (dialog === 'batch') {
@@ -337,7 +337,7 @@ export class SerialPlatesComponent implements OnDestroy {
       const fresh = await this.request(this.data.findBySerial(record.serial));
       this.edit = { ...fresh, history: [] };
       this.loadedOrder = fresh.order;
-      this.loadedOrderItem = fresh.orderItem;
+      this.loadedOrderItemCode = fresh.orderItemCode;
       this.open('edit');
       if (fresh.order && this.canEdit()) this.data.searchOrder(fresh.order).pipe(takeUntil(this.destroy)).subscribe({ next: () => this.updateView(), error: () => {} });
     } catch (error) { this.showError(error); }
@@ -418,20 +418,20 @@ export class SerialPlatesComponent implements OnDestroy {
 
     if (value !== this.edit.order) {
       this.edit.order = value;
-      this.edit.orderItem = '';
+      this.edit.orderItemCode = '';
     }
   }
 
   private async erp(order: string, itemId = ''): Promise<PlatePatch | null> {
     const result = await this.request(this.data.searchOrder(order));
-    const item = itemId ? result.items.find(item => item.id === itemId) : result.items[0];
+    const item = itemId ? result.items.find(item => item.itemCode === itemId) : result.items[0];
     if (!item) { this.toaster.warning('Selecione um item válido do pedido.'); return null; }
-    return { client: result.client, orderItem: item.id, description: item.description, capacity: item.capacity, voltage: item.voltage, weight: item.weight };
+    return { client: result.client, orderItemCode: item.itemCode, description: item.description, capacity: item.capacity, voltage: item.voltage, weight: item.weight };
   }
 
   public async create(): Promise<void> {
     if (!this.canEdit() || this.busy) return;
-    if (this.createDraft.order.trim() && !this.createDraft.orderItem) {
+    if (this.createDraft.order.trim() && !this.createDraft.orderItemCode) {
       this.error = 'Selecione um item do pedido ou limpe o campo Nº Pedido para continuar.';
       return;
     }
@@ -471,17 +471,17 @@ export class SerialPlatesComponent implements OnDestroy {
   public async loadErp(itemId?: string): Promise<void> {
     if (!this.canEdit() || !this.edit || this.edit.readyStock || this.busy) return;
     const record = this.edit;
-    const previousItem = record.orderItem;
+    const previousItem = record.orderItemCode;
     const order = record.order.trim();
     this.busy = true;
     try {
-      const values = await this.erp(order, itemId ?? record.orderItem);
+      const values = await this.erp(order, itemId ?? record.orderItemCode);
       if (!values || this.edit !== record || record.order.trim() !== order || record.readyStock) return;
-      const rollback = () => record.orderItem = previousItem;
+      const rollback = () => record.orderItemCode = previousItem;
       const apply = () => {
         Object.assign(record, values, { order });
         this.loadedOrder = order;
-        this.loadedOrderItem = record.orderItem;
+        this.loadedOrderItemCode = record.orderItemCode;
       };
       if (this.data.hasEquipmentData(record)) this.confirm(1, apply, rollback);
       else apply();
@@ -493,10 +493,10 @@ export class SerialPlatesComponent implements OnDestroy {
     if (!this.canEdit() || !this.edit || this.busy) return;
     const record = this.edit;
     const patch = this.data.editPatch(record);
-    if (patch.order && (patch.order !== this.loadedOrder || patch.orderItem !== this.loadedOrderItem)) {
+    if (patch.order && (patch.order !== this.loadedOrder || patch.orderItemCode !== this.loadedOrderItemCode)) {
       this.busy = true;
       try {
-        const values = await this.erp(patch.order, patch.orderItem);
+        const values = await this.erp(patch.order, patch.orderItemCode);
         if (!values) return;
         const apply = () => this.commit([record], { ...patch, ...values }, false);
         if (this.data.hasEquipmentData(patch)) this.confirm(1, () => { void apply(); });
@@ -511,10 +511,10 @@ export class SerialPlatesComponent implements OnDestroy {
     const patch = this.data.batchPatch(this.batch, this.batchFields);
     if (!Object.keys(patch).length) { this.error = 'Marque pelo menos um campo para atualizar.'; return; }
     if (patch.order?.trim()) {
-      if (!this.batchOrderItems.length || !patch.orderItem) { this.error = 'Busque o pedido e selecione um item.'; return; }
+      if (!this.batchOrderItems.length || !patch.orderItemCode) { this.error = 'Busque o pedido e selecione um item.'; return; }
       this.busy = true;
       try {
-        const values = await this.erp(patch.order, patch.orderItem);
+        const values = await this.erp(patch.order, patch.orderItemCode);
         if (!values) return;
         const rows = await this.request(this.data.selection([...this.selected]));
         const apply = () => this.commit(rows, { ...patch, ...values, ...(this.batchFields.weight ? { weight: patch.weight } : {}), ...(this.batchFields.voltage ? { voltage: patch.voltage } : {}) }, true);

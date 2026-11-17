@@ -13,7 +13,7 @@ import { ChecklistClientHistoryComponent } from '../../../../../../components/of
 import { ChecklistUpdateOrderModalComponent } from '../../../../../../components/modal/checklist/checklist-update-order-modal/checklist-update-order-modal.component';
 import { ChecklistEvidenceComponent } from '../../../../../../components/cards/checklist-evidence/checklist-evidence.component';
 import { ChecklistDelegateModalComponent } from '../../../../../../components/modal/checklist/checklist-delegate-modal/checklist-delegate-modal.component';
-import { ChecklistLinkedStepFlow, ChecklistService } from '../../../../../services/checklist.service';
+import { ChecklistLinkedStepFlow, ChecklistMemorando, ChecklistService } from '../../../../../services/checklist.service';
 import { isProductionKit } from '../../../../../shared/checklist-rules';
 import { ReportPreviewService } from '../../../../../services/report-preview.service';
 import { firstValueFrom } from 'rxjs';
@@ -70,6 +70,10 @@ export class ChecklistRecordDetailComponent implements OnInit {
   protected record!: Checklist;
   protected commentText = '';
   protected linkedStepFlows: ChecklistLinkedStepFlow[] = [];
+  protected relatedMemorandos: ChecklistMemorando[] = [];
+  protected memorandosError = false;
+  private memorandosRequest = 0;
+  protected readonly memorandoStatuses = { CREATED: 'Rascunho', PUBLISH: 'Publicado', APPROVED: 'Aprovado', CANCELED: 'Cancelado' };
 
   ngOnInit(): void {
     this.initialLoad = this.store.load();
@@ -96,6 +100,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
       }
       this.record = record;
       this.linkedStepFlows = linked;
+      this.loadRelatedMemorandos();
     } catch {
       if (version === this.loadVersion) this.loadError = 'Não foi possível carregar o checklist. Tente novamente.';
     } finally {
@@ -120,6 +125,27 @@ export class ChecklistRecordDetailComponent implements OnInit {
     }
     this.record = record;
     this.loadLinkedStepFlows(record.flowId);
+    this.loadRelatedMemorandos();
+  }
+
+  protected loadRelatedMemorandos(): void {
+    const id = this.record.id;
+    const version = this.loadVersion;
+    const request = ++this.memorandosRequest;
+    this.relatedMemorandos = [];
+    this.memorandosError = false;
+    this.checklistApi.listRelatedMemorandos(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (items) => {
+        if (version !== this.loadVersion || request !== this.memorandosRequest) return;
+        this.relatedMemorandos = items;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        if (version !== this.loadVersion || request !== this.memorandosRequest) return;
+        this.memorandosError = true;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   protected get flow() {
