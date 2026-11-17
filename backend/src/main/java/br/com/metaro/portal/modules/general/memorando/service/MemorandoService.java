@@ -240,9 +240,7 @@ public class MemorandoService {
             throw new UnprocessableEntityException("É necessário ao menos 2 departamentos para continuar!");
         }
 
-        if (entity.getStatus().equals(MemorandoStatus.PUBLISH)) {
-            util.checkChanges(dto, entity);
-        }
+        if (entity.getNumber() != null && entity.getPublishedSnapshotJson() == null) util.rememberPublishedVersion(entity);
 
         util.dtoToEntity(dto, entity);
         util.addMyDepartment(entity);
@@ -319,6 +317,7 @@ public class MemorandoService {
             throw new UnprocessableEntityException("Somente administradores podem usar a opção rollback");
         }
 
+        util.rememberPublishedVersion(entity);
         entity.setStatus(MemorandoStatus.CREATED);
         logService.create(entity.getId(), "Voltou o documento para status inicial");
         util.removeNotifications(entity);

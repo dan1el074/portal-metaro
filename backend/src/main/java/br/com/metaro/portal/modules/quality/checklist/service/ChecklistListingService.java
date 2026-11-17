@@ -38,7 +38,7 @@ public class ChecklistListingService {
         Specification<ChecklistRecord> spec = (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
             predicates.add(cb.or(cb.notEqual(root.get("status"), ChecklistStatus.DRAFT),
-                    cb.equal(root.get("creator").get("id"), user.getId()), cb.isTrue(cb.literal(admin))));
+                    cb.equal(cb.coalesce(root.get("owner").get("id"), root.get("creator").get("id")), user.getId()), cb.isTrue(cb.literal(admin))));
             if (consultation) predicates.add(cb.notEqual(root.get("status"), ChecklistStatus.DRAFT));
             if (categoryId != null) predicates.add(cb.equal(root.get("template").get("category").get("id"), categoryId));
             if (selectedStatus != null) predicates.add(cb.equal(root.get("status"), selectedStatus));

@@ -13,6 +13,14 @@ export interface ChecklistPage<T> {
 
 export interface ChecklistDepartment { id: number; name: string; enabled: boolean; }
 
+export interface ChecklistMemorando {
+  id: number;
+  number: number | null;
+  title: string;
+  createAt: string | null;
+  status: 'CREATED' | 'PUBLISH' | 'APPROVED' | 'CANCELED';
+}
+
 export interface ChecklistCatalogEntry {
   id: number;
   type: 'ITEM' | 'DEFECT';
@@ -122,16 +130,16 @@ export class ChecklistService {
   findErpOrder(orderNumber: string): Observable<ChecklistErpOrder> {
     return this.http.get<ChecklistErpOrder>(`${this.api}/erp/orders/${encodeURIComponent(orderNumber)}`);
   }
-  availableSerials(order: string, readyStock: boolean): Observable<Array<{ serial: string; description: string }>> {
+  availableSerials(order: string, readyStock: boolean, item = ''): Observable<Array<{ serial: string; description: string }>> {
     return this.http.get<Array<{ serial: string; description: string }>>(`${this.api}/records/available-serials`, {
-      params: new HttpParams().set('order', order).set('readyStock', readyStock),
+      params: new HttpParams().set('order', order).set('readyStock', readyStock).set('item', readyStock ? '' : item),
     });
   }
   getRecord(id: string): Observable<Checklist> { return this.http.get<Checklist>(`${this.api}/records/${id}`); }
   getFlow(recordId: string): Observable<Flow> { return this.http.get<Flow>(`${this.api}/records/${recordId}/flow`); }
   createRecord(value: ChecklistRecordCreate): Observable<Checklist> { return this.http.post<Checklist>(`${this.api}/records`, value); }
-  saveRecord(value: Checklist, finish: boolean): Observable<Checklist> {
-    return this.http.put<Checklist>(`${this.api}/records/${value.id}${finish ? '/finish' : ''}`, value);
+  saveRecord(value: Checklist, finish: boolean, confirmOpenMemorandos = false): Observable<Checklist> {
+    return this.http.put<Checklist>(`${this.api}/records/${value.id}${finish ? '/finish' : ''}`, { ...value, confirmOpenMemorandos: finish && confirmOpenMemorandos });
   }
   claim(id: string): Observable<Checklist> { return this.http.put<Checklist>(`${this.api}/records/${id}/claim`, null); }
   delegate(id: string, userId: number): Observable<Checklist> {
@@ -196,6 +204,10 @@ export class ChecklistService {
   }
   listLinkedStepFlows(flowId: string): Observable<ChecklistLinkedStepFlow[]> {
     return this.http.get<ChecklistLinkedStepFlow[]>(`${this.api}/step-flow/flows/${flowId}/orders`);
+  }
+
+  listRelatedMemorandos(recordId: string): Observable<ChecklistMemorando[]> {
+    return this.http.get<ChecklistMemorando[]>(`${this.api}/records/${recordId}/memorandos`);
   }
 
   private templatePayload(value: Template): object {

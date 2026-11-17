@@ -46,7 +46,42 @@
 
     <div class="checklist-print-area" [attr.aria-busy]="loading" [attr.inert]="loading ? '' : null">
     <main class="detail-content">
-        @if (linkedStepFlows.length) { <aside class="context-alert no-print"><app-checklist-icon name="history" /><div><strong>Fluxos de etapas vinculados</strong><div class="linked-step-flow-list">@for (stepFlow of linkedStepFlows; track stepFlow.id) { <p><span>{{ stepFlow.linked === false ? 'Vínculo anterior' : 'Vínculo atual' }} · Pedido #{{ stepFlow.order }} · {{ stepFlow.status }}@if (stepFlow.currentStep) { · Etapa {{ stepFlow.currentStep }} }</span><a [routerLink]="['/general/step-flow']" [queryParams]="{ orderId: stepFlow.id }">Acessar fluxo de etapas</a></p> }</div></div></aside> }
+        @if (linkedStepFlows.length) {
+          <aside class="context-alert no-print">
+            <app-checklist-icon name="history" />
+            <div>
+              <strong>Fluxos de etapas relacionados</strong>
+              <div class="linked-step-flow-list">
+                @for (stepFlow of linkedStepFlows; track stepFlow.id) {
+                  <p>
+                    <a [routerLink]="['/general/step-flow']" [queryParams]="{ orderId: stepFlow.id }">Pedido #{{ stepFlow.order }} @if (stepFlow.currentStep) { · Etapa {{ stepFlow.currentStep }}}</a>
+                    <span>({{ stepFlow.status }}) - {{ stepFlow.linked === false ? 'Vínculo anterior' : 'Vínculo atual' }}</span>
+                  </p>
+                }
+              </div>
+            </div>
+          </aside>
+        }
+        @if (relatedMemorandos.length || memorandosError) {
+          <aside class="context-alert memorando-alert no-print" aria-label="Memorandos relacionados">
+            <app-checklist-icon name="file-text" />
+            <div>
+              <strong>Memorandos relacionados</strong>
+              @if (memorandosError) {
+                <p>Não foi possível carregar os memorandos. <button type="button" class="memorando-retry" (click)="loadRelatedMemorandos()">Tentar novamente</button></p>
+              } @else {
+                <div class="related-memorando-list">
+                  @for (memorando of relatedMemorandos; track memorando.id) {
+                    <p>
+                      <a [routerLink]="['/general/memorando', memorando.id]">Memorando {{ memorando.number || '—' }}/{{ memorando.createAt ? (memorando.createAt | date:'yyyy':'-0300') : '—' }} - {{ memorando.title }}</a>
+                      <span>({{ memorandoStatuses[memorando.status] }})</span>
+                    </p>
+                  }
+                </div>
+              }
+            </div>
+          </aside>
+        }
         @if (flow.clientId && store.clientNokHistoryEnabled(snapshot.category.id)) { <div class="outside-actions no-print"><button class="catalog-style-button" type="button" (click)="history.open(flow.clientId)"><app-checklist-icon name="history" /> Ver histórico de NOKs do cliente</button></div> }
 
         <section class="detail-card document-card">

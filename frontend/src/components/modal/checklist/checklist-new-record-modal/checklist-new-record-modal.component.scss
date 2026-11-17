@@ -91,6 +91,19 @@ label>small {
   white-space: nowrap;
 }
 
+.serial-identification {
+  margin-top: 16px;
+}
+
+.ready-stock-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+
+  input { margin-top: 0; }
+}
+
 @media (max-width: 620px) {
   .form-grid {
     grid-template-columns: 1fr;

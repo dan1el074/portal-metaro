@@ -15,7 +15,7 @@ describe('SerialPlatesComponent API integration', () => {
   let roles: string[];
   const settings = { crea: 'RS 169445', instructions: '', providers: 'Interno' };
   const row: SerialPlate = {
-    serial: '18918', version: 0, of: '8301', order: '', orderItem: '', readyStock: false,
+    serial: '18918', version: 0, of: '8301', order: '', orderItemCode: '', readyStock: false,
     client: '', description: '', capacity: null, voltage: '', weight: null, provider: '',
     status: 'Criado', notes: '', manufactured: '2026-10', updated: '2026-10-23T12:00:00Z', history: []
   };
@@ -108,15 +108,15 @@ describe('SerialPlatesComponent API integration', () => {
 
   it('shows only the order item description while preserving the selected model data', async () => {
     initialize(); fixture.detectChanges(); await fixture.whenStable();
-    const open = component.openEdit({ ...row, order: '900', orderItem: 'erp-item' });
-    http.expectOne(request => request.url.endsWith('/18918')).flush({ ...row, order: '900', orderItem: 'erp-item', description: 'Modelo A' });
+    const open = component.openEdit({ ...row, order: '900', orderItemCode: 'erp-item' });
+    http.expectOne(request => request.url.endsWith('/18918')).flush({ ...row, order: '900', orderItemCode: 'erp-item', description: 'Modelo A' });
     await open;
-    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ id: 'erp-item', orderDescription: 'Mesa elevatória', label: 'Mesa elevatória - Modelo A', description: 'Modelo A' }] });
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ itemCode: 'erp-item', orderDescription: 'Mesa elevatória', label: 'Mesa elevatória - Modelo A', description: 'Modelo A' }] });
     await fixture.whenStable();
     const label = Array.from(fixture.nativeElement.querySelectorAll('label')).find((label: any) => label.textContent?.startsWith('Item do pedido')) as HTMLLabelElement;
     expect(label.querySelector('option[value="erp-item"]')?.textContent?.trim()).toBe('Mesa elevatória');
     expect(component.edit?.description).toBe('Modelo A');
-    expect(component.edit?.orderItem).toBe('erp-item');
+    expect(component.edit?.orderItemCode).toBe('erp-item');
   });
 
   it('loads one server page and uses server totals for cards and pagination', () => {
@@ -145,12 +145,12 @@ describe('SerialPlatesComponent API integration', () => {
     component.open('batch'); component.batchFields.order = true; component.changeBatchOrder('900');
     const pending = component.loadBatchErp();
     expect(component.batchOrderItems).toEqual([]);
-    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ id: 'item', description: 'Modelo', capacity: 1.5, voltage: '220v TRI', weight: null }] });
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ itemCode: 'item', description: 'Modelo', capacity: 1.5, voltage: '220v TRI', weight: null }] });
     await pending;
     expect(component.batchOrderItems.length).toBe(1);
     component.changeBatchOrder('901');
     expect(component.batchOrderItems).toEqual([]);
-    expect(component.batch.orderItem).toBe('');
+    expect(component.batch.orderItemCode).toBe('');
   });
 
   it('sends record versions and retains PE values until save', async () => {
@@ -197,10 +197,41 @@ describe('SerialPlatesComponent API integration', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const pending = component.loadCreateOrder();
-    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ id: 'item', description: 'Modelo ERP', capacity: 1.5, voltage: '220v TRI', weight: null }] });
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ itemCode: 'item', description: 'Modelo ERP', capacity: 1.5, voltage: '220v TRI', weight: null }] });
     await pending;
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('#serialPlateModal').textContent).toContain('Modelo ERP');
+  });
+
+  it('only searches the creation order when the search button is clicked, without searching on blur', async () => {
+    initialize(); component.open('new'); fixture.detectChanges(); await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('.create-order-search input') as HTMLInputElement;
+    input.value = '900'; input.dispatchEvent(new Event('input')); fixture.detectChanges(); await fixture.whenStable();
+    input.dispatchEvent(new Event('blur'));
+    http.expectNone(request => request.url.endsWith('/erp/orders/900'));
+    (fixture.nativeElement.querySelector('.search-order-button') as HTMLButtonElement).click();
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [{ itemCode: 'item', description: 'Modelo ERP' }] });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#serialPlateModal').textContent).toContain('Modelo ERP');
+  });
+
+  it('uses Enter only in the creation order field to search without creating records or bubbling', async () => {
+    initialize(); component.open('new'); fixture.detectChanges(); await fixture.whenStable();
+    const create = spyOn(component, 'create');
+    const input = fixture.nativeElement.querySelector('.create-order-search input') as HTMLInputElement;
+    input.value = '900'; input.dispatchEvent(new Event('input')); fixture.detectChanges(); await fixture.whenStable();
+    const bubbled = jasmine.createSpy('document keydown'); document.addEventListener('keydown', bubbled);
+    try {
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      input.dispatchEvent(enter);
+      expect(enter.defaultPrevented).toBeTrue(); expect(bubbled).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+      http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [] });
+      await fixture.whenStable();
+      const other = fixture.nativeElement.querySelector('#serialPlateModal input[type="number"]') as HTMLInputElement;
+      const otherEnter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }); other.dispatchEvent(otherEnter);
+      expect(otherEnter.defaultPrevented).toBeFalse(); expect(bubbled).toHaveBeenCalledTimes(1);
+      http.expectNone(request => request.url.includes('/erp/orders/'));
+    } finally { document.removeEventListener('keydown', bubbled); }
   });
 
   it('sends the checked batch weight and preserves all unmarked fields', async () => {
@@ -225,8 +256,8 @@ describe('SerialPlatesComponent API integration', () => {
     component.open('batch');
     component.batchFields.order = true;
     component.batchFields.weight = true;
-    component.batch = { order: '900', orderItem: 'item', weight: 400 };
-    const item = { id: 'item', description: 'Modelo ERP', capacity: 1.5, voltage: '220v TRI', weight: 300 };
+    component.batch = { order: '900', orderItemCode: 'item', weight: 400 };
+    const item = { itemCode: 'item', description: 'Modelo ERP', capacity: 1.5, voltage: '220v TRI', weight: 300 };
     component.batchOrderItems = [item];
     const pending = component.saveBatch();
     http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [item] });
@@ -237,7 +268,7 @@ describe('SerialPlatesComponent API integration', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     const update = http.expectOne(request => request.url.endsWith('/batch'));
     expect(update.request.body.patch.weight).toBe(400);
-    update.flush([{ ...row, order: '900', orderItem: 'item', description: 'Modelo ERP', weight: 400, version: 1 }]);
+    update.flush([{ ...row, order: '900', orderItemCode: 'item', description: 'Modelo ERP', weight: 400, version: 1 }]);
     await pending;
     http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 1, totalPages: 1 });
     http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
@@ -248,11 +279,11 @@ describe('SerialPlatesComponent API integration', () => {
     component.open('batch');
     component.batchFields.order = true;
     component.changeBatchOrder('900');
-    const item = { id: 'first', description: 'Primeiro item', capacity: 1, voltage: '220v TRI', weight: 300 };
+    const item = { itemCode: 'first', description: 'Primeiro item', capacity: 1, voltage: '220v TRI', weight: 300 };
     const first = component.loadBatchErp();
     http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [item] });
     await first;
-    component.batch.orderItem = 'first';
+    component.batch.orderItemCode = 'first';
     component.batchFields.readyStock = true;
     component.setBatchReadyStock(true);
     expect(component.batchFields.order).toBeFalse();
@@ -260,10 +291,10 @@ describe('SerialPlatesComponent API integration', () => {
     component.batchFields.order = true;
     component.changeBatchOrder('901');
     const second = component.loadBatchErp();
-    http.expectOne(request => request.url.endsWith('/erp/orders/901')).flush({ client: 'Outro cliente', items: [{ ...item, id: 'second' }] });
+    http.expectOne(request => request.url.endsWith('/erp/orders/901')).flush({ client: 'Outro cliente', items: [{ ...item, itemCode: 'second' }] });
     await second;
-    expect(component.batchOrderItems.map(value => value.id)).toEqual(['second']);
-    expect(component.batch.orderItem).toBe('');
+    expect(component.batchOrderItems.map(value => value.itemCode)).toEqual(['second']);
+    expect(component.batch.orderItemCode).toBe('');
   });
 
   it('sends only the checked batch voltage', async () => {
@@ -301,7 +332,7 @@ describe('SerialPlatesComponent API integration', () => {
 
   it('requires relocation confirmation and preserves the edit when cancelled', async () => {
     initialize(); fixture.detectChanges(); await fixture.whenStable();
-    component.edit = { ...row, order: '900', orderItem: 'old', client: 'Cliente' };
+    component.edit = { ...row, order: '900', orderItemCode: 'old', client: 'Cliente' };
     component.open('edit'); component.setReadyStock(true);
     await fixture.whenStable();
     const pending = component.saveEdit();
@@ -329,14 +360,14 @@ describe('SerialPlatesComponent API integration', () => {
 
   it('keeps relocation visible after closing the edit overlay and saves the changed order after confirmation', async () => {
     initialize(); fixture.detectChanges(); await fixture.whenStable();
-    const open = component.openEdit({ ...row, order: '900', orderItem: 'old' });
-    http.expectOne(request => request.url.endsWith('/18918')).flush({ ...row, order: '900', orderItem: 'old', client: 'Antigo', description: 'Modelo A' });
+    const open = component.openEdit({ ...row, order: '900', orderItemCode: 'old' });
+    http.expectOne(request => request.url.endsWith('/18918')).flush({ ...row, order: '900', orderItemCode: 'old', client: 'Antigo', description: 'Modelo A' });
     await open;
-    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Antigo', items: [{ id: 'old', description: 'Modelo A' }] });
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Antigo', items: [{ itemCode: 'old', description: 'Modelo A' }] });
     await fixture.whenStable();
     component.changeEditOrder('901');
     const lookup = component.loadErp('new');
-    http.expectOne(request => request.url.endsWith('/erp/orders/901')).flush({ client: 'Novo', items: [{ id: 'new', description: 'Modelo B', capacity: 1, voltage: '380V', weight: 300 }] });
+    http.expectOne(request => request.url.endsWith('/erp/orders/901')).flush({ client: 'Novo', items: [{ itemCode: 'new', description: 'Modelo B', capacity: 1, voltage: '380V', weight: 300 }] });
     await lookup; await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
     component.confirmErp(); await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
     const saving = component.saveEdit();
@@ -349,7 +380,7 @@ describe('SerialPlatesComponent API integration', () => {
     confirm.click(); await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
     const update = http.expectOne(request => request.url.endsWith('/18918'));
     expect(update.request.body.patch.order).toBe('901'); expect(update.request.body.confirmRelocation).toBeTrue();
-    update.flush({ ...row, order: '901', client: 'Novo', orderItem: 'new', version: 1 }); await saving;
+    update.flush({ ...row, order: '901', client: 'Novo', orderItemCode: 'new', version: 1 }); await saving;
     http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [], totalElements: 1, totalPages: 1 });
     http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
     expect(component.busy).toBeFalse(); expect(component.modalVisible).toBeFalse();

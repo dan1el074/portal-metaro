@@ -260,7 +260,7 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   private async createAndOpenRecord(event: ChecklistRecordCreate): Promise<void> {
     try {
       const record = await this.store.createRecord(event);
-      this.toaster.success('Checklist criado. A identificação foi registrada e está bloqueada para o preenchimento.');
+      this.toaster.success('Registro criado com sucesso!');
       await this.router.navigate(['/qualidade/checklist', record.id, 'edit']);
     } catch (error) {
       this.toaster.warning(error instanceof Error ? error.message : 'Não foi possível criar o checklist.');

@@ -15,5 +15,5 @@ public class SerialPlateCreateDto {
     @Pattern(regexp = "[0-9]{0,15}")
     private String order = "";
     @Size(max = 64)
-    private String orderItem = "";
+    private String orderItemCode = "";
 }

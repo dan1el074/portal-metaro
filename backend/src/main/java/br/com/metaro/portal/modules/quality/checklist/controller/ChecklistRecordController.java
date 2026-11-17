@@ -40,8 +40,9 @@ public class ChecklistRecordController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
     @GetMapping("/available-serials")
     public ResponseEntity<List<ChecklistSerialOptionDto>> listAvailableSerials(
-            @RequestParam(defaultValue = "") String order, @RequestParam(defaultValue = "false") boolean readyStock) {
-        return ResponseEntity.ok(serialPlateService.listAvailable(order, readyStock));
+            @RequestParam(defaultValue = "") String order, @RequestParam(defaultValue = "") String item,
+            @RequestParam(defaultValue = "false") boolean readyStock) {
+        return ResponseEntity.ok(serialPlateService.listAvailable(order, item, readyStock));
     }
 
 
@@ -68,6 +69,12 @@ public class ChecklistRecordController {
     public ResponseEntity<ChecklistFlowDto> getFlow(@PathVariable Long id) {
         ChecklistRecordDto record = service.getRecord(id);
         return ResponseEntity.ok(service.getFlow(record.getFlowId()));
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
+    @GetMapping("/{id}/memorandos")
+    public ResponseEntity<List<ChecklistMemorandoDto>> listRelatedMemorandos(@PathVariable Long id) {
+        return ResponseEntity.ok(service.listRelatedMemorandos(id));
     }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")

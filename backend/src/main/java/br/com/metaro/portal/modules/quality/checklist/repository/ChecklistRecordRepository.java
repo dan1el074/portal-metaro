@@ -18,7 +18,7 @@ public interface ChecklistRecordRepository extends JpaRepository<ChecklistRecord
     @NonNull
     Page<ChecklistRecord> findAll(org.springframework.data.jpa.domain.Specification<ChecklistRecord> spec, Pageable pageable);
 
-    @Query("select r.template.category.id, count(r) from ChecklistRecord r where (r.status <> br.com.metaro.portal.modules.quality.checklist.entity.ChecklistStatus.DRAFT or r.creator.id = :userId or :administrator = true) and (:consultation = false or r.status <> br.com.metaro.portal.modules.quality.checklist.entity.ChecklistStatus.DRAFT) group by r.template.category.id")
+    @Query("select r.template.category.id, count(r) from ChecklistRecord r where (r.status <> br.com.metaro.portal.modules.quality.checklist.entity.ChecklistStatus.DRAFT or coalesce(r.owner.id, r.creator.id) = :userId or :administrator = true) and (:consultation = false or r.status <> br.com.metaro.portal.modules.quality.checklist.entity.ChecklistStatus.DRAFT) group by r.template.category.id")
     List<Object[]> countVisibleCategories(Long userId, boolean administrator, boolean consultation);
 
     @EntityGraph(attributePaths = {"flow", "template", "template.category", "creator", "owner", "finisher"})
@@ -26,7 +26,7 @@ public interface ChecklistRecordRepository extends JpaRepository<ChecklistRecord
     Optional<ChecklistRecord> findDetailedById(Long id);
 
     @EntityGraph(attributePaths = {"flow", "template", "template.category", "creator", "owner"})
-    @Query("select r from ChecklistRecord r where r.status <> br.com.metaro.portal.modules.quality.checklist.entity.ChecklistStatus.DRAFT or r.creator.id = :userId or :administrator = true order by r.updatedAt desc")
+    @Query("select r from ChecklistRecord r where r.status <> br.com.metaro.portal.modules.quality.checklist.entity.ChecklistStatus.DRAFT or coalesce(r.owner.id, r.creator.id) = :userId or :administrator = true order by r.updatedAt desc")
     Page<ChecklistRecord> findVisible(Pageable pageable, Long userId, boolean administrator);
 
     List<ChecklistRecord> findByFlowId(Long flowId);

@@ -145,7 +145,7 @@
         <header class='section-card-header'><div><h2><svg aria-hidden='true' viewBox='0 0 24 24'><circle cx='12' cy='12' r='10'></circle><polyline points='12 6 12 12 16 14'></polyline></svg>Histórico do documento</h2></div></header>
         <ol class='history-timeline'>
           @for (log of item.logs; track log.id) {
-            <li><i></i><div><span>{{ log.createdAt | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p><strong>{{ log.user ? log.user.name : 'Sistema' }}:</strong> {{ log.content }}</p></div></li>
+            <li><i></i><div><span>{{ log.createdAt | date:"dd/MM/yyyy 'às' HH:mm:ss":'-0300' }}</span><p class='history-message' [title]="(log.user ? log.user.name : 'Sistema') + ': ' + log.content"><strong>{{ log.user ? log.user.name : 'Sistema' }}:</strong> {{ log.content }}</p></div></li>
           } @empty { <li class='empty-history'>Nenhum registro disponível.</li> }
         </ol>
       </section>

@@ -3,9 +3,8 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, On
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
 import { Subscription } from 'rxjs';
-import { UserMinData } from '../../../../app/interface/user.interface';
+import { ChecklistOperator, ChecklistService } from '../../../../app/services/checklist.service';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
-import { UserService } from '../../../../app/services/user.service';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
 
 @Component({
@@ -21,7 +20,7 @@ export class ChecklistDelegateModalComponent implements OnDestroy {
   protected loading = false;
   protected saving = false;
   protected error = '';
-  protected operators: UserMinData[] = [];
+  protected operators: ChecklistOperator[] = [];
   protected userId: number | null = null;
   private recordId = '';
   private categoryId = '';
@@ -29,7 +28,7 @@ export class ChecklistDelegateModalComponent implements OnDestroy {
 
   constructor(
     private readonly store: ChecklistPreviewService,
-    private readonly users: UserService,
+    private readonly checklistApi: ChecklistService,
     private readonly cdr: ChangeDetectorRef,
   ) {}
 
@@ -45,8 +44,8 @@ export class ChecklistDelegateModalComponent implements OnDestroy {
     this.loading = true;
     this.error = '';
     this.subscription?.unsubscribe();
-    this.subscription = this.users.findAll().subscribe({
-      next: (users: UserMinData[]) => {
+    this.subscription = this.checklistApi.listOperators().subscribe({
+      next: (users: ChecklistOperator[]) => {
         const allowed = this.store.state().categories.find((category) => category.id === this.categoryId)?.operators ?? [];
         this.operators = users.filter((user) => user.activated && allowed.includes(user.id));
         if (this.userId !== null && !this.operators.some((user) => user.id === this.userId)) this.userId = null;

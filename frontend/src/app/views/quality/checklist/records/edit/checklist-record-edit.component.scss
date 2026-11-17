@@ -79,6 +79,61 @@
   font-size: 13px;
 }
 
+.memorando-alert {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 20px;
+  padding: 13px 15px;
+  border: 1px solid rgba(217, 144, 0, 0.25);
+  border-radius: 10px;
+  background: #d9900018;
+  color: #9a6500;
+  font-size: 13px;
+
+  > app-checklist-icon {
+    flex: 0 0 24px;
+    font-size: 24px;
+  }
+
+  > div { min-width: 0; }
+
+  strong {
+    display: block;
+    line-height: 24px;
+  }
+
+  p { margin: 2px 0 0; }
+
+  a,
+  .memorando-retry {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .memorando-retry {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .related-memorando-list p {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 4px;
+  }
+}
+
+:host-context(html[data-coreui-theme="dark"]) .memorando-alert {
+  color: #fcd34d;
+}
+
 @media (max-width: 700px) {
   .detail-navigation {
     margin-right: -1.5rem;

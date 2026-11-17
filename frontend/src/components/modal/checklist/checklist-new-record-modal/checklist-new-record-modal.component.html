@@ -13,12 +13,17 @@
     @if (!predecessorId && (requiresErp || showsSerial)) {
       <section class="identification-section">
         <div class="section-heading"><strong>Identificação</strong><small>Essas informações ficarão bloqueadas durante o preenchimento.</small></div>
-        @if (production) { <label class="mb-3"><input type="checkbox" [(ngModel)]="readyStock" (ngModelChange)="readyStockChanged()" /> Pronta Entrega</label> }
         <div class="form-grid">
           @if (requiresErp || (production && readyStock)) {
             <label>Pedido<div class="search-field"><input cFormControl [(ngModel)]="order" [disabled]="readyStock" (ngModelChange)="orderChanged()" (keyup.enter)="searchOrder()" placeholder="Informe o pedido" /><button cButton type="button" color="secondary" variant="outline" [disabled]="readyStock || !order.trim() || loadingOrder" (click)="searchOrder()">{{ loadingOrder ? 'Consultando...' : 'Buscar' }}</button></div>@if (orderError) { <small class="text-danger">{{ orderError }}</small> }</label>
             <label>Item<select cSelect [(ngModel)]="item" (ngModelChange)="loadSerials()" [disabled]="readyStock || !erpOrder"><option value="">Selecione</option>@for (orderItem of erpOrder?.items ?? []; track orderItem.code) { <option [value]="formatItem(orderItem)">{{ formatItem(orderItem) }}</option> }</select></label>
           }
+
+        </div>
+        @if (erpOrder) { <div class="erp-summary"><span>Cliente</span><strong>{{ erpOrder.client }}</strong><span>Vendedor</span><strong>{{ erpOrder.salesperson || '—' }}</strong></div> }
+        @if (production || showsSerial) {
+          <div class="form-grid serial-identification">
+            @if (production) { <label class="ready-stock-control"><input type="checkbox" [(ngModel)]="readyStock" (ngModelChange)="readyStockChanged()" /> Pronta Entrega</label> }
           @if (showsSerial) {
             <label>Número de série{{ requiresSerial ? '' : ' (opcional)' }}
               @if (production) {
@@ -31,8 +36,9 @@
               } @else { <input cFormControl [(ngModel)]="serial" /> }
             </label>
           }
-        </div>
-        @if (erpOrder) { <div class="erp-summary"><span>Cliente</span><strong>{{ erpOrder.client }}</strong><span>Vendedor</span><strong>{{ erpOrder.salesperson || '—' }}</strong></div> }
+          </div>
+        }
+
       </section>
     }
   </c-modal-body>

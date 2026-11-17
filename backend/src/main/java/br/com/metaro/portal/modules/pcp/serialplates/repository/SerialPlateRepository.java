@@ -12,7 +12,7 @@ public interface SerialPlateRepository extends JpaRepository<SerialPlate, Long>,
         select p from SerialPlate p where
         ((:readyStock = true and p.readyStock = true) or
          (:readyStock = false and p.readyStock = false and p.order = :orderNumber
-          and p.client <> '' and p.orderItem <> ''))
+          and p.client <> ''))
         and not exists (select f.id from ChecklistFlow f where f.cancelled = false
           and (f.serialPlateId = p.serial or f.normalizedSerial = cast(p.serial as string)))
         order by p.serial

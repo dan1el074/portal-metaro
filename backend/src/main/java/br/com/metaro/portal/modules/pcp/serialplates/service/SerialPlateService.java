@@ -97,7 +97,7 @@ public class SerialPlateService {
             List<SerialPlateChangeDto> displayed = new ArrayList<>();
 
             for (SerialPlateChangeDto change : changes) {
-                if (change.getField().equals(LABELS.get("orderItem"))) {
+                if (change.getField().equals(LABELS.get("orderItemCode"))) {
                     String previousItemModel = itemModels.getOrDefault(change.getBefore(), beforeModel);
                     String nextItemModel = itemModels.getOrDefault(change.getAfter(), afterModel);
                     displayed.add(new SerialPlateChangeDto(change.getField(),
@@ -139,13 +139,13 @@ public class SerialPlateService {
             throw invalid("Informe a ordem de fabricação. Somente ROLE_ADMIN pode criar registros sem OF.");
         }
 
-        if (!text(request.getOrder()).isEmpty() && text(request.getOrderItem()).isEmpty()) {
+        if (!text(request.getOrder()).isEmpty() && text(request.getOrderItemCode()).isEmpty()) {
             throw invalid("Selecione um item do pedido ou limpe o campo Nº Pedido para continuar.");
         }
 
         // Resolve upstream data before taking the global sequence lock.
         SerialPlateOrderDto order = text(request.getOrder()).isEmpty() ? null : erp.findOrder(request.getOrder());
-        SerialPlateOrderItemDto item = order == null ? null : orderItem(order, request.getOrderItem());
+        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, request.getOrderItemCode());
         Param sequence = params.findLockedByName("serialPlatesCount").orElseThrow(ResourceNotFoundException::new);
         long last;
 
@@ -182,19 +182,16 @@ public class SerialPlateService {
     @Transactional
     public List<SerialPlateDto> updatePlates(SerialPlateMutationDto request) {
         if (!LABELS.keySet().containsAll(request.getFields())) throw invalid("Campo de atualização inválido.");
-        if (request.getFields().contains("orderItem") && !request.getFields().contains("order")) throw invalid("Informe o pedido ao alterar seu item.");
+        if (request.getFields().contains("orderItemCode") && !request.getFields().contains("order")) throw invalid("Informe o pedido ao alterar seu item.");
 
         SerialPlatePatchDto patch = request.getPatch();
         boolean importing = request.getFields().contains("order") && !text(patch.getOrder()).isEmpty() && !(request.getFields().contains("readyStock") && Boolean.TRUE.equals(patch.getReadyStock()));
 
-        if (importing && text(patch.getOrderItem()).isEmpty()) throw invalid("Selecione um item do pedido.");
+        if (importing && text(patch.getOrderItemCode()).isEmpty()) throw invalid("Selecione um item do pedido.");
 
         List<Long> requestedSerials = serials(request.getVersions().keySet());
-        boolean changedReference = importing && repository.findAllById(requestedSerials).stream().anyMatch(plate ->
-                !text(patch.getOrder()).equals(plate.getOrder()) || !Objects.equals(patch.getOrderItem(), plate.getOrderItem()));
-
-        SerialPlateOrderDto order = changedReference ? erp.findOrder(patch.getOrder()) : null;
-        SerialPlateOrderItemDto item = order == null ? null : orderItem(order, patch.getOrderItem());
+        SerialPlateOrderDto order = importing ? erp.findOrder(patch.getOrder()) : null;
+        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, patch.getOrderItemCode());
         User user = users.authenticate();
         List<SerialPlate> updated = new ArrayList<>();
 
@@ -206,7 +203,7 @@ public class SerialPlateService {
             }
 
             Map<String, String> before = snapshot(plate);
-            boolean changedOrder = order != null && (!text(patch.getOrder()).equals(plate.getOrder()) || !Objects.equals(patch.getOrderItem(), plate.getOrderItem()));
+            boolean changedOrder = order != null;
 
             if (changedOrder) applyOrder(plate, patch.getOrder(), order, item);
 
@@ -226,8 +223,10 @@ public class SerialPlateService {
             }
 
             if (plate.getReadyStock()) {
-                plate.setOrder(""); plate.setOrderItem(""); plate.setClient("");
-            } else if (text(plate.getOrder()).isEmpty()) plate.setOrderItem("");
+                plate.setOrder(""); plate.setOrderItemCode(""); plate.setClient("");
+            } else if (text(plate.getOrder()).isEmpty()) {
+                plate.setOrderItemCode("");
+            }
 
             if (!text(plate.getProvider()).isEmpty() && before.get(LABELS.get("provider")).isEmpty() && plate.getStatus().equals("Criado")) plate.setStatus("Programado");
             validate(plate, before.get(LABELS.get("status")), before.get(LABELS.get("of")).isBlank());
@@ -359,13 +358,14 @@ public class SerialPlateService {
         return PageRequest.of(Math.max(0, requested.getPageNumber()), Math.max(1, Math.min(200, requested.getPageSize())), Sort.by(orders));
     }
 
-    private SerialPlateOrderItemDto orderItem(SerialPlateOrderDto order, String id) {
-        if (id == null || id.isBlank()) return order.getItems().getFirst();
-        return order.getItems().stream().filter(item -> item.getId().equals(id)).findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
+    private SerialPlateOrderItemDto orderItemCode(SerialPlateOrderDto order, String id) {
+        if (id == null || id.isBlank()) throw invalid("Selecione um item do pedido.");
+        return order.getItems().stream().filter(item -> item.getItemCode().equals(id)).findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
     }
 
     private void applyOrder(SerialPlate plate, String number, SerialPlateOrderDto order, SerialPlateOrderItemDto item) {
-        plate.setOrder(number.trim()); plate.setOrderItem(item.getId()); plate.setReadyStock(false);
+        plate.setOrder(number.trim()); plate.setReadyStock(false);
+        plate.setOrderItemCode(text(item.getItemCode()));
         plate.setClient(order.getClient()); plate.setDescription(item.getDescription()); plate.setVoltage(item.getVoltage());
         plate.setCapacity(item.getCapacity()); plate.setWeight(item.getWeight());
     }
@@ -384,7 +384,7 @@ public class SerialPlateService {
             if (value != null && (value.signum() <= 0 || value.scale() > 6 || value.precision() - value.scale() > 12)) throw invalid("Capacidade e peso devem ser positivos, com até seis casas decimais.");
         }
 
-        if (plate.getOrderItem().length() > 64 || plate.getClient().length() > 500 || plate.getDescription().length() > 1000 || plate.getVoltage().length() > 120 || plate.getProvider().length() > 255 || plate.getNotes().length() > 10000) throw invalid("Um dos campos ultrapassa o tamanho permitido.");
+        if (plate.getOrderItemCode().length() > 64 || plate.getClient().length() > 500 || plate.getDescription().length() > 1000 || plate.getVoltage().length() > 120 || plate.getProvider().length() > 255 || plate.getNotes().length() > 10000) throw invalid("Um dos campos ultrapassa o tamanho permitido.");
     }
 
     private SerialPlateDto dto(SerialPlate entity) {
@@ -414,7 +414,7 @@ public class SerialPlateService {
         if (changes.isEmpty()) return;
 
         for (SerialPlateChangeDto change : changes) {
-            if (!change.getField().equals(LABELS.get("orderItem"))) continue;
+            if (!change.getField().equals(LABELS.get("orderItemCode"))) continue;
             String previousLabel = previousItemLabel(serial, change.getBefore(), before.getOrDefault(LABELS.get("description"), ""));
             change.setBeforeLabel(previousLabel);
             change.setAfterLabel(itemHistoryLabel(change.getAfter(), itemLabel, after.getOrDefault(LABELS.get("description"), "")));
@@ -448,7 +448,7 @@ public class SerialPlateService {
 
         for (SerialPlateLog event : logs.findBySerialOrderByAtDescIdDesc(serial)) {
             for (SerialPlateChangeDto change : readChanges(event)) {
-                if (change.getField().equals(LABELS.get("orderItem")) && reference.equals(change.getAfter()) && !text(change.getAfterLabel()).isEmpty()) {
+                if (change.getField().equals(LABELS.get("orderItemCode")) && reference.equals(change.getAfter()) && !text(change.getAfterLabel()).isEmpty()) {
                     return change.getAfterLabel();
                 }
             }
@@ -479,7 +479,7 @@ public class SerialPlateService {
     private UnprocessableEntityException invalid(String message) { return new UnprocessableEntityException(message); }
     private static Map<String, String> labels() {
         Map<String, String> labels = new LinkedHashMap<>();
-        labels.put("of", "Ordem de fabricação"); labels.put("order", "Nº Pedido"); labels.put("orderItem", "Item do pedido");
+        labels.put("of", "Ordem de fabricação"); labels.put("order", "Nº Pedido"); labels.put("orderItemCode", "Item do pedido");
         labels.put("readyStock", "Pronta Entrega"); labels.put("client", "Cliente"); labels.put("description", "Modelo");
         labels.put("capacity", "Capacidade"); labels.put("voltage", "Voltagem"); labels.put("weight", "Peso");
         labels.put("provider", "Prestador de serviço"); labels.put("status", "Status"); labels.put("notes", "Observações");

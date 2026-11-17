@@ -56,18 +56,41 @@ describe('New checklist serial selection', () => {
     await fixture.whenStable();
   }
 
-  it('loads all available series for the order after selecting an ERP item and clears them when the order changes', async () => {
+  it('loads series for the order and selected ERP item code and clears them when the order changes', async () => {
     await change('Pedido', '900');
     control('Pedido').dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter' }));
     http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush(order);
     const available = http.expectOne(request => request.url.endsWith('/available-serials'));
     expect(available.request.params.get('order')).toBe('900');
-    expect(available.request.params.has('item')).toBeFalse();
+    expect(available.request.params.get('item')).toBe('MESA');
     available.flush([{ serial: '18918', description: 'Modelo' }]);
     await fixture.whenStable();
     expect(control('Número de série').textContent).toContain('18918');
     await change('Pedido', '901');
     expect(control('Número de série').textContent).not.toContain('18918');
+  });
+
+  it('queries each item by its code and clears the previous serial selection when the item changes', async () => {
+    await change('Pedido', '900');
+    control('Pedido').dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter' }));
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ ...order, items: [
+      { code: '60310', description: 'Mesmo modelo', quantity: 1 },
+      { code: '60297', description: 'Mesmo modelo', quantity: 1 },
+    ] });
+    await fixture.whenStable();
+    http.expectNone(request => request.url.endsWith('/available-serials'));
+    await change('Item', '60310 - Mesmo modelo');
+    const first = http.expectOne(request => request.url.endsWith('/available-serials'));
+    expect(first.request.params.get('order')).toBe('900'); expect(first.request.params.get('item')).toBe('60310');
+    first.flush([{ serial: '18918', description: 'Modelo' }]); await fixture.whenStable();
+    await change('Número de série', '18918');
+    await change('Item', '60297 - Mesmo modelo');
+    const second = http.expectOne(request => request.url.endsWith('/available-serials'));
+    expect(second.request.params.get('item')).toBe('60297');
+    second.flush([{ serial: '18919', description: 'Modelo' }]); await fixture.whenStable();
+    expect(control('Número de série').value).toBe('');
+    expect(control('Número de série').textContent).not.toContain('18918');
+    expect(control('Número de série').textContent).toContain('18919');
   });
 
   it('disables order and item in PE and submits only the selected stock series', async () => {

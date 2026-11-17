@@ -17,6 +17,7 @@ import br.com.metaro.portal.modules.general.memorando.entity.MemorandoStatus;
 import br.com.metaro.portal.modules.general.memorando.entity.Signature;
 import br.com.metaro.portal.modules.general.memorando.repository.MemorandoRepository;
 import br.com.metaro.portal.modules.general.memorando.service.MemorandoLogService;
+import br.com.metaro.portal.modules.general.memorando.service.MemorandoPublicationHistoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.TaskScheduler;
@@ -47,6 +48,12 @@ public class MemorandoUtil {
     private TaskScheduler taskScheduler;
     @Autowired
     private MemorandoScheduler memorandoScheduler;
+    @Autowired
+    private MemorandoPublicationHistoryService publicationHistory;
+
+    public void rememberPublishedVersion(Memorando entity) {
+        publicationHistory.capture(entity);
+    }
 
     public void dtoToEntity(MemorandoInsertDto dto, Memorando entity) {
         entity.setRequest(dto.getRequest());
@@ -98,10 +105,10 @@ public class MemorandoUtil {
             throw new UnprocessableEntityException("Não foram encontradas assinaturas pendentes!");
         }
 
+        boolean republishing = entity.getNumber() != null;
         addNumberAndCreatedAt(entity);
-
-        logService.create(entity.getId(), "Publicou o documento nº %d/%d".formatted(entity.getNumber(),
-                entity.getCreateAt().atZone(ZoneId.systemDefault()).getYear()));
+        logService.create(entity.getId(), publicationHistory.publicationMessage(entity, republishing));
+        publicationHistory.capture(entity);
 
         signAll(entity);
         notifyAllManangers(entity);

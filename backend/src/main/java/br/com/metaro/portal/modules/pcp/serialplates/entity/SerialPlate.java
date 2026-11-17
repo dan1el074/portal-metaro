@@ -20,7 +20,7 @@ public class SerialPlate {
     @Column(name = "order_number", nullable = false, length = 15)
     private String order = "";
     @Column(nullable = false, length = 64)
-    private String orderItem = "";
+    private String orderItemCode = "";
     @Column(nullable = false)
     private Boolean readyStock = false;
     @Column(nullable = false, length = 500)
