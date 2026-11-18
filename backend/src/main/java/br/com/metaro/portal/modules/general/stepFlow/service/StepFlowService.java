@@ -284,10 +284,17 @@ public class StepFlowService {
 
     @Transactional
     public void goToNextStep(Long id) {
-        Order order = this.orderRepository.findById(id).orElseThrow(ResourceNotFoundException::new);
+        User actor = userService.authenticate();
+        Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
 
+        if (!canInteract(order, actor)) {
+            throw new ForbiddenException("Usuário não corresponde ao setor competente!");
+        }
         if (order.getStatus().equals(OrderStatus.CANCELLED)) {
             throw new UnprocessableEntityException("Não é possível editar um pedido cancelado!");
+        }
+        if (order.getStatus().equals(OrderStatus.COMPLETED)) {
+            throw new UnprocessableEntityException("Não é possível editar um pedido concluído!");
         }
 
         StepType type = order.getCurrentStep();
@@ -308,10 +315,10 @@ public class StepFlowService {
 
         currentStep.setStatus(StepStatus.DONE);
         currentStep.setFinishedAt(Instant.now());
-        currentStep.setFinishedBy(userService.authenticate());
+        currentStep.setFinishedBy(actor);
 
         if (type.equals(StepType.FINAL_ASSEMBLY)) {
-            checkVolumes(order);
+            checkVolumes(order, actor);
         }
 
         if (type.equals(StepType.SHIPPING)) {
@@ -551,9 +558,8 @@ public class StepFlowService {
         }
     }
 
-    private void checkVolumes(Order order) {
-        User me = userService.authenticate();
-        boolean isAdmin = me.getAuthorities().stream()
+    private void checkVolumes(Order order, User actor) {
+        boolean isAdmin = actor.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
 
         if (!isAdmin && order.getVolumes().isEmpty()) {
@@ -571,14 +577,15 @@ public class StepFlowService {
         if (user.getAuthorities().stream()
             .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) return true;
 
+        String department = user.getPosition() == null ? null : user.getPosition().getName();
         return switch (order.getCurrentStep()) {
-            case FINAL_ASSEMBLY -> user.getPosition().getName().equals("Montagem Final")
-                                || user.getPosition().getName().equals("Almoxarifado")
-                                || user.getPosition().getName().equals("Qualidade");
-            case PCP ->  user.getPosition().getName().equals("PCP");
-            case FREIGHT -> user.getPosition().getName().equals("Comercial");
-            case BILLING -> user.getPosition().getName().equals("Financeiro");
-            case SHIPPING -> user.getPosition().getName().equals("Almoxarifado");
+            case FINAL_ASSEMBLY -> "Montagem Final".equals(department)
+                                || "Almoxarifado".equals(department)
+                                || "Qualidade".equals(department);
+            case PCP -> "PCP".equals(department);
+            case FREIGHT -> "Comercial".equals(department);
+            case BILLING -> "Financeiro".equals(department);
+            case SHIPPING -> "Almoxarifado".equals(department);
         };
     }
 

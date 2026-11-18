@@ -326,9 +326,10 @@
       <button
         cButton
         color="primary"
+        type="button"
         class="sofd-action-btn"
         (click)="onNextStep()"
-        [disabled]="quantityMutationLoading || reprocessLoading || nextStepLoading || volumeMutationLoading"
+        [disabled]="nextStepDisabled"
         [attr.aria-busy]="nextStepLoading"
       >
         @if (nextStepLoading) {

@@ -199,8 +199,8 @@ class StepFlowServiceTests {
         StepFlowService service = serviceWith(orderRepository, userService);
         Order order = finalAssemblyOrder();
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(userService.authenticate()).thenReturn(new User());
+        when(orderRepository.findLockedById(1L)).thenReturn(Optional.of(order));
+        when(userService.authenticate()).thenReturn(operatorFrom("Montagem Final"));
 
         assertThatThrownBy(() -> service.goToNextStep(1L))
                 .isInstanceOf(UnprocessableEntityException.class)
@@ -218,13 +218,34 @@ class StepFlowServiceTests {
         adminRole.setAuthority("ROLE_ADMIN");
         administrator.addRole(adminRole);
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.findLockedById(1L)).thenReturn(Optional.of(order));
         when(userService.authenticate()).thenReturn(administrator);
 
         service.goToNextStep(1L);
 
         assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void checksTheCurrentStageDepartmentOnEveryAdvance() {
+        OrderRepository repository = mock(OrderRepository.class);
+        UserService users = mock(UserService.class);
+        StepFlowService service = serviceWith(repository, users);
+        Order order = finalAssemblyOrder();
+        order.getVolumes().add(new OrderVolume());
+        User actor = operatorFrom("Qualidade");
+
+        when(repository.findLockedById(1L)).thenReturn(Optional.of(order));
+        when(users.authenticate()).thenReturn(actor);
+
+        service.goToNextStep(1L);
+        assertThatThrownBy(() -> service.goToNextStep(1L)).isInstanceOf(ForbiddenException.class);
+
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+        assertThat(order.getSteps().getFirst().getFinishedBy()).isSameAs(actor);
+        assertThat(order.getSteps().getLast().getStatus()).isEqualTo(StepStatus.ACTIVE);
+        verify(repository).save(order);
     }
 
     @Test

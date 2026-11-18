@@ -38,6 +38,36 @@ describe('Step flow quantities remain independent when editing linked checklists
 
   afterEach(() => { fixture.destroy(); http.verify(); });
 
+  it('only submits one advance while the request is pending and allows retry after an error', async () => {
+    fixture.componentInstance.open(1);
+    http.expectOne(request => request.url.endsWith('/step-flow/1')).flush({ ...order, currentStep: 'PCP', nextStep: 'Frete' });
+    http.expectOne(request => request.url.endsWith('/orders/1/equipment')).flush([checklist]);
+    await fixture.whenStable();
+
+    const button = fixture.nativeElement.querySelector('.sofd-footer button[aria-busy]') as HTMLButtonElement;
+    const advanced = spyOn(fixture.componentInstance.nextStepTask, 'emit');
+    const isAdvanceRequest = (request: { method: string; url: string }) =>
+      request.method === 'PUT' && request.url.endsWith('/step-flow/1/nextStep');
+
+    button.click();
+    button.click();
+    button.click();
+    await fixture.whenStable();
+    expect(button.disabled).toBeTrue();
+    http.expectOne(isAdvanceRequest).flush(null, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+    expect(button.disabled).toBeFalse();
+    expect(advanced).not.toHaveBeenCalled();
+
+    button.click();
+    http.expectOne(isAdvanceRequest).flush(null, { status: 204, statusText: 'No Content' });
+    await fixture.whenStable();
+    expect(advanced).toHaveBeenCalledOnceWith(1);
+    expect(fixture.nativeElement.querySelector('.sof-custom-offcanvas.visible')).toBeNull();
+    button.click();
+    http.expectNone(isAdvanceRequest);
+  });
+
   it('saves quantity from its modal without submitting pending comments or the step form', async () => {
     const comment = fixture.nativeElement.querySelector('#comment') as HTMLTextAreaElement;
     comment.value = 'Comentário ainda não salvo'; comment.dispatchEvent(new Event('input'));
