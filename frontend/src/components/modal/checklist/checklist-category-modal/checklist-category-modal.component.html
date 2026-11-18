@@ -1,4 +1,4 @@
-<c-modal modalBackNavigation [visible]="visible" (visibleChange)="onVisibleChange($event)" alignment="center" backdrop="static" size="xl">
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="onVisibleChange($event)" alignment="center" backdrop="static" size="xl" scrollable>
   <c-modal-header><h5 cModalTitle>{{ editing ? (store.state().categories.some(item => item.id === category.id) ? 'Editar categoria' : 'Nova categoria') : 'Gestão de categorias' }}</h5><button cButtonClose type="button" aria-label="Fechar" cTooltip="Fechar" cTooltipPlacement="bottom" (click)="close()"></button></c-modal-header>
   <c-modal-body>
     @if (editing) {
