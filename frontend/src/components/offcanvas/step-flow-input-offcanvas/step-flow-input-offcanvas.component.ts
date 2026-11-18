@@ -429,8 +429,12 @@ export class StepFlowInputOffcanvasComponent {
     return Array.from(formData.keys()).length === 0;
   }
 
+  protected get nextStepDisabled(): boolean {
+    return this.nextStepLoading || this.reprocessLoading || this.quantityMutationLoading || this.volumeMutationLoading || this.saveLoading;
+  }
+
   protected onNextStep(): void {
-    if (this.reprocessLoading || this.quantityMutationLoading || this.volumeMutationLoading) return;
+    if (!this.visible || !this.order || this.nextStepDisabled || this.showNextStepConfirmationModal) return;
     if (!this.isAdmin && this.order?.currentStep === 'Montagem Final' && this.order.volumes.length === 0) {
       this.shippingValidationForNextStep = true;
       this.toasterService.error('Cadastre ao menos um volume antes de avançar.');
@@ -578,16 +582,15 @@ export class StepFlowInputOffcanvasComponent {
   }
 
   protected onConfirmNextStep(): void {
+    if (!this.showNextStepConfirmationModal) return;
     this.showNextStepConfirmationModal = false;
     this.advanceToNextStep();
   }
 
   private advanceToNextStep(): void {
-    if (this.nextStepLoading) {
-      return;
-    }
+    if (!this.visible || !this.order || this.nextStepDisabled) return;
 
-    const id = this.order?.id as number;
+    const id = this.order.id;
     this.nextStepLoading = true;
 
     this.stepFlowService.nextStep(id)
@@ -601,7 +604,7 @@ export class StepFlowInputOffcanvasComponent {
           this.nextStepTask.emit(id);
           this.toasterService.success('Informações atualizada com sucesso.');
         },
-        error: (error) => this.toasterService.error(error.error.error),
+        error: (error) => this.toasterService.error(error.error?.error || 'Não foi possível avançar a etapa.'),
       });
   }
 
