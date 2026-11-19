@@ -1,5 +1,6 @@
 package br.com.metaro.portal.modules.pcp.serialplates.service;
 
+import br.com.metaro.portal.util.erp.ErpItemCode;
 import br.com.metaro.portal.core.entities.Param;
 import br.com.metaro.portal.core.entities.User;
 import br.com.metaro.portal.core.repositories.ParamRepository;
@@ -19,9 +20,11 @@ import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.http.HttpStatus;
 import org.hibernate.query.criteria.JpaExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
@@ -61,8 +64,22 @@ public class SerialPlateService {
 
 
     @Transactional(readOnly = true)
-    public Page<SerialPlateDto> listPlates(Pageable requested, String search, String status) {
-        return repository.findAll(filter(search, status), pageable(requested)).map(this::dto);
+    public Page<SerialPlateListRowDto> listPlates(Pageable requested, String search, String status) {
+        Pageable page = pageable(requested);
+        Specification<SerialPlate> specification = filter(search, status);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<SerialPlateListRowDto> query = cb.createQuery(SerialPlateListRowDto.class);
+        Root<SerialPlate> root = query.from(SerialPlate.class);
+        query.select(cb.construct(SerialPlateListRowDto.class, root.get("serial"), root.get("of"), root.get("order"),
+                root.get("readyStock"), root.get("client"), root.get("description"), root.get("provider"),
+                root.get("status"), root.get("notes"), root.get("updated")));
+        query.where(specification.toPredicate(root, query, cb)).orderBy(jpaOrders(page.getSort(), root, cb));
+
+        List<SerialPlateListRowDto> rows = entityManager.createQuery(query)
+                .setFirstResult(Math.toIntExact(page.getOffset()))
+                .setMaxResults(page.getPageSize())
+                .getResultList();
+        return PageableExecutionUtils.getPage(rows, page, () -> repository.count(specification));
     }
 
     @Transactional(readOnly = true)
@@ -132,7 +149,7 @@ public class SerialPlateService {
     }
 
     @Transactional
-    public List<SerialPlateDto> createPlates(SerialPlateCreateDto request) {
+    public int createPlates(SerialPlateCreateDto request) {
         int quantity = request.getQuantity().intValueExact();
         User user = users.authenticate();
         if (text(request.getOf()).isEmpty() && !user.hasRole("ROLE_ADMIN")) {
@@ -158,7 +175,6 @@ public class SerialPlateService {
 
         Long maximum = repository.findMaximumSerial();
         if (maximum != null && last < maximum) throw invalid("A sequência está abaixo do maior número de série existente. Corrija serialPlatesCount.");
-        List<SerialPlate> created = new ArrayList<>();
 
         for (int index = 0; index < quantity; index++) {
             SerialPlate plate = new SerialPlate();
@@ -170,13 +186,12 @@ public class SerialPlateService {
             plate.setUpdated(Instant.now());
             repository.save(plate);
             audit(plate.getSerial(), user, plate.getUpdated(), List.of(new SerialPlateChangeDto("Registro", "", "Registro criado")), snapshot(plate), Map.of(), item == null ? null : item.getLabel());
-            created.add(plate);
         }
 
         sequence.setContent(Long.toString(last));
         repository.flush();
 
-        return created.stream().map(this::dto).toList();
+        return quantity;
     }
 
     @Transactional
@@ -245,33 +260,61 @@ public class SerialPlateService {
     }
 
     @Transactional(readOnly = true)
-    public List<SerialPlateDto> getSelection(Collection<String> selection) {
-        List<Long> ids = serials(selection);
-        List<SerialPlate> found = repository.findAllById(ids);
-
-        if (found.size() != ids.size()) throw invalid("Um ou mais números de série não foram encontrados.");
-
-        Map<Long, SerialPlate> byId = new HashMap<>();
-        found.forEach(plate -> byId.put(plate.getSerial(), plate));
-
-        return ids.stream().map(id -> dto(byId.get(id))).toList();
+    public List<SerialPlateBatchRowDto> getSelection(Collection<String> selection) {
+        var ids = serials(selection);
+        var rows = repository.batchRows(ids);
+        requireAllSelected(ids, rows);
+        return rows;
     }
 
-    @Transactional(readOnly = true)
-    public List<SerialPlateDto> getRange(String anchor, String target, Pageable requested, String search, String status) {
+    private void requireAllSelected(List<Long> ids, List<?> rows) {
+        if (ids.size() != rows.size()) throw invalid("Um ou mais números de série não foram encontrados.");
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<String> getRange(String anchor, String target, Pageable requested, String search, String status) {
+        long first = parseSerial(anchor);
+        long last = parseSerial(target);
+        Sort sort = pageable(requested).getSort();
+        Specification<SerialPlate> specification = filter(search, status);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> query = cb.createQuery(Long.class);
-        Root<SerialPlate> root = query.from(SerialPlate.class);
-        query.select(root.get("serial")).where(filter(search, status).toPredicate(root, query, cb));
-        query.orderBy(pageable(requested).getSort().stream().map(sort -> sort.isAscending() ? cb.asc(root.get(sort.getProperty())) : cb.desc(root.get(sort.getProperty()))).toList());
-        List<Long> ids = entityManager.createQuery(query).getResultList();
-        int start = ids.indexOf(parseSerial(anchor));
-        int end = ids.indexOf(parseSerial(target));
+        var bounds = cb.createTupleQuery();
+        var plate = bounds.from(SerialPlate.class);
+        var fields = sort.stream().map(Sort.Order::getProperty).distinct().toList();
+        bounds.select(cb.tuple(fields.stream().map(field -> plate.get(field).alias(field)).toArray(Selection<?>[]::new)));
+        bounds.where(plate.get("serial").in(first, last), specification.toPredicate(plate, bounds, cb));
+        bounds.orderBy(jpaOrders(sort, plate, cb));
+        var endpoints = entityManager.createQuery(bounds).getResultList();
+        if (endpoints.size() < 2) {
+            if (!repository.existsById(last)) throw invalid("Um ou mais números de série não foram encontrados.");
+            return List.of(Long.toString(last));
+        }
 
-        if (start < 0 || end < 0) return getSelection(List.of(target));
-        if (Math.abs(end - start) >= 10000) throw invalid("Selecione no máximo 10000 registros por operação.");
+        var query = cb.createQuery(Long.class);
+        var root = query.from(SerialPlate.class);
+        query.select(root.get("serial")).where(specification.toPredicate(root, query, cb),
+                rangeBound(root, cb, sort, endpoints.getFirst(), true),
+                rangeBound(root, cb, sort, endpoints.getLast(), false));
+        query.orderBy(jpaOrders(sort, root, cb));
+        var ids = entityManager.createQuery(query).setMaxResults(10001).getResultList();
+        if (ids.size() > 10000) throw invalid("Selecione no máximo 10000 registros por operação.");
+        return ids.stream().map(Object::toString).toList();
+    }
 
-        return getSelection(ids.subList(Math.min(start, end), Math.max(start, end) + 1).stream().map(Object::toString).toList());
+    // All allowed sort keys are non-null. The final serial key makes each boundary unique.
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Predicate rangeBound(Root<SerialPlate> root, CriteriaBuilder cb, Sort sort,
+                                 jakarta.persistence.Tuple endpoint, boolean lower) {
+        Predicate samePrefix = cb.conjunction();
+        Predicate inside = cb.disjunction();
+        for (Sort.Order order : sort) {
+            Path<Comparable> field = root.get(order.getProperty());
+            Comparable value = (Comparable) endpoint.get(order.getProperty());
+            Predicate beyond = lower == order.isAscending() ? cb.greaterThan(field, value) : cb.lessThan(field, value);
+            inside = cb.or(inside, cb.and(samePrefix, beyond));
+            samePrefix = cb.and(samePrefix, cb.equal(field, value));
+        }
+        return cb.or(inside, samePrefix);
     }
 
     @Transactional(readOnly = true)
@@ -308,14 +351,22 @@ public class SerialPlateService {
     }
 
     @Transactional(readOnly = true)
+    public SerialPlateReportDto previewReport(SerialPlateSelectionDto selection) {
+        var ids = serials(selection.getSerials());
+        var rows = repository.reportRows(ids);
+        requireAllSelected(ids, rows);
+        return new SerialPlateReportDto(rows, getSettings());
+    }
+
+    @Transactional(readOnly = true)
     public SerialPlateReportDto prepareReport(SerialPlateSelectionDto selection) {
-        SerialPlateSettingsDto settings = getSettings();
+        var report = previewReport(selection);
+        var settings = report.getSettings();
         List<String> columns = settings.getReportColumns();
         if (columns.isEmpty()) throw invalid("Selecione pelo menos uma coluna do relatório nas configurações.");
         if (columns.contains("crea") && settings.getCrea().isBlank()) throw invalid("Informe o CREA nas configurações.");
-        List<SerialPlateDto> records = getSelection(selection.getSerials());
 
-        for (SerialPlateDto row : records) {
+        for (var row : report.getRecords()) {
             List<String> missing = new ArrayList<>();
             if (columns.contains("description") && row.getDescription().isBlank()) missing.add("modelo");
             if (columns.contains("voltage") && row.getVoltage().isBlank()) missing.add("tensão");
@@ -324,7 +375,7 @@ public class SerialPlateService {
             if (!missing.isEmpty()) throw invalid("Complete " + String.join(", ", missing) + " do registro #" + row.getSerial() + ".");
         }
 
-        return new SerialPlateReportDto(records, settings);
+        return report;
     }
 
     private Specification<SerialPlate> filter(String search, String status) {
@@ -351,6 +402,12 @@ public class SerialPlateService {
         };
     }
 
+    private List<Order> jpaOrders(Sort sort, Root<SerialPlate> root, CriteriaBuilder cb) {
+        return sort.stream()
+                .map(order -> order.isAscending() ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty())))
+                .toList();
+    }
+
     private Pageable pageable(Pageable requested) {
         List<Sort.Order> orders = new ArrayList<>(requested.getSort().stream().filter(order -> SORTS.contains(order.getProperty())).toList());
         if (orders.isEmpty()) orders.add(Sort.Order.desc("serial"));
@@ -360,11 +417,12 @@ public class SerialPlateService {
 
     private SerialPlateOrderItemDto orderItemCode(SerialPlateOrderDto order, String id) {
         if (id == null || id.isBlank()) throw invalid("Selecione um item do pedido.");
-        return order.getItems().stream().filter(item -> item.getItemCode().equals(id)).findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
+        String code = ErpItemCode.normalize(id);
+        return order.getItems().stream().filter(item -> item.getItemCode().equals(code)).findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
     }
 
     private void applyOrder(SerialPlate plate, String number, SerialPlateOrderDto order, SerialPlateOrderItemDto item) {
-        plate.setOrder(number.trim()); plate.setReadyStock(false);
+        plate.setOrder(Long.valueOf(number.trim()).toString()); plate.setReadyStock(false);
         plate.setOrderItemCode(text(item.getItemCode()));
         plate.setClient(order.getClient()); plate.setDescription(item.getDescription()); plate.setVoltage(item.getVoltage());
         plate.setCapacity(item.getCapacity()); plate.setWeight(item.getWeight());

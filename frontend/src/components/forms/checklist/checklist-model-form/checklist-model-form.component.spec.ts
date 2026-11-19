@@ -24,7 +24,7 @@ describe('Checklist model requirements', () => {
       equipment: [{ id: 'e', name: 'Mesa', abbreviation: 'MEB' }],
       templates: [previous, model, { ...previous, id: '11', categoryId: 'c', predecessorId: '' },
         { ...previous, id: 'other', equipmentId: 'other', predecessorId: '' }],
-      schema: 1, records: [], flows: [], items: [], defects: [], processes: [], nokFields: [] };
+      schema: 1, records: [], flows: [], items: [], defects: [], nokFields: [] };
     toast = jasmine.createSpyObj('ToastrService', ['error']);
     await TestBed.configureTestingModule({ imports: [ChecklistModelFormComponent], providers: [
       { provide: ChecklistPreviewService, useValue: { state: signal(data) } },
@@ -40,6 +40,31 @@ describe('Checklist model requirements', () => {
   it('shows the stored requirement even when it already has a predecessor and successor', () => {
     expect(select().value).toBe('12');
     expect(Array.from(select().options).map(option => option.value)).toEqual(['', '12', '11']);
+    expect(fixture.componentInstance.model.automatic).toBeFalse();
+  });
+
+  it('enables automatic generation when selecting a requirement and disables it when clearing the selection', async () => {
+    select().value = '';
+    select().dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    select().value = '12';
+    select().dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const automatic: HTMLInputElement = fixture.nativeElement.querySelector('.automatic-option input');
+    expect(automatic.checked).toBeTrue();
+    expect(fixture.componentInstance.model.automatic).toBeTrue();
+
+    select().value = '';
+    select().dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(automatic.checked).toBeFalse();
+    expect(automatic.disabled).toBeTrue();
   });
 
   it('rejects an occupied requirement immediately, names its successor and keeps the previous selection', async () => {

@@ -147,6 +147,33 @@ class RawMaterialsServiceValidationTests {
     }
 
     @Test
+    void requiresAndRecordsActivationReason() {
+        RawMaterialCategory category = new RawMaterialCategory();
+        category.setId(1L);
+        RawMaterial item = material(category);
+        item.setActive(false);
+        when(materialRepository.findById(11L)).thenReturn(Optional.of(item));
+        RawMaterialInputDto dto = validItem();
+        dto.setActivationReason("  ");
+
+        assertThatThrownBy(() -> service.update(11L, dto))
+                .isInstanceOf(UnprocessableEntityException.class).hasMessageContaining("justificativa");
+        assertThat(item.getActive()).isFalse();
+        verifyNoInteractions(historyRepository);
+
+        dto.setActivationReason("  Liberado pelo PCP | pedido 2  ");
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(userService.authenticate()).thenReturn(new User());
+        service.update(11L, dto);
+
+        ArgumentCaptor<RawMaterialHistory> history = ArgumentCaptor.forClass(RawMaterialHistory.class);
+        verify(historyRepository).save(history.capture());
+        assertThat(item.getActive()).isTrue();
+        assertThat(history.getValue().getChangedFields())
+                .isEqualTo("Item ativado\nJustificativa: Liberado pelo PCP | pedido 2");
+    }
+
+    @Test
     void doesNotRecordHistoryWhenAdministratorSavesWithoutChanges() {
         RawMaterialCategory category = new RawMaterialCategory();
         category.setId(1L);

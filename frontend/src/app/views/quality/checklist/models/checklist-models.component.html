@@ -4,8 +4,13 @@
     <div><button cButton color="secondary" variant="outline" routerLink="/qualidade/checklist"><app-checklist-icon name="arrow-left" /> Voltar</button><button cButton color="primary" (click)="create()"><app-checklist-icon name="plus" /> Novo modelo</button></div>
   </header>
 
+  @if (loading()) { <p>Carregando modelos...</p> }
+  @if (loadError()) {
+    <p role="alert">Não foi possível carregar os modelos.</p>
+    <button cButton color="secondary" variant="outline" (click)="load()">Tentar novamente</button>
+  }
   <c-accordion class="category-accordion" [alwaysOpen]="true">
-    @for (category of store.state().categories; track category.id; let categoryIndex = $index) {
+    @for (category of categories(); track category.id; let categoryIndex = $index) {
       <c-accordion-item #categoryItem="cAccordionItem" [visible]="categoryIndex === 0">
         <ng-template cTemplateId="accordionHeaderTemplate">
           <button cAccordionButton [collapsed]="!categoryItem.visible" (click)="categoryItem.toggleItem()">
@@ -19,9 +24,9 @@
             @for (model of modelsFor(category.id); track model.id) {
               <article>
                 <span class="model-id">#{{ modelNumber(model.id) }}</span>
-                <div class="model-main"><strong>{{ model.name }}</strong>@if (category.integration === 'production') { <span>{{ equipment(model.equipmentId) }}</span> }</div>
+                <div class="model-main"><strong>{{ model.name }}</strong>@if (category.integration === 'production') { <span>{{ model.equipment || 'Em branco' }}</span> }</div>
                 <div class="model-meta"><span>Versão {{ model.version }}</span>@if (model.predecessorId) { <span>Com requisito</span> } @else { <span>Início de fluxo</span> }</div>
-                <div class="model-actions"><button type="button" (click)="open(model.id)" cTooltip="Editar modelo" cTooltipPlacement="top" aria-label="Editar modelo"><app-checklist-icon name="pencil" /></button><button type="button" (click)="copy(model)" cTooltip="Copiar modelo" cTooltipPlacement="top" aria-label="Copiar modelo"><app-checklist-icon name="copy" /></button><button type="button" class="danger" [disabled]="modelUsed(model.id)" (click)="remove(model)" [cTooltip]="modelUsed(model.id) ? 'Modelo utilizado ou definido como requisito' : 'Excluir modelo'" cTooltipPlacement="top" aria-label="Excluir modelo"><app-checklist-icon name="trash" /></button></div>
+                <div class="model-actions"><button type="button" (click)="open(model.id)" cTooltip="Editar modelo" cTooltipPlacement="top" aria-label="Editar modelo"><app-checklist-icon name="pencil" /></button><button type="button" (click)="copy(model)" cTooltip="Copiar modelo" cTooltipPlacement="top" aria-label="Copiar modelo"><app-checklist-icon name="copy" /></button><button type="button" class="danger" [disabled]="model.used" (click)="remove(model)" [cTooltip]="model.used ? 'Modelo utilizado ou definido como requisito' : 'Excluir modelo'" cTooltipPlacement="top" aria-label="Excluir modelo"><app-checklist-icon name="trash" /></button></div>
               </article>
             } @empty { <p class="empty">Nenhum modelo configurado nesta categoria.</p> }
           </div>

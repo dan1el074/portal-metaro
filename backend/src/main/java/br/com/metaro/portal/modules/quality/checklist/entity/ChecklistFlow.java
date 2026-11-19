@@ -30,6 +30,7 @@ public class ChecklistFlow {
     private String clientId;
     private String clientName;
     private String commercialItem;
+    private String commercialItemCode;
     private String salesperson;
     @Column(name = "plan_json", columnDefinition = "TEXT")
     private String planJson;

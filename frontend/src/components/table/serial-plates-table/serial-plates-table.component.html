@@ -27,7 +27,7 @@
           <td class="custom-td" [class.description-cell]="columnName === 'description'" [class.client-cell]="columnName === 'client'" [class.selected-cell]="selected.has(item.serial)" [class.selection-cell]="columnName === 'selection'" [class.has-notes]="item.notes.trim()" [attr.title]="item.notes.trim() || null" (click)="onCellClick(columnName, item, $event)" (mousedown)="columnName === 'selection' && $event.shiftKey && $event.preventDefault()">
             @switch (columnName) {
               @case ('selection') { <input type="checkbox" [attr.aria-label]="'Selecionar ' + item.serial" [checked]="selected.has(item.serial)"> }
-              @case ('serial') { <button type="button" class="serial-link" (click)="$event.stopPropagation(); recordOpen.emit(item)">{{ serialLabel(item.serial) }}</button> }
+              @case ('serial') { <button type="button" class="serial-link" (click)="$event.stopPropagation(); recordOpen.emit(item.serial)">{{ serialLabel(item.serial) }}</button> }
               @case ('order') { {{ item.readyStock ? 'PE' : (item.order || '-') }} }
               @case ('of') { {{ numericOf(item.of) || '-' }} }
               @case ('status') { <span [class]="'status-badge ' + statusClass(item.status)"><i></i>{{ item.status }}</span> }

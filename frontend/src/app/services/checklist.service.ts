@@ -1,14 +1,76 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, firstValueFrom, from, switchMap, map } from 'rxjs';
+import { normalizeChecklistIntegration } from '../shared/checklist-rules';
 import { environment } from '../../environments/environment';
-import { Category, Checklist, ChecklistTableRow, Comment, Equipment, Flow, Template } from '../interface/checklist.interface';
+import { Category, Checklist, ChecklistTableRow, Comment, Equipment, Flow, Status, Template } from '../interface/checklist.interface';
 import { PendingIssues } from '../interface/user.interface';
+
+export interface ChecklistCreationOption {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  integration: Category['integration'];
+  erp: boolean;
+  serial: boolean;
+  standalone: boolean;
+  hasPredecessor: boolean;
+}
+
+export interface ChecklistPredecessor {
+  id: string;
+  serial: string | null;
+  title: string;
+  finished: string;
+}
+
+export interface ChecklistRecordContext {
+  record: Checklist;
+  flow: Flow;
+  editable: boolean;
+  clientNokHistory: boolean;
+  blocked: boolean;
+  previousId: string | null;
+  nextId: string | null;
+  steps: Array<{
+    templateId: string;
+    label: string;
+    title: string;
+    recordId: string | null;
+    status: Status | null;
+    skipped: boolean;
+  }>;
+}
 
 export interface ChecklistPage<T> {
   content: T[];
   totalElements: number;
   totalPages: number;
+}
+
+export type ChecklistCategoryTab = Pick<Category, 'id' | 'name'>;
+export type ChecklistCategorySummary = Pick<Category, 'id' | 'name' | 'integration' | 'active'>;
+export type ChecklistCategoryHistory = Pick<Category, 'id' | 'name' | 'integration' | 'clientNokHistory'>;
+export type ChecklistCategoryAccess = Pick<Category, 'id' | 'name' | 'operators'>;
+export interface ChecklistAccessChange {
+  categoryId: string;
+  userId: number;
+  allowed: boolean;
+}
+export interface ChecklistCategoryModelOption extends Pick<Category, 'id' | 'name' | 'integration' | 'erp' | 're' | 'ref' | 'media'> {
+  fieldIds: string[];
+}
+export type ChecklistTemplateOption = Pick<Template, 'id' | 'name' | 'categoryId' | 'equipmentId' | 'predecessorId'>;
+export interface ChecklistTemplateSummary extends ChecklistTemplateOption {
+  equipment: string | null;
+  version: number;
+  used: boolean;
+}
+
+export interface ChecklistHeader {
+  categories: ChecklistCategoryTab[];
+  headerCount: Array<{ categories: number; models: number; equipment: number }>;
 }
 
 export interface ChecklistDepartment { id: number; name: string; enabled: boolean; }
@@ -82,14 +144,78 @@ export class ChecklistService {
 
   constructor(private readonly http: HttpClient) {}
 
+  header(): Observable<ChecklistHeader> {
+    return this.http.get<ChecklistHeader>(`${this.api}/header`).pipe(map(header => ({
+      ...header, categories: header.categories.map(category => ({ ...category, id: String(category.id) })),
+    })));
+  }
+
+  listCategorySummaries(): Observable<ChecklistCategorySummary[]> {
+    return this.http.get<ChecklistCategorySummary[]>(`${this.api}/categories/summary`).pipe(map(categories =>
+      categories.map(category => ({ ...category, id: String(category.id), integration: normalizeChecklistIntegration(category.integration) })),
+    ));
+  }
+
+  listCategoryModelOptions(): Observable<ChecklistCategoryModelOption[]> {
+    return this.http.get<ChecklistCategoryModelOption[]>(`${this.api}/categories/model-options`).pipe(map(categories =>
+      categories.map(category => ({ ...category, id: String(category.id), integration: normalizeChecklistIntegration(category.integration) })),
+    ));
+  }
+
+  getCategory(id: string): Observable<Category> {
+    return this.http.get<Category>(`${this.api}/categories/${id}`).pipe(map(category => ({
+      ...category, id: String(category.id), integration: normalizeChecklistIntegration(category.integration),
+    })));
+  }
+
+  updateCategoryStatus(id: string, active: boolean, reason: string): Observable<void> {
+    return this.http.patch<void>(`${this.api}/categories/${id}/status`, { active, reason });
+  }
+
+  listCategoryHistorySettings(): Observable<ChecklistCategoryHistory[]> {
+    return this.http.get<ChecklistCategoryHistory[]>(`${this.api}/categories/history-settings`).pipe(map(categories =>
+      categories.map(category => ({ ...category, id: String(category.id), integration: normalizeChecklistIntegration(category.integration) })),
+    ));
+  }
+
+  updateCategoryHistory(settings: Record<string, boolean>): Observable<void> {
+    return this.http.patch<void>(`${this.api}/categories/history-settings`, settings);
+  }
+
+  listCategoryAccess(): Observable<ChecklistCategoryAccess[]> {
+    return this.http.get<ChecklistCategoryAccess[]>(`${this.api}/access/categories`).pipe(map(categories =>
+      categories.map(category => ({ ...category, id: String(category.id) })),
+    ));
+  }
+
   listCategories(): Observable<Category[]> { return this.http.get<Category[]>(`${this.api}/categories`); }
-  createCategory(value: Category): Observable<Category> { return this.http.post<Category>(`${this.api}/categories`, this.withoutId(value)); }
-  updateCategory(value: Category): Observable<Category> { return this.http.put<Category>(`${this.api}/categories/${value.id}`, value); }
+  createCategory(value: Category): Observable<Category> { return from(this.categoryPayload(value)).pipe(switchMap(dto => this.http.post<Category>(`${this.api}/categories`, this.withoutId(dto)))); }
+  updateCategory(value: Category): Observable<Category> { return from(this.categoryPayload(value)).pipe(switchMap(dto => this.http.put<Category>(`${this.api}/categories/${value.id}`, dto))); }
   deleteCategory(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/categories/${id}`); }
-  myAccess(): Observable<string[]> { return this.http.get<string[]>(`${this.api}/access/me`); }
+  private nextNestedId = 0n;
+  private blockEnd = 0n;
+  private reserving?: Promise<void>;
+
+  async nestedId(): Promise<string> {
+    while (this.nextNestedId === this.blockEnd) {
+      this.reserving ??= firstValueFrom(this.http.post(`${this.api}/records/id-block`, {}, { responseType: 'text' }))
+        .then(first => { this.nextNestedId = BigInt(first); this.blockEnd = this.nextNestedId + 256n; })
+        .finally(() => { this.reserving = undefined; });
+      await this.reserving;
+    }
+    return String(this.nextNestedId++);
+  }
+
+  newContext(templateId: string, previous: string): Observable<Flow> {
+    return this.http.get<Flow>(`${this.api}/records/new-context`, { params: previous ? { templateId, previous } : { templateId } });
+  }
   listOperators(): Observable<ChecklistOperator[]> { return this.http.get<ChecklistOperator[]>(`${this.api}/access/operators`); }
   updateAccess(categoryId: string, operatorIds: number[]): Observable<void> {
     return this.http.put<void>(`${this.api}/access`, { categoryId, userIds: operatorIds });
+  }
+
+  updateAccessBatch(changes: ChecklistAccessChange[]): Observable<void> {
+    return this.http.patch<void>(`${this.api}/access`, changes);
   }
 
   listEquipment(): Observable<Equipment[]> { return this.http.get<Equipment[]>(`${this.api}/equipment`); }
@@ -97,9 +223,21 @@ export class ChecklistService {
   updateEquipment(value: Equipment): Observable<Equipment> { return this.http.put<Equipment>(`${this.api}/equipment/${value.id}`, value); }
   deleteEquipment(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/equipment/${id}`); }
 
+  listTemplateSummaries(): Observable<ChecklistTemplateSummary[]> {
+    return this.http.get<ChecklistTemplateSummary[]>(`${this.api}/templates/summary`).pipe(map(templates =>
+      templates.map(template => ({
+        ...template, id: String(template.id), categoryId: String(template.categoryId),
+        equipmentId: template.equipmentId == null ? '' : String(template.equipmentId),
+        predecessorId: template.predecessorId == null ? '' : String(template.predecessorId),
+      })),
+    ));
+  }
+
+  getTemplate(id: string): Observable<Template> { return this.http.get<Template>(`${this.api}/templates/${id}`); }
+
   listTemplates(): Observable<Template[]> { return this.http.get<Template[]>(`${this.api}/templates`); }
-  createTemplate(value: Template): Observable<Template> { return this.http.post<Template>(`${this.api}/templates`, this.withoutId(this.templatePayload(value))); }
-  updateTemplate(value: Template): Observable<Template> { return this.http.put<Template>(`${this.api}/templates/${value.id}`, this.templatePayload(value)); }
+  createTemplate(value: Template): Observable<Template> { return from(this.templatePayload(value, true)).pipe(switchMap(dto => this.http.post<Template>(`${this.api}/templates`, this.withoutId(dto)))); }
+  updateTemplate(value: Template): Observable<Template> { return from(this.templatePayload(value, false)).pipe(switchMap(dto => this.http.put<Template>(`${this.api}/templates/${value.id}`, dto))); }
   deleteTemplate(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/templates/${id}`); }
 
   listCatalog(type: 'ITEM' | 'DEFECT'): Observable<ChecklistCatalogEntry[]> {
@@ -112,10 +250,10 @@ export class ChecklistService {
     return this.http.put<ChecklistCatalogEntry>(`${this.api}/catalog/${entry.id}`, entry);
   }
 
-  listRecordRows(query: { page: number; size: number; categoryId?: string; search?: string; status?: string; sort?: string; consultation?: boolean; actionable?: boolean }): Observable<ChecklistPage<ChecklistTableRow & { order?: string }>> {
+  listRecordRows(query: { page: number; size: number; categoryId?: string; search?: string; status?: string; sort?: string; consultation?: boolean; actionable?: boolean }): Observable<ChecklistPage<ChecklistTableRow>> {
     let params = new HttpParams();
     Object.entries(query).forEach(([key, value]) => { if (value !== undefined && value !== '') params = params.set(key, value); });
-    return this.http.get<ChecklistPage<ChecklistTableRow & { order?: string }>>(`${this.api}/records/table`, { params });
+    return this.http.get<ChecklistPage<ChecklistTableRow>>(`${this.api}/records/table`, { params });
   }
   recordCounts(consultation: boolean): Observable<Record<string, number>> {
     return this.http.get<Record<string, number>>(`${this.api}/records/counts`, { params: new HttpParams().set('consultation', consultation) });
@@ -130,18 +268,39 @@ export class ChecklistService {
   findErpOrder(orderNumber: string): Observable<ChecklistErpOrder> {
     return this.http.get<ChecklistErpOrder>(`${this.api}/erp/orders/${encodeURIComponent(orderNumber)}`);
   }
+  creationOptions(): Observable<ChecklistCreationOption[]> {
+    return this.http.get<ChecklistCreationOption[]>(`${this.api}/records/creation-options`).pipe(
+      map(options => options.map(option => ({ ...option, id: String(option.id), categoryId: String(option.categoryId),
+        integration: normalizeChecklistIntegration(option.integration) }))),
+    );
+  }
+
+  eligiblePredecessors(templateId: string, page: number) {
+    return this.http.get<{ content: ChecklistPredecessor[]; last: boolean }>(
+      `${this.api}/records/eligible-predecessors`, { params: { templateId, page } },
+    );
+  }
+
   availableSerials(order: string, readyStock: boolean, item = ''): Observable<Array<{ serial: string; description: string }>> {
     return this.http.get<Array<{ serial: string; description: string }>>(`${this.api}/records/available-serials`, {
       params: new HttpParams().set('order', order).set('readyStock', readyStock).set('item', readyStock ? '' : item),
     });
   }
+  getRecordContext(id: string, editing: boolean): Observable<ChecklistRecordContext> {
+    return this.http.get<ChecklistRecordContext>(`${this.api}/records/${id}/context`, {
+      params: new HttpParams().set('editing', editing),
+    });
+  }
+
   getRecord(id: string): Observable<Checklist> { return this.http.get<Checklist>(`${this.api}/records/${id}`); }
   getFlow(recordId: string): Observable<Flow> { return this.http.get<Flow>(`${this.api}/records/${recordId}/flow`); }
   createRecord(value: ChecklistRecordCreate): Observable<Checklist> { return this.http.post<Checklist>(`${this.api}/records`, value); }
   saveRecord(value: Checklist, finish: boolean, confirmOpenMemorandos = false): Observable<Checklist> {
     return this.http.put<Checklist>(`${this.api}/records/${value.id}${finish ? '/finish' : ''}`, { ...value, confirmOpenMemorandos: finish && confirmOpenMemorandos });
   }
-  claim(id: string): Observable<Checklist> { return this.http.put<Checklist>(`${this.api}/records/${id}/claim`, null); }
+  claim(id: string): Observable<Checklist> {
+    return this.http.put<Checklist>(`${this.api}/records/${id}/claim`, null, { params: { editing: true } });
+  }
   delegate(id: string, userId: number): Observable<Checklist> {
     return this.http.put<Checklist>(`${this.api}/records/${id}/delegate/${userId}`, null);
   }
@@ -210,8 +369,27 @@ export class ChecklistService {
     return this.http.get<ChecklistMemorando[]>(`${this.api}/records/${recordId}/memorandos`);
   }
 
-  private templatePayload(value: Template): object {
-    return { ...value, equipmentId: value.equipmentId || null, predecessorId: value.predecessorId || null };
+  private async categoryPayload(value: Category) {
+    const dto = structuredClone(value);
+    for (const field of dto.fields) if (Number(field.id) < 0) field.id = await this.nestedId();
+    return dto;
+  }
+
+  private async templatePayload(value: Template, creating: boolean) {
+    const dto = structuredClone(value);
+    const replacements = new Map<string, string>();
+    for (const section of dto.sections) {
+      const nodes = [section, ...section.questions.flatMap(question => [question, ...question.fields])];
+      for (const node of nodes) {
+        if (creating || Number(node.id) < 0) {
+          const id = await this.nestedId();
+          replacements.set(String(node.id), id);
+          node.id = id;
+        }
+      }
+    }
+    dto.title = dto.title.replace(/\{([^}]+)\}/g, (token, id) => replacements.has(id) ? `{${replacements.get(id)}}` : token);
+    return { ...dto, equipmentId: dto.equipmentId || null, predecessorId: dto.predecessorId || null };
   }
 
   private withoutId<T extends object>(value: T): Omit<T, 'id'> {

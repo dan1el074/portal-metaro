@@ -169,17 +169,6 @@ export interface Revision {
   actor: string;
   record: Omit<Checklist, 'revisions'>;
 }
-export interface PreviewProcess {
-  id: string;
-  order: string;
-  item: string;
-  flowIds: string[];
-  categoryId: string;
-  stage: string;
-  requested: boolean;
-  done: boolean;
-  cancelled: boolean;
-}
 export interface ChecklistState {
   schema: number;
   categories: Category[];
@@ -190,18 +179,15 @@ export interface ChecklistState {
   items: string[];
   defects: string[];
   nokFields: NokFormField[];
-  processes: PreviewProcess[];
 }
 export interface ChecklistTableRow {
   id: string;
-  number: number;
   title: string;
   category: string;
   categoryId: string;
   model: string;
-  equipment: string;
-  equipmentId: string;
-  serial: string;
+  serial: string | null;
+  order: string | null;
   status: Status;
   updated: string;
 }

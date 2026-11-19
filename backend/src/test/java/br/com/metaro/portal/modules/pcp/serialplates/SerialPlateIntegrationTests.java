@@ -61,6 +61,12 @@ class SerialPlateIntegrationTests {
         dto.setQuantity(BigDecimal.valueOf(quantity)); dto.setOf("8301"); return dto;
     }
 
+    private List<SerialPlateDto> createAndRead(SerialPlateCreateDto input) {
+        int count = service.createPlates(input);
+        long last = repository.findMaximumSerial();
+        return java.util.stream.LongStream.rangeClosed(last - count + 1, last).mapToObj(service::getPlate).toList();
+    }
+
     @Test
     void consumesThePublishedItemCodeAndPersistsItOnNewSeries() throws Exception {
         FoccoPlateLineDto line = mapper.readValue("""
@@ -71,7 +77,7 @@ class SerialPlateIntegrationTests {
         var item = erp.findOrder("900").getItems().getFirst();
         assertThat(item.getItemCode()).isEqualTo("60289");
         var input = draft(5); input.setOrder("900"); input.setOrderItemCode(item.getItemCode());
-        var created = service.createPlates(input);
+        var created = createAndRead(input);
         assertThat(created).hasSize(5);
         assertThat(repository.findAll()).allSatisfy(plate -> assertThat(plate.getOrderItemCode()).isEqualTo("60289"));
     }
@@ -89,16 +95,16 @@ class SerialPlateIntegrationTests {
         var reordered = erp.findOrder("900").getItems();
         assertThat(reordered.getFirst().getItemCode()).isEqualTo(items.get(1).getItemCode());
         var input = draft(1); input.setOrder("900"); input.setOrderItemCode(reordered.getFirst().getItemCode());
-        service.createPlates(input);
+        createAndRead(input);
         assertThat(repository.findAll().getFirst().getOrderItemCode()).isEqualTo("60310");
     }
 
     @Test
     void requiresAnExplicitItemWhenCreatingPlatesWithAnOrder() {
         var input = draft(1); input.setOrder("900");
-        assertThatThrownBy(() -> service.createPlates(input)).hasMessageContaining("Selecione um item do pedido");
+        assertThatThrownBy(() -> createAndRead(input)).hasMessageContaining("Selecione um item do pedido");
         input.setOrder(" ");
-        assertThat(service.createPlates(input)).hasSize(1);
+        assertThat(createAndRead(input)).hasSize(1);
     }
 
     @Test
@@ -108,14 +114,14 @@ class SerialPlateIntegrationTests {
         admin.setRoles(new HashSet<>(Set.of(adminRole)));
         when(userService.authenticate()).thenReturn(admin);
         SerialPlateCreateDto input = draft(1); input.setOf("   ");
-        List<SerialPlateDto> created = service.createPlates(input);
+        List<SerialPlateDto> created = createAndRead(input);
         assertThat(created.getFirst().getOf()).isEmpty();
 
         User operator = new User(); operator.setId(admin.getId()); operator.setName(admin.getName());
         Role checklistAdmin = new Role(); checklistAdmin.setId(-2L); checklistAdmin.setAuthority("ROLE_CHECKLIST_ADMIN");
         operator.setRoles(new HashSet<>(Set.of(checklistAdmin)));
         when(userService.authenticate()).thenReturn(operator);
-        assertThatThrownBy(() -> service.createPlates(input)).hasMessageContaining("Somente ROLE_ADMIN");
+        assertThatThrownBy(() -> createAndRead(input)).hasMessageContaining("Somente ROLE_ADMIN");
         assertThat(repository.count()).isEqualTo(1);
         SerialPlatePatchDto patch = new SerialPlatePatchDto(); patch.setNotes("Atualizado");
         List<SerialPlateDto> updated = service.updatePlates(mutation(created, patch, "notes"));
@@ -136,7 +142,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void returnedStatusIsPersistedAuditedAndIncludedInFiltersAndSummary() {
-        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        List<SerialPlateDto> rows = createAndRead(draft(2));
         SerialPlatePatchDto patch = new SerialPlatePatchDto();
         patch.setStatus("Devolvido");
         assertThatThrownBy(() -> service.updatePlates(mutation(rows, patch, "status")))
@@ -152,7 +158,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void retiredStatusCannotBeAssignedToAnyPlate() {
-        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        List<SerialPlateDto> rows = createAndRead(draft(2));
         SerialPlatePatchDto patch = new SerialPlatePatchDto();
         patch.setProvider("Interno"); patch.setStatus("Terceiro");
         assertThatThrownBy(() -> service.updatePlates(mutation(rows, patch, "status", "provider")))
@@ -162,7 +168,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void legacyStatusSurvivesUnrelatedEditsButCannotBeSelectedAgainAfterChangingIt() {
-        SerialPlateDto row = service.createPlates(draft(1)).getFirst();
+        SerialPlateDto row = createAndRead(draft(1)).getFirst();
         var plate = repository.findById(Long.valueOf(row.getSerial())).orElseThrow();
         plate.setStatus("Terceiro"); plate.setProvider("Interno"); repository.saveAndFlush(plate);
         row = service.getPlate(plate.getSerial());
@@ -180,13 +186,13 @@ class SerialPlateIntegrationTests {
     @Test
     void allocatesGlobalNumbersAndRejectsCounterRewind() {
         assertThat(repository.count()).isZero();
-        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        List<SerialPlateDto> rows = createAndRead(draft(2));
         assertThat(rows).extracting(SerialPlateDto::getSerial).containsExactly("18918", "18919");
         assertThat(service.getHistory(18918L)).hasSize(1);
         assertThat(params.findByName("serialPlatesCount").orElseThrow().getContent()).isEqualTo("18919");
         Param sequence = params.findByName("serialPlatesCount").orElseThrow();
         sequence.setContent("18917"); params.saveAndFlush(sequence);
-        assertThatThrownBy(() -> service.createPlates(draft(1))).hasMessageContaining("sequência");
+        assertThatThrownBy(() -> createAndRead(draft(1))).hasMessageContaining("sequência");
         assertThat(repository.count()).isEqualTo(2);
     }
 
@@ -195,20 +201,18 @@ class SerialPlateIntegrationTests {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             CountDownLatch start = new CountDownLatch(1);
-            Callable<List<SerialPlateDto>> task = () -> { start.await(); return service.createPlates(draft(3)); };
-            Future<List<SerialPlateDto>> first = executor.submit(task);
-            Future<List<SerialPlateDto>> second = executor.submit(task);
+            Callable<Integer> task = () -> { start.await(); return service.createPlates(draft(3)); };
+            var first = executor.submit(task);
+            var second = executor.submit(task);
             start.countDown();
-            Set<String> serials = new HashSet<>();
-            first.get(20, TimeUnit.SECONDS).forEach(row -> serials.add(row.getSerial()));
-            second.get(20, TimeUnit.SECONDS).forEach(row -> serials.add(row.getSerial()));
-            assertThat(serials).hasSize(6);
+            assertThat(first.get(20, TimeUnit.SECONDS) + second.get(20, TimeUnit.SECONDS)).isEqualTo(6);
+            assertThat(repository.count()).isEqualTo(6);
         } finally { executor.shutdownNow(); }
     }
 
     @Test
     void rollsBackEntireBatchAndRejectsStaleEdits() {
-        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        List<SerialPlateDto> rows = createAndRead(draft(2));
         SerialPlatePatchDto patch = new SerialPlatePatchDto(); patch.setStatus("Finalizado");
         assertThatThrownBy(() -> service.updatePlates(mutation(rows, patch, "status"))).hasMessageContaining("prestador");
         assertThat(repository.findAll()).allMatch(row -> row.getStatus().equals("Criado"));
@@ -224,7 +228,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void clearsOrderAndClientOnlyOnSavedPeAndKeepsEquipment() {
-        List<SerialPlateDto> rows = service.createPlates(draft(1));
+        List<SerialPlateDto> rows = createAndRead(draft(1));
         SerialPlatePatchDto patch = new SerialPlatePatchDto();
         patch.setClient("Cliente"); patch.setDescription("Modelo"); patch.setReadyStock(true);
         SerialPlateDto updated = service.updatePlates(mutation(rows, patch, "client", "description", "readyStock")).getFirst();
@@ -236,13 +240,19 @@ class SerialPlateIntegrationTests {
 
     @Test
     void paginatesFiltersOrdersAndCountsAllRecords() {
-        service.createPlates(draft(12));
+        createAndRead(draft(12));
         var page = service.listPlates(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "serial")), "8301", "Criado");
         assertThat(page.getTotalElements()).isEqualTo(12);
         assertThat(page.getContent()).hasSize(10);
         assertThat(page.getContent().getFirst().getSerial()).isEqualTo("18929");
         assertThat(service.getSummary().get("total")).isEqualTo(12);
         assertThat(service.getRange("18929", "18918", PageRequest.of(0, 10), "", "")).hasSize(12);
+        var tied = PageRequest.of(0, 10, Sort.by("client", "status"));
+        assertThat(service.getRange("18922", "18925", tied, "8301", "Criado"))
+                .containsExactly("18925", "18924", "18923", "18922");
+        assertThat(service.getRange("18925", "18922", tied, "8301", "Criado"))
+                .containsExactly("18925", "18924", "18923", "18922");
+        assertThat(service.getRange("18925", "18922", tied, "", "Recebido")).containsExactly("18922");
     }
 
     @Test
@@ -250,7 +260,7 @@ class SerialPlateIntegrationTests {
     void searchesPartialSerialThroughThePaginatedEndpoint() throws Exception {
         Param sequence = params.findByName("serialPlatesCount").orElseThrow();
         sequence.setContent("18689"); params.saveAndFlush(sequence);
-        service.createPlates(draft(12));
+        createAndRead(draft(12));
 
         mvc.perform(get("/api/serial-plates")
                 .param("page", "0").param("size", "10").param("search", "1869")
@@ -259,7 +269,22 @@ class SerialPlateIntegrationTests {
             .andExpect(jsonPath("$.totalElements").value(10))
             .andExpect(jsonPath("$.content.length()").value(10))
             .andExpect(jsonPath("$.content[0].serial").value("18699"))
-            .andExpect(jsonPath("$.content[9].serial").value("18690"));
+            .andExpect(jsonPath("$.content[9].serial").value("18690"))
+            .andExpect(jsonPath("$.content[0].of").value("8301"))
+            .andExpect(jsonPath("$.content[0].readyStock").value(false))
+            .andExpect(jsonPath("$.content[0].notes").value(""))
+            .andExpect(jsonPath("$.content[0].version").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.content[0].orderItemCode").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.content[0].capacity").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.content[0].weight").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.content[0].voltage").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.content[0].manufactured").doesNotHaveJsonPath());
+
+        mvc.perform(get("/api/serial-plates/18699"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.version").isNumber())
+            .andExpect(jsonPath("$.weight").hasJsonPath())
+            .andExpect(jsonPath("$.manufactured").isNotEmpty());
     }
 
     @Test
@@ -274,7 +299,7 @@ class SerialPlateIntegrationTests {
             assertThat(order.getItems().getFirst().getCapacity()).isNull();
             assertThat(order.getItems().getFirst().getWeight()).isEqualByComparingTo("180");
             SerialPlateCreateDto input = draft(1); input.setOrder("900"); input.setOrderItemCode(order.getItems().getFirst().getItemCode());
-            SerialPlateDto created = service.createPlates(input).getFirst();
+            SerialPlateDto created = createAndRead(input).getFirst();
             assertThat(created.getCapacity()).isNull();
             assertThat(created.getWeight()).isEqualByComparingTo("180");
             assertThat(created.getDescription()).isEqualTo("NDE 902020");
@@ -292,7 +317,7 @@ class SerialPlateIntegrationTests {
             assertThat(order.getItems().getFirst().getCapacity()).isEqualByComparingTo("9");
             assertThat(order.getItems().getFirst().getWeight()).isNull();
             SerialPlateCreateDto input = draft(1); input.setOrder("900"); input.setOrderItemCode(order.getItems().getFirst().getItemCode());
-            SerialPlateDto created = service.createPlates(input).getFirst();
+            SerialPlateDto created = createAndRead(input).getFirst();
             assertThat(created.getCapacity()).isEqualByComparingTo("9");
             assertThat(created.getWeight()).isNull();
         }
@@ -302,7 +327,7 @@ class SerialPlateIntegrationTests {
         when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
         SerialPlateOrderDto order = erp.findOrder("900");
         SerialPlateCreateDto input = draft(1); input.setOrder("900"); input.setOrderItemCode(order.getItems().getFirst().getItemCode());
-        SerialPlateDto created = service.createPlates(input).getFirst();
+        SerialPlateDto created = createAndRead(input).getFirst();
         assertThat(created.getCapacity()).isNull(); assertThat(created.getWeight()).isNull();
     }
 
@@ -319,7 +344,7 @@ class SerialPlateIntegrationTests {
         assertThat(order.getItems().getFirst().getWeight()).isNull();
         assertThat(order.getItems().getFirst().getDescription()).isEqualTo(line.getModel());
         SerialPlateCreateDto dto = draft(1); dto.setOrder("900"); dto.setOrderItemCode(order.getItems().getFirst().getItemCode());
-        SerialPlateDto plate = service.createPlates(dto).getFirst();
+        SerialPlateDto plate = createAndRead(dto).getFirst();
         assertThat(plate.getClient()).isEqualTo("Cliente");
         assertThatThrownBy(() -> service.prepareReport(selection(plate.getSerial()))).hasMessageContaining("Complete");
     }
@@ -332,7 +357,7 @@ class SerialPlateIntegrationTests {
     void persistsReportColumnsAndOnlyRequiresSelectedFieldsForExport() {
         SerialPlateSettingsDto original = service.getSettings();
         assertThat(original.getReportColumns()).containsExactly("serial", "description", "manufactured", "voltage", "crea", "weight");
-        SerialPlateDto plate = service.createPlates(draft(1)).getFirst();
+        SerialPlateDto plate = createAndRead(draft(1)).getFirst();
         try {
             SerialPlateSettingsDto settings = service.getSettings();
             settings.setReportColumns(List.of("serial")); settings.setCrea("");
@@ -357,7 +382,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void rollbackAlsoRemovesChangesAlreadyAppliedToEarlierBatchRows() {
-        List<SerialPlateDto> rows = service.createPlates(draft(2));
+        List<SerialPlateDto> rows = createAndRead(draft(2));
         SerialPlatePatchDto provider = new SerialPlatePatchDto(); provider.setProvider("Interno");
         SerialPlateDto first = service.updatePlates(mutation(List.of(rows.getFirst()), provider, "provider")).getFirst();
         SerialPlatePatchDto status = new SerialPlatePatchDto(); status.setStatus("Finalizado");
@@ -368,7 +393,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void permitsStatusRegressionAndDoesNotAuditDecimalFormattingOrNoOpSaves() {
-        List<SerialPlateDto> rows = service.createPlates(draft(1));
+        List<SerialPlateDto> rows = createAndRead(draft(1));
         SerialPlatePatchDto patch = new SerialPlatePatchDto();
         patch.setProvider("Interno"); patch.setStatus("Finalizado"); patch.setWeight(new BigDecimal("300.0"));
         SerialPlateDto first = service.updatePlates(mutation(rows, patch, "provider", "status", "weight")).getFirst();
@@ -389,7 +414,7 @@ class SerialPlateIntegrationTests {
         when(focco.findPlateOrder(900L)).thenReturn(List.of(line));
         SerialPlateOrderDto order = erp.findOrder("900");
         SerialPlateCreateDto draft = draft(1); draft.setOrder("900"); draft.setOrderItemCode(order.getItems().getFirst().getItemCode());
-        SerialPlateDto plate = service.createPlates(draft).getFirst();
+        SerialPlateDto plate = createAndRead(draft).getFirst();
         SerialPlateChangeDto linked = service.getHistory(18918L).getFirst().getChanges().stream()
                 .filter(change -> change.getField().equals("Item do pedido")).findFirst().orElseThrow();
         assertThat(linked.getAfter()).isEqualTo("Mesa");
@@ -406,7 +431,7 @@ class SerialPlateIntegrationTests {
 
     @Test
     void rendersLegacyItemHashesUsingTheModelRecordedInThatEvent() throws Exception {
-        service.createPlates(draft(1));
+        createAndRead(draft(1));
         br.com.metaro.portal.modules.pcp.serialplates.entity.SerialPlateLog legacy = new br.com.metaro.portal.modules.pcp.serialplates.entity.SerialPlateLog();
         legacy.setSerial(18918L); legacy.setAt(java.time.Instant.now());
         legacy.setUserId(users.findAll().getFirst().getId()); legacy.setAuthor("Operador");
@@ -432,7 +457,11 @@ class SerialPlateIntegrationTests {
     @WithMockUser(roles = "SERIAL_PLATES_OPERATOR")
     void operatorCreatesAndHistoryComesFromServer() throws Exception {
         mvc.perform(post("/api/serial-plates").contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(draft(1))))
-            .andExpect(status().isCreated()).andExpect(jsonPath("$[0].serial").value("18918"));
+            .andExpect(status().isCreated()).andExpect(jsonPath("$").value(1));
+        mvc.perform(post("/api/serial-plates/selection").contentType(MediaType.APPLICATION_JSON).content("{\"serials\":[\"18918\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].serial").value("18918"))
+                .andExpect(jsonPath("$[0].version").isNumber()).andExpect(jsonPath("$[0].equipmentData").value(false))
+                .andExpect(jsonPath("$[0].client").doesNotExist());
         mvc.perform(get("/api/serial-plates/18918/history")).andExpect(status().isOk()).andExpect(jsonPath("$[0].author").isNotEmpty());
         mvc.perform(delete("/api/serial-plates/18918")).andExpect(status().isMethodNotAllowed());
     }

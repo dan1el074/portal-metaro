@@ -4,7 +4,7 @@ import { defaultChecklistNokFields } from './checklist-factory';
 export function normalizeChecklistIntegration(value: unknown): Integration {
   const normalized = String(value ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (['production', 'producao', 'integracao producao'].includes(normalized)) return 'production';
-  if (['5s', 'integracao 5s'].includes(normalized)) return '5s';
+  if (['5s', 'five_s', 'integracao 5s'].includes(normalized)) return '5s';
   return 'none';
 }
 
@@ -14,7 +14,11 @@ export function checklistIntegrationLabel(integration: Integration): string {
   return 'Nenhuma';
 }
 
-export function validateTemplate( model: Template, state: ChecklistState): string | null {
+export function validateTemplate(model: Template, state: {
+  categories: Array<Pick<ChecklistState['categories'][number], 'id' | 'name' | 'integration' | 'erp'>
+    & ({ fields: Array<{ id: string }> } | { fieldIds: string[] })>;
+  templates: Pick<Template, 'id' | 'name' | 'categoryId' | 'equipmentId' | 'predecessorId'>[];
+}): string | null {
   const category = state.categories.find((c) => c.id === model.categoryId);
 
   if (!category) return 'Informe a categoria do modelo.';
@@ -87,7 +91,7 @@ export function validateTemplate( model: Template, state: ChecklistState): strin
     if (category.erp && !predecessorCategory.erp) return 'O requisito deve disponibilizar os dados ERP herdados.';
 
     const seen = new Set([model.id]);
-    let cursor: Template | undefined = previous;
+    let cursor: typeof previous | undefined = previous;
 
     while (cursor) {
       if (seen.has(cursor.id)) return 'O requisito criaria um ciclo.';
@@ -101,7 +105,7 @@ export function validateTemplate( model: Template, state: ChecklistState): strin
     ...model.sections.flatMap((s) =>
       s.questions.flatMap((q) => [q.id, ...q.fields.map((f) => f.id)]),
     ),
-    ...category.fields.map((f) => f.id),
+    ...('fieldIds' in category ? category.fieldIds : category.fields.map(field => field.id)),
   ]);
   if ([...model.title.matchAll(/\{([^}]+)\}/g)].some((m) => !keys.has(m[1]))) return 'O título contém uma variável que não existe mais.';
   return null;

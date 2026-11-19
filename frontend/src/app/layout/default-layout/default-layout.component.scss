@@ -1,34 +1,4 @@
 :host::ng-deep {
-  .ng-scrollbar {
-    --scrollbar-padding: 1px;
-    --scrollbar-size: 5px;
-    --scrollbar-thumb-color: var(--cui-gray-500, #aab3c5);
-    --scrollbar-thumb-hover-color: var(--cui-gray-400, #cfd4de);
-    --scrollbar-hover-size: calc(var(--scrollbar-size) * 1.5);
-    --scrollbar-border-radius: 5px;
-
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: 100%;
-    min-height: 0;
-    overflow-x: hidden !important;
-  }
-
-  .ng-scroll-content {
-    display: flex;
-    width: 100%;
-    min-width: 0;
-    min-height: 100%;
-    overflow-x: hidden;
-  }
-
-  c-sidebar-nav.sidebar-nav {
-    flex: 1 0 auto;
-    width: 100%;
-    min-width: 0;
-    min-height: 100%;
-  }
-
   .sidebar-nav.sidebar-nav-tree .nav-group .nav-group-items::before {
     border-inline-start-color: #4a566d !important;
   }

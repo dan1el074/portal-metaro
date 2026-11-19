@@ -6,9 +6,7 @@
     </c-sidebar-brand>
   </c-sidebar-header>
 
-  <ng-scrollbar orientation="vertical" pointerEventsMethod="scrollbar" visibility="hover">
-    <c-sidebar-nav class="sidebar-nav-tree" [navItems]="navItems" dropdownMode="path" compact />
-  </ng-scrollbar>
+  <c-sidebar-nav class="sidebar-nav-tree" [navItems]="navItems" dropdownMode="path" compact />
 
   @if (!sidebar1.narrow) {
     <c-sidebar-footer cSidebarToggle="sidebar1" class="border-top d-none d-lg-flex" toggle="unfoldable" style="cursor: pointer;">

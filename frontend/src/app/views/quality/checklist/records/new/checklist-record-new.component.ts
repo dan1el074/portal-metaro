@@ -38,14 +38,18 @@ export class ChecklistRecordNewComponent implements OnInit, ChecklistPendingChan
   protected get snapshot() { return this.flow.plan.find((item) => item.template.id === this.record.templateId)!; }
 
   public async ngOnInit(): Promise<void> {
-    await this.store.load();
-    const result = this.store.newRecord(
-      this.route.snapshot.paramMap.get('id') ?? '',
-      this.route.snapshot.queryParamMap.get('previous') ?? '',
-    );
-    this.record = result.record;
-    this.flow = result.flow;
-    this.cdr.detectChanges();
+    try {
+      const result = await this.store.newRecord(
+        this.route.snapshot.paramMap.get('id') ?? '',
+        this.route.snapshot.queryParamMap.get('previous') ?? '',
+      );
+      this.record = result.record;
+      this.flow = result.flow;
+      this.cdr.detectChanges();
+    } catch {
+      this.toaster.warning('Não foi possível iniciar este checklist. Verifique o modelo e o requisito.');
+      this.cancel();
+    }
   }
 
   @HostListener('window:beforeunload', ['$event'])
@@ -72,7 +76,7 @@ export class ChecklistRecordNewComponent implements OnInit, ChecklistPendingChan
 
   protected async save(finish: boolean): Promise<void> {
     try {
-      const saved = await this.store.saveRecord(this.record, this.flow, finish);
+      const saved = await this.store.saveRecord(this.record, this.flow, finish, false, { blocked: false, creating: true, previous: this.route.snapshot.queryParamMap.get('previous') ?? undefined });
       this.dirty = false;
       this.toaster.success(finish ? 'Checklist concluído.' : 'Rascunho salvo.');
       void this.router.navigate(['/qualidade/checklist', saved.id]);

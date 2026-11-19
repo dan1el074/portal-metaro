@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { ButtonDirective, FormControlDirective } from '@coreui/angular';
 import { IColumn, ISorterValue, SmartPaginationComponent, SmartTableComponent, TemplateIdDirective } from '@coreui/angular-pro';
-import { SerialPlate, SerialPlateSelection } from '../../../app/interface/serial-plates.interface';
+import { SerialPlateListRow, SerialPlateSelection } from '../../../app/interface/serial-plates.interface';
 import { SERIAL_PLATES_PAGE_SIZES, STATUSES } from '../../../app/config/serial-plates.config';
 import { ChecklistIconComponent } from '../../icons/checklist-icon/checklist-icon.component';
 
@@ -23,7 +23,7 @@ import { ChecklistIconComponent } from '../../icons/checklist-icon/checklist-ico
   styleUrl: './serial-plates-table.component.scss'
 })
 export class SerialPlatesTableComponent implements OnChanges {
-  @Input() public data: SerialPlate[] = [];
+  @Input() public data: SerialPlateListRow[] = [];
   @Input() public selected = new Set<string>();
   @Input() public search = '';
   @Input() public canEdit = false;
@@ -36,7 +36,7 @@ export class SerialPlatesTableComponent implements OnChanges {
   @Output() public clearSelection = new EventEmitter<void>();
   @Output() public batchRequest = new EventEmitter<void>();
   @Output() public reportRequest = new EventEmitter<void>();
-  @Output() public recordOpen = new EventEmitter<SerialPlate>();
+  @Output() public recordOpen = new EventEmitter<string>();
   @Output() public selectionChange = new EventEmitter<SerialPlateSelection>();
   @Output() public selectAllChange = new EventEmitter<boolean>();
   @Output() public sorterChange = new EventEmitter<ISorterValue>();
@@ -44,7 +44,7 @@ export class SerialPlatesTableComponent implements OnChanges {
   @Output() public perPageChange = new EventEmitter<number>();
 
   public readonly pageSizes = SERIAL_PLATES_PAGE_SIZES;
-  public displayRows: SerialPlate[] = [];
+  public displayRows: SerialPlateListRow[] = [];
   public allSelected = false;
   public someSelected = false;
   public readonly columns: IColumn[] = [
@@ -69,16 +69,16 @@ export class SerialPlatesTableComponent implements OnChanges {
     this.selectAllChange.emit(!this.allSelected);
   }
 
-  public onCellClick(column: string, item: SerialPlate, event: MouseEvent): void {
+  public onCellClick(column: string, item: SerialPlateListRow, event: MouseEvent): void {
     if (column !== 'selection')
       return;
     event.stopPropagation();
     this.selectionChange.emit({ serial: item.serial, event });
   }
 
-  public onRowClick(event: { item: SerialPlate; columnName?: string; event?: MouseEvent; }): void {
+  public onRowClick(event: { item: SerialPlateListRow; columnName?: string; event?: MouseEvent; }): void {
     if (event.columnName === 'selection' || (event.event?.target as HTMLElement | null)?.closest('input')) return;
-    this.recordOpen.emit(event.item);
+    this.recordOpen.emit(event.item.serial);
   }
 
   public serialLabel(value: string): string {

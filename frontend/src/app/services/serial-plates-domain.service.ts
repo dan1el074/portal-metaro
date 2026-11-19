@@ -1,4 +1,4 @@
-import type { SerialPlate, PlatePatch, PlateSettings, SerialPlateBatchFields } from '../interface/serial-plates.interface';
+import type { SerialPlateReportRow, SerialPlate, PlatePatch, PlateSettings, SerialPlateBatchFields } from '../interface/serial-plates.interface';
 import { FIELD_LABELS, SERIAL_PLATES_REPORT_KEYS } from '../config/serial-plates.config';
 
 export class SerialPlatesDomainService {
@@ -23,7 +23,7 @@ export class SerialPlatesDomainService {
     return new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1))).toLocaleUpperCase('pt-BR') + '/' + year;
   }
 
-  public reportMissing(records: SerialPlate[], settings: PlateSettings): string[] {
+  public reportMissing(records: SerialPlateReportRow[], settings: PlateSettings): string[] {
     const missing: string[] = [];
     const columns = new Set(settings.reportColumns ?? SERIAL_PLATES_REPORT_KEYS);
     if (!columns.size) return ['Selecione pelo menos uma coluna do relatório nas configurações.'];

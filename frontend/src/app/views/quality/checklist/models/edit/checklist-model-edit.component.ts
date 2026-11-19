@@ -24,20 +24,20 @@ export class ChecklistModelEditComponent implements OnInit, ChecklistPendingChan
   private readonly router = inject(Router);
   private readonly toaster = inject(ToastrService);
   private readonly cdr = inject(ChangeDetectorRef);
+  protected context!: Awaited<ReturnType<ChecklistPreviewService['loadModelEditor']>>;
   protected model!: Template;
   protected dirty=false;
 
-  async ngOnInit():Promise<void> {
-    await this.store.load();
-    this.store.requireAdmin();
-    const model = this.store.state().templates.find(item => item.id === this.route.snapshot.paramMap.get('id'));
-
-    if(!model){
+  async ngOnInit(): Promise<void> {
+    try {
+      this.context = await this.store.loadModelEditor(this.route.snapshot.paramMap.get('id'));
+      if (!this.context.model) throw new Error();
+      this.model = copy(this.context.model);
+      this.cdr.markForCheck();
+    } catch {
+      this.toaster.warning('Não foi possível carregar o modelo.');
       void this.router.navigate(['/qualidade/checklist/models']);
-      return;
     }
-    this.model=copy(model);
-    this.cdr.detectChanges();
   }
 
   @HostListener('window:beforeunload',['$event'])
@@ -64,7 +64,7 @@ export class ChecklistModelEditComponent implements OnInit, ChecklistPendingChan
 
   protected async save():Promise<void> {
     try{
-      await this.store.saveTemplate(this.model);
+      await this.store.saveTemplate(this.model, this.context);
       this.dirty = false;
       this.toaster.success('Modelo salvo com sucesso.');
       void this.router.navigate(['/qualidade/checklist/models'])

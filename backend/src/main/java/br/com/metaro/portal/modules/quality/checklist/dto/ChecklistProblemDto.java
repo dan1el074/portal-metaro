@@ -13,7 +13,7 @@ import java.util.Map;
 @Setter
 @NoArgsConstructor
 public class ChecklistProblemDto {
-    private String id;
+    private Long id;
     private String item;
     private String code;
     private String defect;

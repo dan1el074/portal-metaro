@@ -5,7 +5,7 @@
   </header>
   @if (model) {
     <app-checklist-model-form
-      [model]="model"
+      [model]="model" [categories]="context.categories" [equipment]="context.equipment" [modelOptions]="context.templates"
       (modelChange)="changed()"
       (saveModel)="save()"
       (cancel)="cancel()"

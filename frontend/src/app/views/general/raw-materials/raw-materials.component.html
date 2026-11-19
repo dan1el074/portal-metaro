@@ -164,7 +164,7 @@
   </c-card>
 </c-container>
 
-<c-modal modalBackNavigation id="rawMaterialItemModal" [visible]="itemModalVisible" alignment="center" backdrop="static" size="lg">
+<c-modal modalBackNavigation id="rawMaterialItemModal" [visible]="itemModalVisible && !activationModalVisible" alignment="center" backdrop="static" size="lg">
   <c-modal-header>
     <h5 cModalTitle>{{ currentView === 'consultation' ? 'Visualizar matéria-prima' : (editingItem?.id ? 'Editar matéria-prima' : 'Nova matéria-prima') }}</h5>
     <button cButtonClose (click)="closeItemModal()"></button>
@@ -296,7 +296,7 @@
 
         @if (editingItem.id) {
           <label class="active-control">
-            <input type="checkbox" [(ngModel)]="editingItem.active">
+            <input #activeCheckbox type="checkbox" [checked]="editingItem.active" (change)="toggleActive(activeCheckbox)">
             <span><strong>Item ativo</strong><small>Disponível nas consultas e operações</small></span>
           </label>
         }
@@ -337,6 +337,21 @@
         }
       </div>
     </div>
+  </c-modal-footer>
+</c-modal>
+
+<c-modal modalBackNavigation [(visible)]="activationModalVisible" alignment="center" backdrop="static">
+  <c-modal-header>
+    <h5 cModalTitle>Ativar matéria-prima · {{ editingItem?.code }}</h5>
+    <button cButtonClose (click)="activationModalVisible = false" aria-label="Cancelar"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <label for="activationReason" class="form-label">Justificativa</label>
+    <textarea id="activationReason" class="form-control" rows="3" maxlength="500" required [(ngModel)]="activationReason"></textarea>
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton color="secondary" variant="outline" (click)="activationModalVisible = false">Cancelar</button>
+    <button cButton color="primary" [disabled]="!activationReason.trim()" (click)="confirmActivation()">Confirmar</button>
   </c-modal-footer>
 </c-modal>
 

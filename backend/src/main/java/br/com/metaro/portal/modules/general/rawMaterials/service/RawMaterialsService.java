@@ -364,7 +364,17 @@ public class RawMaterialsService {
         if (!sameDecimal(item.getLitersPerUnit(), dto.getLitersPerUnit())) fields.add("Litros por unidade");
         if (!sameDecimal(item.getWeightPerLinearMeter(), dto.getWeightPerLinearMeter())) fields.add("Peso por metro linear");
         if (!Objects.equals(item.getCategory().getId(), dto.getCategoryId())) fields.add("Categoria");
-        if (!Objects.equals(item.getActive(), dto.getActive())) fields.add("Situação do item");
+        if (!Objects.equals(item.getActive(), dto.getActive())) {
+            if (Boolean.TRUE.equals(dto.getActive())) {
+                String reason = dto.getActivationReason();
+                if (reason == null || reason.isBlank()) {
+                    throw new UnprocessableEntityException("Informe a justificativa para ativar o item.");
+                }
+                fields.add("Item ativado\nJustificativa: " + reason.strip());
+            } else {
+                fields.add("Situação do item");
+            }
+        }
         return fields;
     }
 

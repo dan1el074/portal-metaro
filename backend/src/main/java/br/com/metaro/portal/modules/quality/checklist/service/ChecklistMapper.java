@@ -73,19 +73,27 @@ public class ChecklistMapper {
     }
 
     public ChecklistFlowDto toDto(ChecklistFlow entity) {
+        return toFlowDto(entity, read(entity.getPlanJson(), new TypeReference<>() {}), true);
+    }
+
+    public ChecklistFlowDto toScreenFlowDto(ChecklistFlow entity, ChecklistSnapshotDto current) {
+        return toFlowDto(entity, List.of(current), false);
+    }
+
+    private ChecklistFlowDto toFlowDto(ChecklistFlow entity, List<ChecklistSnapshotDto> plan, boolean includeErpData) {
         ChecklistFlowDto dto = new ChecklistFlowDto();
         dto.setId(entity.getId());
         dto.setSerial(entity.getSerialNumber());
         dto.setSerialPlateId(entity.getSerialPlateId());
         dto.setReadyStock(entity.isReadyStock());
         dto.setSerialWaived(entity.isSerialWaived());
-        dto.setErpData(read(entity.getErpDataJson(), new TypeReference<>() {}));
+        if (includeErpData) dto.setErpData(read(entity.getErpDataJson(), new TypeReference<>() {}));
         dto.setOrder(entity.getOrderNumber());
         dto.setClientId(entity.getClientId());
         dto.setClient(entity.getClientName());
         dto.setItem(entity.getCommercialItem());
         dto.setSeller(entity.getSalesperson());
-        dto.setPlan(read(entity.getPlanJson(), new TypeReference<>() {}));
+        dto.setPlan(plan);
         dto.setSkipped(read(entity.getSkippedJson(), new TypeReference<>() {}));
         dto.setCancelled(entity.isCancelled());
         dto.setCancellationReason(entity.getCancellationReason());
@@ -95,14 +103,19 @@ public class ChecklistMapper {
     }
 
     public ChecklistRecordDto toDto(ChecklistRecord entity) {
-        return toDto(entity, true);
+        return toDto(entity, true, true, true);
     }
 
     public ChecklistRecordDto toRevisionDto(ChecklistRecord entity) {
-        return toDto(entity, false);
+        return toDto(entity, false, true, true);
     }
 
-    private ChecklistRecordDto toDto(ChecklistRecord entity, boolean hideJustifiedAnswers) {
+    public ChecklistRecordDto toScreenRecordDto(ChecklistRecord entity, boolean editing) {
+        return toDto(entity, true, !editing, false);
+    }
+
+    private ChecklistRecordDto toDto(ChecklistRecord entity, boolean hideJustifiedAnswers,
+                                    boolean includeActivity, boolean includeRevisions) {
         ChecklistRecordDto dto = new ChecklistRecordDto();
         dto.setId(entity.getId());
         dto.setFlowId(entity.getFlow().getId());
@@ -119,7 +132,7 @@ public class ChecklistMapper {
         dto.setStatus(entity.getStatus().name());
         dto.setAutomatic(entity.isAutomatic());
         Map<String, ChecklistAnswerDto> answers = read(entity.getAnswersJson(), new TypeReference<>() {});
-        Map<String, List<ChecklistEvidenceDto>> evidenceByProblem = new HashMap<>();
+        Map<Long, List<ChecklistEvidenceDto>> evidenceByProblem = new HashMap<>();
         evidenceService.findByRecord(entity.getId()).forEach(evidence -> evidenceByProblem
                 .computeIfAbsent(evidence.getProblemId(), ignored -> new ArrayList<>())
                 .add(evidenceService.toDto(evidence)));
@@ -131,9 +144,13 @@ public class ChecklistMapper {
         dto.setAnswers(answers);
         dto.setFields(read(entity.getFieldsJson(), new TypeReference<>() {}));
         dto.setDepartments(read(entity.getDepartmentsJson(), new TypeReference<>() {}));
-        dto.setComments(commentRepository.findByRecordIdAndActiveTrueOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
-        dto.setLogs(auditRepository.findByRecordIdOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
-        dto.setRevisions(revisionRepository.findByRecordIdOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
+        if (includeActivity) {
+            dto.setComments(commentRepository.findByRecordIdAndActiveTrueOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
+            dto.setLogs(auditRepository.findByRecordIdOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
+        }
+        if (includeRevisions) {
+            dto.setRevisions(revisionRepository.findByRecordIdOrderByCreatedAtAsc(entity.getId()).stream().map(this::toDto).toList());
+        }
         if (hideJustifiedAnswers && entity.getStatus() == ChecklistStatus.JUSTIFIED) {
             dto.setAnswers(blankAnswers(entity));
             dto.setFields(blankFields(entity));
@@ -153,8 +170,8 @@ public class ChecklistMapper {
             for (ChecklistSectionDto section : snapshot.getTemplate().getSections()) {
                 for (ChecklistQuestionDto question : section.getQuestions()) {
                     ChecklistAnswerDto answer = new ChecklistAnswerDto();
-                    question.getFields().forEach(field -> answer.getFields().put(field.getId(), ""));
-                    answers.put(question.getId(), answer);
+                    question.getFields().forEach(field -> answer.getFields().put(field.getId().toString(), ""));
+                    answers.put(question.getId().toString(), answer);
                 }
             }
         }
@@ -165,7 +182,7 @@ public class ChecklistMapper {
         Map<String, String> fields = new LinkedHashMap<>();
         for (ChecklistSnapshotDto snapshot : this.<List<ChecklistSnapshotDto>>read(record.getFlow().getPlanJson(), new TypeReference<>() {})) {
             if (snapshot.getTemplate().getId().equals(record.getTemplate().getId())) {
-                snapshot.getCategory().getFields().forEach(field -> fields.put(field.getId(), ""));
+                snapshot.getCategory().getFields().forEach(field -> fields.put(field.getId().toString(), ""));
             }
         }
         return fields;

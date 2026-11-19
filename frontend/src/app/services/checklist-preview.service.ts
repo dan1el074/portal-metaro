@@ -1,10 +1,10 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom, forkJoin, of } from 'rxjs';
 import { UserService } from './user.service';
-import { Checklist, ChecklistState, Flow, Template } from '../interface/checklist.interface';
+import { Checklist, ChecklistState, Flow, Status, Template } from '../interface/checklist.interface';
 import { CHECKLIST_BODY_EVIDENCE_ID, checklistCopy as copy, checklistId as uid, checklistNow as now, defaultChecklistNokFields } from '../shared/checklist-factory';
 import { blockingPredecessor, migrateTitleFormula, normalizeChecklistIntegration, recordTitle, validateRecord, validateTemplate } from '../shared/checklist-rules';
-import { ChecklistCatalogEntry, ChecklistRecordCreate, ChecklistService } from './checklist.service';
+import { ChecklistCatalogEntry, ChecklistRecordContext, ChecklistRecordCreate, ChecklistService } from './checklist.service';
 import { ChecklistMediaPreviewService } from './checklist-media-preview.service';
 import { Upload } from 'tus-js-client';
 
@@ -74,7 +74,6 @@ export class ChecklistPreviewService {
         items: result.items.filter((entry) => entry.active).map((entry) => entry.name),
         defects: result.defects.filter((entry) => entry.active).map((entry) => entry.name),
         nokFields: defaultChecklistNokFields(),
-        processes: [],
       });
       this.warning.set('');
     } catch {
@@ -84,21 +83,32 @@ export class ChecklistPreviewService {
   }
 
   private emptyState(): ChecklistState {
-    return { schema: 1, categories: [], equipment: [], templates: [], flows: [], records: [], items: [], defects: [], nokFields: defaultChecklistNokFields(), processes: [] };
+    return { schema: 1, categories: [], equipment: [], templates: [], flows: [], records: [], items: [], defects: [], nokFields: defaultChecklistNokFields() };
   }
 
+  private readonly statuses: Record<string, Status> = { DRAFT: 'Rascunho', IN_PROGRESS: 'Em andamento', PENDING: 'Pendente', FINISHED: 'Finalizado', JUSTIFIED: 'Justificado', CANCELLED: 'Cancelado' };
+
   private normalizeRecord(record: Checklist): Checklist {
-    const statuses: Record<string, Checklist['status']> = { DRAFT: 'Rascunho', IN_PROGRESS: 'Em andamento', PENDING: 'Pendente', FINISHED: 'Finalizado', JUSTIFIED: 'Justificado', CANCELLED: 'Cancelado' };
+    const normalizeProblems = (answers: Checklist['answers']) => {
+      for (const answer of Object.values(answers ?? {})) {
+        for (const problem of answer.problems ?? []) problem.id = String(problem.id);
+      }
+    };
+    normalizeProblems(record.answers);
+    for (const revision of record.revisions ?? []) normalizeProblems(revision.record.answers);
     record.id = String(record.id);
     record.flowId = String(record.flowId);
     record.templateId = String(record.templateId);
-    record.status = statuses[record.status] ?? record.status;
+    record.status = this.statuses[record.status] ?? record.status;
     record.comments ??= [];
     record.logs ??= [];
     record.revisions ??= [];
     record.fields ??= {};
     record.media ??= [];
-    record.comments.forEach((comment) => comment.id = String(comment.id));
+    record.comments.forEach(comment => {
+      comment.id = String(comment.id);
+      if (comment.problemId != null) comment.problemId = String(comment.problemId);
+    });
     const knownProblems = [record, ...record.revisions.map(revision => revision.record)].flatMap(item =>
       Object.values(item.answers ?? {}).flatMap(answer => answer.problems ?? []));
     record.logs.forEach((log) => {
@@ -130,14 +140,14 @@ export class ChecklistPreviewService {
       snapshot.id = String(snapshot.id);
       snapshot.flowId = String(snapshot.flowId);
       snapshot.templateId = String(snapshot.templateId);
-      if (statuses[snapshot.status]) snapshot.status = statuses[snapshot.status];
+      if (this.statuses[snapshot.status]) snapshot.status = this.statuses[snapshot.status];
       snapshot.media ??= [];
     });
     return record;
   }
 
   private normalizeFlow(flow: Flow): Flow {
-    flow.id = String(flow.id);
+    flow.id = flow.id == null ? uid() : String(flow.id);
     flow.serial ??= '';
     flow.order ??= '';
     flow.clientId ??= '';
@@ -146,6 +156,8 @@ export class ChecklistPreviewService {
     flow.seller ??= '';
     flow.skipped ??= {};
     flow.plan.forEach((snapshot) => {
+      this.normalizeTemplate(snapshot.template);
+      snapshot.category.fields?.forEach(field => field.id = String(field.id));
       snapshot.category.id = String(snapshot.category.id);
       snapshot.template.id = String(snapshot.template.id);
       snapshot.template.categoryId = String(snapshot.template.categoryId);
@@ -157,6 +169,13 @@ export class ChecklistPreviewService {
   }
 
   private normalizeTemplate(template: Template): Template {
+    for (const section of template.sections ?? []) {
+      section.id = String(section.id);
+      for (const question of section.questions) {
+        question.id = String(question.id);
+        for (const field of question.fields) field.id = String(field.id);
+      }
+    }
     template.id = String(template.id);
     template.categoryId = String(template.categoryId);
     template.equipmentId = template.equipmentId == null ? '' : String(template.equipmentId);
@@ -249,128 +268,54 @@ export class ChecklistPreviewService {
     return recordTitle(r, this.flow(r));
   }
 
-  clientNokHistoryEnabled(categoryId: string): boolean {
-    return this.state().categories.find((category) => category.id === categoryId)?.clientNokHistory ?? false;
-  }
-
-  async updateFlowOrder(flowId: string, orderNumber: string, item: string): Promise<void> {
+  async updateFlowOrder(recordId: string, orderNumber: string, item: string): Promise<void> {
     this.requireAdmin();
-    const record = this.state().records.find((item) => item.flowId === flowId);
-    if (!record) throw new Error('Fluxo não encontrado.');
-    await firstValueFrom(this.api.updateOrder(record.id, orderNumber, item));
-    await this.load(true);
+    await firstValueFrom(this.api.updateOrder(recordId, orderNumber, item));
   }
 
   blocked(r: Checklist): boolean {
     return blockingPredecessor(r, this.flow(r), this.state().records);
   }
 
-  log(r: Checklist, action: string): void {
-    r.updated = now();
-    r.logs.push({ id: uid(), at: r.updated, actor: this.user.name, action });
+  async claim(current: Checklist): Promise<Checklist> {
+    if (current.ownerId !== null) return current;
+    const record = this.normalizeRecord(await firstValueFrom(this.api.claim(current.id)));
+    this.state.update(data => ({ ...data, records: data.records.map(item => item.id === record.id ? record : item) }));
+    return record;
   }
 
-  async claim(id: string): Promise<void> {
-    const current = this.state().records.find((r) => r.id === id)!;
-    if (!this.editable(current))
-      throw new Error('Este registro não está disponível para preenchimento.');
-    if (current.ownerId !== null) return;
-    const record = this.normalizeRecord(await firstValueFrom(this.api.claim(id)));
-    this.state.update((data) => ({ ...data, records: data.records.map((item) => item.id === id ? record : item) }));
-  }
-
-  async saveTemplate(model: Template): Promise<void> {
+  async loadModelEditor(id?: string | null) {
     this.requireAdmin();
-    const category = this.state().categories.find((item) => item.id === model.categoryId);
+    const context = await firstValueFrom(forkJoin({
+      categories: this.api.listCategoryModelOptions(),
+      equipment: this.api.listEquipment(),
+      templates: this.api.listTemplateSummaries(),
+      model: id ? this.api.getTemplate(id) : of(null),
+    }));
+    return {
+      ...context,
+      equipment: context.equipment.map(item => ({ ...item, id: String(item.id) })),
+      model: context.model ? this.normalizeTemplate(context.model) : null,
+    };
+  }
+
+  async saveTemplate(model: Template, context: Awaited<ReturnType<ChecklistPreviewService['loadModelEditor']>>): Promise<void> {
+    this.requireAdmin();
+    const category = context.categories.find((item) => item.id === model.categoryId);
     if (category?.integration === 'production') {
-      model.name = this.state().equipment.find((item) => item.id === model.equipmentId)?.abbreviation || '';
+      model.name = context.equipment.find((item) => item.id === model.equipmentId)?.abbreviation || '';
       model.signature = true;
     }
-    const error = validateTemplate(model, this.state());
+    const error = validateTemplate(model, context);
     if (error) throw new Error(error);
-    const previous = this.state().templates.find((item) => item.id === model.id);
+    const previous = context.model?.id === model.id;
     const saved = this.normalizeTemplate(await firstValueFrom(previous ? this.api.updateTemplate(model) : this.api.createTemplate(model)));
     this.state.update((data) => ({ ...data, templates: [...data.templates.filter((item) => item.id !== model.id), saved] }));
   }
 
-  async deleteTemplate(id: string): Promise<void> {
-    this.requireAdmin();
-    await firstValueFrom(this.api.deleteTemplate(id));
-    this.state.update(data => ({
-      ...data,
-      templates: data.templates.filter(template => template.id !== id),
-    }));
-  }
-
-  newRecord(
-    templateId: string,
-    predecessorId = '',
-  ): { record: Checklist; flow: Flow } {
-    const template = this.state().templates.find((t) => t.id === templateId);
-    if (!template) throw new Error('Modelo não encontrado.');
-    const category = this.state().categories.find(
-      (c) => c.id === template.categoryId,
-    )!;
-    if (!category.active || !this.canOperate(category.id))
-      throw new Error('Categoria indisponível para operação.');
-    let flow: Flow;
-    if (predecessorId) {
-      const previous = this.state().records.find((r) => r.id === predecessorId);
-      if (
-        !previous ||
-        !this.visible(previous) ||
-        previous.status !== 'Finalizado' ||
-        this.blocked(previous)
-      )
-        throw new Error('Selecione um predecessor finalizado e sem bloqueios.');
-      flow = copy(this.flow(previous));
-      const next = this.nextSnapshot(flow, previous.templateId);
-      if (
-        !next ||
-        next.template.id !== templateId ||
-        next.template.automatic ||
-        this.state().records.some(
-          (r) => r.flowId === flow.id && r.templateId === templateId,
-        )
-      )
-        throw new Error('Este fluxo não permite esta inserção manual.');
-    } else {
-      if (template.predecessorId && !template.optionalPredecessor)
-        throw new Error('Selecione o registro anterior elegível.');
-      const error = validateTemplate(template, this.state());
-      if (error) throw new Error(`Modelo precisa de configuração: ${error}`);
-      flow = {
-        id: uid(),
-        serial: '',
-        order: '',
-        clientId: '',
-        client: '',
-        item: '',
-        seller: '',
-        plan: [],
-        skipped: {},
-        cancelled: false,
-      };
-      let cursor: Template | undefined = template;
-      const seen = new Set<string>();
-      while (cursor && !seen.has(cursor.id)) {
-        seen.add(cursor.id);
-        flow.plan.push({
-          template: copy(cursor),
-          category: copy(
-            this.state().categories.find((c) => c.id === cursor!.categoryId)!,
-          ),
-          equipment:
-            this.state().equipment.find((e) => e.id === cursor!.equipmentId)
-              ?.name || '',
-        });
-        cursor = this.state().templates.find(
-          (t) => t.predecessorId === cursor!.id,
-        );
-      }
-    }
-    const record = this.makeRecord(flow, templateId, false);
-    return { record, flow };
+  async newRecord(templateId: string, previous = '') {
+    const flow = this.normalizeFlow(await firstValueFrom(this.api.newContext(templateId, previous)));
+    return { flow, record: this.makeRecord(flow, templateId, false) };
   }
   private makeRecord(
     flow: Flow,
@@ -416,26 +361,18 @@ export class ChecklistPreviewService {
   }
 
   async createRecord(input: ChecklistRecordCreate): Promise<Checklist> {
-    this.newRecord(input.templateId, input.predecessorRecordId);
-    const record = this.normalizeRecord(await firstValueFrom(this.api.createRecord(input)));
-    const flow = this.normalizeFlow(await firstValueFrom(this.api.getFlow(record.id)));
-    this.state.update((data) => ({
-      ...data,
-      records: [...data.records.filter((item) => item.id !== record.id), record],
-      flows: [...data.flows.filter((item) => item.id !== flow.id), flow],
-    }));
-    return record;
+    return this.normalizeRecord(await firstValueFrom(this.api.createRecord(input)));
   }
 
-  async saveRecord(record: Checklist, flow: Flow, finish: boolean, confirmOpenMemorandos = false): Promise<Checklist> {
+  async saveRecord(record: Checklist, flow: Flow, finish: boolean, confirmOpenMemorandos = false, context?: { blocked: boolean; creating?: boolean; previous?: string }): Promise<Checklist> {
     const old = this.state().records.find((item) => item.id === record.id);
     const snapshot = flow.plan.find(
       (s) => s.template.id === record.templateId,
     )!;
-    if (old ? !this.editable(old) : !this.canOperate(snapshot.category.id))
+    if (!context && (old ? !this.editable(old) : !this.canOperate(snapshot.category.id)))
       throw new Error('Você não pode editar este registro.');
     if (finish) {
-      if (blockingPredecessor(record, flow, this.state().records))
+      if (context?.blocked ?? blockingPredecessor(record, flow, this.state().records))
         throw new Error(
           'Um checklist anterior está em revisão ou ainda não foi finalizado.',
         );
@@ -443,10 +380,10 @@ export class ChecklistPreviewService {
       if (error) throw new Error(error);
     }
     let target = record;
-    if (!old) {
+    if ((context?.creating && Number(record.id) < 0) || (!old && !context)) {
       target = this.normalizeRecord(await firstValueFrom(this.api.createRecord({
         templateId: record.templateId,
-        predecessorRecordId: this.findPredecessorRecordId(record, flow),
+        predecessorRecordId: context?.previous,
         serial: flow.serial,
         order: flow.order,
         clientId: flow.clientId,
@@ -454,9 +391,15 @@ export class ChecklistPreviewService {
         item: flow.item,
         seller: flow.seller,
       })));
-      target.answers = record.answers;
-      target.fields = record.fields;
-      target.departments = record.departments;
+      // Keep the draft identity if an upload or the following save needs a retry.
+      const { answers, fields, departments, media } = record;
+      Object.assign(record, target, { answers, fields, departments, media });
+      target = record;
+    }
+    for (const answer of Object.values(record.answers)) {
+      for (const problem of answer.problems) {
+        if (Number(problem.id) < 0) problem.id = await this.api.nestedId();
+      }
     }
     try {
       await this.synchronizeEvidence(target.id, old, record);
@@ -464,6 +407,7 @@ export class ChecklistPreviewService {
       this.uploadState.set(null);
     }
     const saved = this.normalizeRecord(await firstValueFrom(this.api.saveRecord({ ...target, answers: record.answers, fields: record.fields, departments: record.departments }, finish, confirmOpenMemorandos)));
+    if (context) return saved;
     const savedFlow = this.normalizeFlow(await firstValueFrom(this.api.getFlow(saved.id)));
     this.state.update((data) => ({
       ...data,
@@ -471,12 +415,6 @@ export class ChecklistPreviewService {
       flows: [...data.flows.filter((item) => item.id !== flow.id && item.id !== savedFlow.id), savedFlow],
     }));
     return saved;
-  }
-
-  private findPredecessorRecordId(record: Checklist, flow: Flow): string | undefined {
-    const template = this.state().templates.find((item) => item.id === record.templateId);
-    if (!template?.predecessorId) return undefined;
-    return this.state().records.find((item) => item.flowId === flow.id && item.templateId === template.predecessorId)?.id;
   }
 
   private async synchronizeEvidence(recordId: string, previous: Checklist | undefined, submitted: Checklist): Promise<void> {
@@ -532,112 +470,6 @@ export class ChecklistPreviewService {
   private auditAction(action: string): string {
     return ({ FINISHED_WITH_OPEN_MEMORANDOS: 'Confirmou a finalização com memorandos não aprovados', SERIAL_WAIVED: 'Série dispensada pelo administrador', SERIAL_PLATE_UPDATED: 'Dados atualizados pelo PCP', CREATED: 'Checklist iniciado', SAVED: 'Salvo', COMMENTED: 'Comentário adicionado', COMMENT_UPDATED: 'Comentário atualizado', COMMENT_DELETED: 'Comentário excluído', FINISHED: 'Checklist finalizado', FINISHED_INPUT: 'Checklist finalizado', CLAIMED: 'Assumiu o preenchimento do checklist', DELEGATED: 'Delegou o checklist para outro operador', REOPENED: 'Checklist reaberto para edição', CANCELLED: 'Cancelou o fluxo de checklist', TREATED: 'Tratado', PROBLEM_TREATED: 'Tratou uma não conformidade (NOK)', TREATMENT_REVERSED: 'Reverteu o tratamento de uma não conformidade', ORDER_UPDATED: 'Pedido atualizado', SERIAL_UPDATED: 'Número de série atualizado', CATEGORY_SKIPPED: 'Categoria ignorada', CHECKLIST_SKIPPED: 'Checklist justificado', GENERATED: 'Checklist gerado automaticamente pelo fluxo' } as Record<string, string>)[action] ?? action;
   }
-  private nextSnapshot(flow: Flow, templateId: string) {
-    let index = flow.plan.findIndex((s) => s.template.id === templateId) + 1;
-    while (
-      index < flow.plan.length &&
-      flow.skipped[flow.plan[index].template.id]
-    )
-      index++;
-    return flow.plan[index];
-  }
-  refreshFlows(data: ChecklistState): void {
-    for (const record of [...data.records])
-      if (!data.flows.find((f) => f.id === record.flowId)?.cancelled)
-        this.advance(data, record);
-    this.reconcile(data);
-  }
-  private advance(data: ChecklistState, record: Checklist): void {
-    const flow = data.flows.find((f) => f.id === record.flowId)!;
-    if (
-      record.status !== 'Finalizado' ||
-      blockingPredecessor(record, flow, data.records)
-    )
-      return;
-    const index = flow.plan.findIndex(
-      (s) => s.template.id === record.templateId,
-    );
-    for (const snapshot of flow.plan.slice(index + 1)) {
-      if (
-        data.records.some(
-          (r) => r.flowId === flow.id && r.templateId === snapshot.template.id,
-        )
-      )
-        break;
-      if (flow.skipped[snapshot.template.id]) continue;
-      const category = data.categories.find(
-        (c) => c.id === snapshot.category.id,
-      )!;
-      if (!category.active) {
-        flow.skipped[snapshot.template.id] = category.reason;
-        this.log(
-          data.records.find((r) => r.id === record.id)!,
-          `Categoria ${category.name} pulada: ${category.reason}`,
-        );
-        continue;
-      }
-      if (snapshot.template.automatic) {
-        const next = this.makeRecord(flow, snapshot.template.id, true);
-        this.log(next, 'Gerado automaticamente após conclusão do requisito');
-        data.records.push(next);
-      }
-      break;
-    }
-    this.evaluateProcesses(data);
-  }
-  evaluateProcesses(data: ChecklistState): void {
-    for (const process of data.processes.filter(
-      (p) => p.requested && !p.done && !p.cancelled,
-    )) {
-      process.done =
-        process.flowIds.length > 0 &&
-        process.flowIds.every((id) => {
-          const flow = data.flows.find((f) => f.id === id)!;
-          const record = data.records.find(
-            (r) =>
-              r.flowId === id &&
-              flow.plan.find((s) => s.template.id === r.templateId)?.category
-                .id === process.categoryId,
-          );
-          return (
-            !!record &&
-            !flow.cancelled &&
-            record.status === 'Finalizado' &&
-            !blockingPredecessor(record, flow, data.records)
-          );
-        });
-    }
-  }
-  private reconcile(data: ChecklistState): void {
-    for (let pass = 0; pass < data.records.length; pass++) {
-      let changed = false;
-      for (const record of [...data.records]) {
-        const flow = data.flows.find((f) => f.id === record.flowId)!;
-        if (
-          record.status !== 'Pendente' ||
-          flow.cancelled ||
-          blockingPredecessor(record, flow, data.records)
-        )
-          continue;
-        if (
-          Object.values(record.answers)
-            .flatMap((a) => a.problems)
-            .some((p) => !p.treated)
-        )
-          continue;
-        record.status = 'Finalizado';
-        record.finished = now();
-        this.log(
-          record,
-          'Finalizado após liberação da revisão anterior e tratamento de todas as ocorrências',
-        );
-        this.advance(data, record);
-        changed = true;
-      }
-      if (!changed) break;
-    }
-    this.evaluateProcesses(data);
-  }
   async treat(recordId: string, problemId: string, justification: string): Promise<void> {
     const record = this.normalizeRecord(await firstValueFrom(this.api.treat(recordId, problemId, justification)));
     this.state.update((data) => ({ ...data, records: data.records.map((item) => item.id === recordId ? record : item) }));
@@ -645,7 +477,6 @@ export class ChecklistPreviewService {
   async reopen(id: string, reason: string): Promise<void> {
     this.requireAdmin();
     await firstValueFrom(this.api.reopen(id, reason));
-    await this.loadRecordContext(id);
   }
 
   async delegate(id: string, userId: number): Promise<void> {
@@ -681,42 +512,46 @@ export class ChecklistPreviewService {
       const records = data.records.filter(record => record.id !== recordId);
       return { ...data, records, flows: data.flows.filter(flow => records.some(record => record.flowId === flow.id)) };
     });
-    await this.load(true).catch(() => undefined);
   }
 
   async cancelFlow(recordId: string, reason: string): Promise<void> {
     await firstValueFrom(this.api.cancel(recordId, reason));
-    await this.load(true);
   }
 
   async skipChecklist(recordId: string, reason: string): Promise<void> {
     this.requireAdmin();
     await firstValueFrom(this.api.skip(recordId, reason));
-    await this.load(true);
   }
 
-  async loadRecordContext(recordId: string): Promise<Checklist> {
+  async loadRecordContext(recordId: string, editing = false): Promise<ChecklistRecordContext> {
     const version = ++this.contextLoadVersion;
-    const result = await firstValueFrom(forkJoin({
-      record: this.api.getRecord(recordId),
-      flow: this.api.getFlow(recordId),
-      records: this.api.listRecords(),
-    }));
-    const record = this.normalizeRecord(result.record);
-    const flow = this.normalizeFlow(result.flow);
-    const records = result.records.content.map(item => String(item.id) === recordId ? record : this.normalizeRecord(item));
-    if (!records.some(item => item.id === recordId)) records.push(record);
+    const context = await firstValueFrom(this.api.getRecordContext(recordId, editing));
+    const record = this.normalizeRecord(context.record);
+    const flow = this.normalizeFlow(context.flow);
     if (version === this.contextLoadVersion) {
-      this.state.update(data => ({ ...data,
-        records,
-        flows: [...data.flows.filter(item => item.id !== flow.id), flow],
+      this.state.update(data => ({
+        ...data,
+        records: [record],
+        flows: [flow],
       }));
     }
-    return record;
+    return {
+      ...context, record, flow,
+      previousId: context.previousId == null ? null : String(context.previousId),
+      nextId: context.nextId == null ? null : String(context.nextId),
+      steps: context.steps.map(step => ({
+        ...step,
+        templateId: String(step.templateId),
+        recordId: step.recordId == null ? null : String(step.recordId),
+        status: step.status && (this.statuses[step.status] ?? step.status),
+      })),
+    };
   }
 
   private async refreshRecord(recordId: string): Promise<void> {
     const record = this.normalizeRecord(await firstValueFrom(this.api.getRecord(recordId)));
-    this.state.update((data) => ({ ...data, records: data.records.map((item) => item.id === recordId ? record : item) }));
+    this.state.update(data => ({
+      ...data, records: data.records.map(item => item.id === recordId ? record : item),
+    }));
   }
 }

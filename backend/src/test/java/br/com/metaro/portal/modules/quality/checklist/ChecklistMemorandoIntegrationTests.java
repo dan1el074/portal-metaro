@@ -34,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,6 +47,7 @@ import static org.mockito.Mockito.when;
     "external.datasource.username=sa", "external.datasource.password="
 })
 class ChecklistMemorandoIntegrationTests {
+    private static final java.util.concurrent.atomic.AtomicLong TEST_NAMES = new java.util.concurrent.atomic.AtomicLong();
     @Autowired private ChecklistMemorandoService service;
     @Autowired private MemorandoRepository documents;
     @Autowired private UserRepository users;
@@ -68,7 +68,8 @@ class ChecklistMemorandoIntegrationTests {
         reader = existing.getFirst(); other = existing.get(1);
         role("ROLE_MEMORANDO");
         flow = new ChecklistFlow(); flow.setOrderNumber("688");
-        flow.setCommercialItem("60310 - PA DOCA MOVEL (DM)");
+        flow.setCommercialItemCode("60310");
+        flow.setCommercialItem("Descrição de exibição");
     }
 
     @Test
@@ -82,7 +83,7 @@ class ChecklistMemorandoIntegrationTests {
 
     @Test
     void normalizesSpacesAndLeadingZeros() {
-        flow.setOrderNumber(" 00688 "); flow.setCommercialItem(" 0060310 - Descrição ");
+        flow.setOrderNumber(" 00688 "); flow.setCommercialItemCode(" 0060310 ");
         Memorando match = document(688L, MemorandoStatus.APPROVED, other, "60310 - Item");
         assertThat(service.findRelated(flow, reader)).extracting(ChecklistMemorandoDto::getId).containsExactly(match.getId());
     }
@@ -113,7 +114,7 @@ class ChecklistMemorandoIntegrationTests {
         }
         flow.setOrderNumber("688");
         for (String item : new String[] { null, "", "-", "Descrição 60310", "60310A - Item" }) {
-            flow.setCommercialItem(item); assertThat(service.findRelated(flow, reader)).isEmpty();
+            flow.setCommercialItemCode(item); assertThat(service.findRelated(flow, reader)).isEmpty();
         }
     }
 
@@ -178,7 +179,7 @@ class ChecklistMemorandoIntegrationTests {
 
     private ChecklistRecordDto checklist() {
         role("ROLE_ADMIN"); when(authentication.authenticate()).thenReturn(reader);
-        ChecklistCategory category = new ChecklistCategory(); category.setName("Memorandos " + UUID.randomUUID());
+        ChecklistCategory category = new ChecklistCategory(); category.setName("Memorandos " + TEST_NAMES.incrementAndGet());
         category.setIntegration(ChecklistIntegration.NONE); category.setActive(true); category.setFieldsJson("[]"); category.setDocumentTitle("Inspeção");
         category.setCreatedAt(Instant.now()); category.setUpdatedAt(Instant.now()); categories.saveAndFlush(category);
         ChecklistTemplate template = new ChecklistTemplate(); template.setCategory(category); template.setName("Inspeção");
@@ -187,7 +188,7 @@ class ChecklistMemorandoIntegrationTests {
         ChecklistRecordCreateDto input = new ChecklistRecordCreateDto(); input.setTemplateId(template.getId());
         ChecklistRecordDto record = records.createRecord(input);
         ChecklistFlow savedFlow = flows.findById(record.getFlowId()).orElseThrow();
-        savedFlow.setOrderNumber("688"); savedFlow.setCommercialItem("60310 - PA DOCA MOVEL (DM)");
+        savedFlow.setOrderNumber("688"); savedFlow.setCommercialItemCode("60310"); savedFlow.setCommercialItem("60310 - PA DOCA MOVEL (DM)");
         flows.saveAndFlush(savedFlow);
         return records.getRecord(record.getId());
     }

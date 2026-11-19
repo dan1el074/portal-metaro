@@ -26,13 +26,13 @@
     }
   </header>
 
-  @if (store.warning()) { <div class="alert alert-warning" role="alert">{{ store.warning() }} <button type="button" class="reload-link" [disabled]="reloading()" (click)="reload()">{{ reloading() ? 'Atualizando...' : 'atualizar' }}</button></div> }
+  @if (hasLoadError()) { <div class="alert alert-warning" role="alert">Não foi possível carregar os checklists do servidor. Tente novamente. <button type="button" class="reload-link" [disabled]="reloading()" (click)="reload()">{{ reloading() ? 'Atualizando...' : 'atualizar' }}</button></div> }
 
   @if (currentView === 'admin') {
     <section class="management-grid" aria-label="Administração do checklist">
-      <button type="button" class="management-card" (click)="categories.open()"><span class="management-icon"><app-checklist-icon name="folder-cog" /></span><strong>Categorias</strong><small>{{ store.state().categories.length }} categorias e integrações</small></button>
-      <button type="button" class="management-card" (click)="openModels()"><span class="management-icon"><app-checklist-icon name="clipboard-list" /></span><strong>Modelos</strong><small>{{ store.state().templates.length }} modelos configurados</small></button>
-      <button type="button" class="management-card" (click)="equipmentModal.open()"><span class="management-icon"><app-checklist-icon name="package" /></span><strong>Equipamentos</strong><small>Tipos associados aos modelos</small></button>
+      <button type="button" class="management-card" (click)="categories.open()"><span class="management-icon"><app-checklist-icon name="folder-cog" /></span><strong>Categorias</strong><small>{{ headerCount()?.categories ?? "…" }} categorias e integrações</small></button>
+      <button type="button" class="management-card" (click)="openModels()"><span class="management-icon"><app-checklist-icon name="clipboard-list" /></span><strong>Modelos</strong><small>{{ headerCount()?.models ?? "…" }} modelos configurados</small></button>
+      <button type="button" class="management-card" (click)="equipmentModal.open()"><span class="management-icon"><app-checklist-icon name="package" /></span><strong>Equipamentos</strong><small>{{ headerCount()?.equipment ?? "…" }} equipamentos cadastrados</small></button>
       <button type="button" class="management-card" (click)="accessModal.open()"><span class="management-icon"><app-checklist-icon name="users" /></span><strong>Controle de acesso</strong><small>Operadores por categoria</small></button>
     </section>
     <div class="secondary-actions"><button cButton color="secondary" variant="ghost" (click)="catalogModal.open()"><app-checklist-icon name="settings" /> Configurações</button></div>
@@ -45,9 +45,9 @@
   }
 
   <c-card class="records-card">
-    <div class="records-header"><div><h2>Registros</h2><p>Consulte checklists em andamento e finalizados.</p></div>@if (currentView !== 'consultation' && store.operator) { <button cButton color="primary" (click)="openNewRecord()"><app-checklist-icon name="plus" /> Novo</button> }</div>
+    <div class="records-header"><div><h2>Registros</h2><p>Consulte checklists em andamento e finalizados.</p></div>@if (currentView !== 'consultation' && store.operator) { <button cButton color="primary" [disabled]="loadingCreation()" (click)="openNewRecord()"><app-checklist-icon name="plus" /> Novo</button> }</div>
     <nav class="category-tabs" aria-label="Categorias">
-      @for (category of store.state().categories; track category.id) { <button type="button" [class.active]="activeCategoryId === category.id" (click)="selectCategory(category.id)">{{ category.name }} <span>{{ count(category.id) }}</span></button> }
+      @for (category of categoryTabs(); track category.id) { <button type="button" [class.active]="activeCategoryId === category.id" (click)="selectCategory(category.id)">{{ category.name }} <span>{{ count(category.id) }}</span></button> }
     </nav>
     <div class="content-panel">
       <app-checklist-table [data]="pageRows()" [loading]="loadingRows()" [perPage]="itemsPerPage" [searchValue]="search" [selectedStatus]="status" [sorterValue]="sorter" (openRecord)="openRecord($event)" (filterChange)="changeSearch($event)" (statusChange)="changeStatus($event)" (sorterChange)="changeSort($event)" (itemsPerPageChange)="changeSize($event)" (clearAll)="clearFilters()" />
@@ -56,8 +56,8 @@
   </c-card>
 </c-container>
 
-<app-checklist-category-modal #categories />
-<app-checklist-equipment-modal #equipmentModal />
+<app-checklist-category-modal #categories (changed)="categoriesChanged()" />
+<app-checklist-equipment-modal #equipmentModal (changed)="loadHeader()" />
 <app-checklist-access-modal #accessModal />
 <app-checklist-catalog-modal #catalogModal />
 <app-checklist-new-record-modal #newRecordModal (createRecord)="createRecord($event)" />

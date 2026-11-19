@@ -10,5 +10,5 @@ public interface ChecklistCommentRepository extends JpaRepository<ChecklistComme
     List<ChecklistComment> findByRecordId(Long recordId);
     List<ChecklistComment> findByRecordIdAndActiveTrueOrderByCreatedAtAsc(Long recordId);
     Optional<ChecklistComment> findByIdAndRecordId(Long id, Long recordId);
-    Optional<ChecklistComment> findByRecordIdAndProblemIdAndActiveTrue(Long recordId, String problemId);
+    Optional<ChecklistComment> findByRecordIdAndProblemIdAndActiveTrue(Long recordId, Long problemId);
 }

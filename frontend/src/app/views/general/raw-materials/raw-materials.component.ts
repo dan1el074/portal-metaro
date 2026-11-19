@@ -72,6 +72,8 @@ export class RawMaterialsComponent implements OnInit {
   protected activeInventoryTab = '';
 
   protected itemModalVisible = false;
+  protected activationModalVisible = false;
+  protected activationReason = '';
   protected stockModalVisible = false;
   protected accessModalVisible = false;
   protected accessUsers: RawMaterialUserAccess[] = [];
@@ -218,6 +220,8 @@ export class RawMaterialsComponent implements OnInit {
     this.saving = false;
     this.itemSaveError = '';
     this.itemFormSubmitted = false;
+    this.activationReason = '';
+    this.activationModalVisible = false;
     this.editingItem = item
       ? this.formatItemDimensions({ ...item, categoryId: this.categories.find(category => category.name === item.type)?.id })
       : {
@@ -248,6 +252,23 @@ export class RawMaterialsComponent implements OnInit {
     this.history = [];
   }
 
+  protected toggleActive(checkbox: HTMLInputElement): void {
+    if (!this.editingItem) return;
+    this.activationReason = '';
+    if (checkbox.checked) {
+      checkbox.checked = false;
+      this.activationModalVisible = true;
+    } else {
+      this.editingItem.active = false;
+    }
+  }
+
+  protected confirmActivation(): void {
+    if (!this.editingItem || !this.activationReason.trim()) return;
+    this.editingItem.active = true;
+    this.activationModalVisible = false;
+  }
+
   protected closeItemModal(): void {
     this.saving = false;
     this.itemSaveError = '';
@@ -273,7 +294,8 @@ export class RawMaterialsComponent implements OnInit {
     this.itemSaveError = '';
     this.saving = true;
     const isEditing = this.editingItem.id > 0;
-    this.rawMaterialsService.saveItem(this.editingItem)
+    const reason = this.editingItem.active ? this.activationReason.trim() : '';
+    this.rawMaterialsService.saveItem(this.editingItem, reason || undefined)
       .pipe(finalize(() => {
         this.saving = false;
         this.cdf.detectChanges();

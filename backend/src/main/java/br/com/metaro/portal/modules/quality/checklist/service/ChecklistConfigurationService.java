@@ -8,6 +8,7 @@ import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityExceptio
 import br.com.metaro.portal.modules.quality.checklist.dto.*;
 import br.com.metaro.portal.modules.quality.checklist.entity.*;
 import br.com.metaro.portal.modules.quality.checklist.repository.*;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -30,16 +31,76 @@ public class ChecklistConfigurationService {
     private final ChecklistStepFlowService checklistStepFlowService;
 
     @Transactional(readOnly = true)
+    public ChecklistHeaderDto header() {
+        var categories = categoryRepository.listTabs();
+        var counts = isAdministrator(userService.authenticate())
+                ? List.of(new ChecklistHeaderCountDto(categories.size(), templateRepository.count(), equipmentRepository.count()))
+                : List.<ChecklistHeaderCountDto>of();
+        return new ChecklistHeaderDto(categories, counts);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChecklistCategorySummaryDto> listCategorySummaries() {
+        return categoryRepository.listSummaries();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChecklistCategoryModelOptionDto> listCategoryModelOptions() {
+        return categoryRepository.listModelOptions().stream().map(row -> {
+            List<ChecklistFieldDto> fields = mapper.read((String) row[7], new TypeReference<>() {});
+            var fieldIds = fields == null ? List.<String>of() : fields.stream().map(field -> field.getId().toString()).toList();
+            return new ChecklistCategoryModelOptionDto((Long) row[0], (String) row[1],
+                    (ChecklistIntegration) row[2], (Boolean) row[3], (String) row[4], (String) row[5], (Boolean) row[6], fieldIds);
+        }).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ChecklistCategoryDto getCategory(Long id) {
+        return mapper.toDto(categoryRepository.findById(id).orElseThrow(ResourceNotFoundException::new));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChecklistCategoryHistoryDto> listCategoryHistorySettings() {
+        return categoryRepository.listHistorySettings();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChecklistCategoryAccessDto> listCategoryAccess() {
+        Map<Long, ChecklistCategoryAccessDto> categories = new LinkedHashMap<>();
+        for (Object[] row : categoryRepository.listAccess()) {
+            Long id = (Long) row[0];
+            var category = categories.computeIfAbsent(id,
+                    key -> new ChecklistCategoryAccessDto(key, (String) row[1], new ArrayList<>()));
+            if (row[2] != null) category.getOperators().add((Long) row[2]);
+        }
+        return List.copyOf(categories.values());
+    }
+
+    @Transactional
+    public void updateCategoryStatus(Long id, ChecklistCategoryStatusDto dto) {
+        var category = categoryRepository.findById(id).orElseThrow(ResourceNotFoundException::new);
+        applyCategoryStatus(category, dto.getActive(), dto.getReason());
+        category.setUpdatedAt(Instant.now());
+    }
+
+    @Transactional
+    public void updateCategoryHistory(Map<Long, Boolean> settings) {
+        var categories = categoryRepository.findAllById(settings.keySet());
+        if (categories.size() != settings.size()) throw new ResourceNotFoundException();
+        for (var category : categories) {
+            category.setClientNokHistory(Boolean.TRUE.equals(settings.get(category.getId())));
+            category.setUpdatedAt(Instant.now());
+        }
+    }
+
+    @Transactional(readOnly = true)
     public List<ChecklistCategoryDto> listCategories() {
         return categoryRepository.findAll(Sort.by(Sort.Direction.ASC, "id")).stream().map(mapper::toDto).toList();
     }
 
     @Transactional(readOnly = true)
     public List<ChecklistOperatorDto> listOperators() {
-        return userRepository.findAll(Sort.by("name")).stream()
-                .filter(user -> user.hasRole("ROLE_CHECKLIST_OPERATOR"))
-                .map(user -> new ChecklistOperatorDto(user.getId(), user.getName(), Boolean.TRUE.equals(user.getActivated())))
-                .toList();
+        return categoryRepository.listOperators();
     }
 
     @Transactional
@@ -60,14 +121,7 @@ public class ChecklistConfigurationService {
         ChecklistIntegration previousIntegration = entity.getIntegration();
         entity.setName(dto.getName().trim());
         entity.setIntegration(parseIntegration(dto.getIntegration()));
-        entity.setActive(dto.isActive());
-        entity.setDeactivationReason(blankToNull(dto.getReason()));
-        if (!entity.isActive() && entity.getDeactivationReason() == null) {
-            throw new UnprocessableEntityException("É necessário informar uma justificativa para desativar a categoria.");
-        }
-        if (!entity.isActive() && checklistStepFlowService.categoryIsRequired(entity.getId())) {
-            throw new UnprocessableEntityException("Uma categoria exigida pelo Fluxo de etapas não pode ser desativada.");
-        }
+        applyCategoryStatus(entity, dto.isActive(), dto.getReason());
         entity.setDisplayOrder(dto.getDisplayOrder());
         entity.setLogo(dto.isLogo());
         entity.setReLabel(blankToNull(dto.getRe()));
@@ -88,6 +142,17 @@ public class ChecklistConfigurationService {
         return mapper.toDto(categoryRepository.save(entity));
     }
 
+    private void applyCategoryStatus(ChecklistCategory category, boolean active, String reason) {
+        category.setActive(active);
+        category.setDeactivationReason(blankToNull(reason));
+        if (!active && category.getDeactivationReason() == null) {
+            throw new UnprocessableEntityException("É necessário informar uma justificativa para desativar a categoria.");
+        }
+        if (!active && checklistStepFlowService.categoryIsRequired(category.getId())) {
+            throw new UnprocessableEntityException("Uma categoria exigida pelo Fluxo de etapas não pode ser desativada.");
+        }
+    }
+
     @Transactional
     public void deleteCategory(Long id) {
         if (templateRepository.existsByCategoryId(id)) {
@@ -99,7 +164,8 @@ public class ChecklistConfigurationService {
 
     @Transactional
     public void updateCategoryAccess(ChecklistAccessUpdateDto dto) {
-        ChecklistCategory category = categoryRepository.findById(dto.getCategoryId()).orElseThrow(ResourceNotFoundException::new);
+        ChecklistCategory category = categoryRepository.findLockedByIds(List.of(dto.getCategoryId())).stream()
+                .findFirst().orElseThrow(ResourceNotFoundException::new);
         Set<User> operators = new HashSet<>(userRepository.findAllById(dto.getUserIds()));
         if (operators.size() != new HashSet<>(dto.getUserIds()).size()) {
             throw new ResourceNotFoundException();
@@ -107,6 +173,40 @@ public class ChecklistConfigurationService {
         category.setOperators(operators);
         category.setUpdatedAt(Instant.now());
         categoryRepository.save(category);
+    }
+
+    @Transactional
+    public void updateCategoryAccessBatch(List<ChecklistAccessChangeDto> changes) {
+        Map<Long, Map<Long, Boolean>> byCategory = new HashMap<>();
+        Set<Long> userIds = new HashSet<>();
+        for (var change : changes) {
+            byCategory.computeIfAbsent(change.getCategoryId(), id -> new HashMap<>())
+                    .put(change.getUserId(), change.getAllowed());
+            userIds.add(change.getUserId());
+        }
+
+        var categories = categoryRepository.findLockedByIds(List.copyOf(byCategory.keySet()));
+        Map<Long, User> operators = new HashMap<>();
+        userRepository.findAllById(userIds).forEach(user -> operators.put(user.getId(), user));
+        if (categories.size() != byCategory.size() || operators.size() != userIds.size()) {
+            throw new ResourceNotFoundException();
+        }
+
+        Instant updatedAt = Instant.now();
+        for (ChecklistCategory category : categories) {
+            Map<Long, Boolean> permissions = byCategory.get(category.getId());
+            Set<User> assigned = category.getOperators();
+            boolean changed = assigned.removeIf(operator -> Boolean.FALSE.equals(permissions.get(operator.getId())));
+            Set<Long> assignedIds = new HashSet<>();
+            assigned.forEach(operator -> assignedIds.add(operator.getId()));
+            for (var permission : permissions.entrySet()) {
+                if (permission.getValue() && assignedIds.add(permission.getKey())) {
+                    assigned.add(operators.get(permission.getKey()));
+                    changed = true;
+                }
+            }
+            if (changed) category.setUpdatedAt(updatedAt);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -158,6 +258,16 @@ public class ChecklistConfigurationService {
         return templateRepository.findAllByOrderByDisplayOrderAscNameAsc().stream().map(mapper::toDto).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ChecklistTemplateSummaryDto> listTemplateSummaries() {
+        return templateRepository.listSummaries();
+    }
+
+    @Transactional(readOnly = true)
+    public ChecklistTemplateDto getTemplate(Long id) {
+        return mapper.toDto(templateRepository.findById(id).orElseThrow(ResourceNotFoundException::new));
+    }
+
     @Transactional
     public ChecklistTemplateDto saveTemplate(ChecklistTemplateDto dto) {
         Long id = dto.getId();
@@ -169,6 +279,16 @@ public class ChecklistConfigurationService {
         ChecklistTemplate predecessor = dto.getPredecessorId() == null ? null
                 : templateRepository.findById(dto.getPredecessorId()).orElseThrow(ResourceNotFoundException::new);
         validateTemplate(dto, id, category, equipment, predecessor);
+        Set<Long> questions = new HashSet<>();
+        Set<Long> sections = new HashSet<>();
+        for (var section : dto.getSections()) {
+            if (section.getId() == null || section.getId() <= 0 || !sections.add(section.getId()))
+                throw new UnprocessableEntityException("Identificador de seção inválido ou repetido.");
+            for (var question : section.getQuestions()) {
+                if (question.getId() == null || question.getId() <= 0 || !questions.add(question.getId()))
+                    throw new UnprocessableEntityException("Identificador de pergunta inválido ou repetido.");
+            }
+        }
         Instant now = Instant.now();
         if (entity.getId() == null) {
             entity.setCreatedAt(now);
@@ -320,10 +440,10 @@ public class ChecklistConfigurationService {
         if (fields == null) return;
         Set<String> ids = new HashSet<>();
         for (ChecklistFieldDto field : fields) {
-            if (field.getId() == null || field.getId().isBlank() || field.getLabel() == null || field.getLabel().isBlank()) {
+            if (field.getId() == null || field.getId() <= 0 || field.getLabel() == null || field.getLabel().isBlank()) {
                 throw new UnprocessableEntityException("Os campos configurados precisam de identificadores estáveis e descrições.");
             }
-            if (!ids.add(field.getId())) throw new UnprocessableEntityException("Os identificadores dos campos configurados devem ser únicos.");
+            if (!ids.add(field.getId().toString())) throw new UnprocessableEntityException("Os identificadores dos campos configurados devem ser únicos.");
             if ("select".equals(field.getType()) && (field.getOptions() == null || field.getOptions().isEmpty())) {
                 throw new UnprocessableEntityException("Campos de seleção precisam de opções.");
             }
@@ -331,8 +451,7 @@ public class ChecklistConfigurationService {
     }
 
     private void applyIntegrationChange(ChecklistCategory category) {
-        for (ChecklistTemplate template : templateRepository.findAllByOrderByDisplayOrderAscNameAsc()) {
-            if (!template.getCategory().getId().equals(category.getId())) continue;
+        for (ChecklistTemplate template : templateRepository.findByCategoryId(category.getId())) {
             List<ChecklistSectionDto> sections = mapper.read(template.getSectionsJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
             for (ChecklistSectionDto section : sections) {
                 section.getOptions().removeIf("NOK"::equals);

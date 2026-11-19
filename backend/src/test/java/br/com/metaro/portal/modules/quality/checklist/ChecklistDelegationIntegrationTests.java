@@ -16,22 +16,28 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @Transactional
 @TestPropertySource(properties = {
     "external.datasource.jdbc-url=jdbc:h2:mem:checklist-delegation",
@@ -39,7 +45,9 @@ import static org.mockito.Mockito.when;
     "external.datasource.username=sa", "external.datasource.password="
 })
 class ChecklistDelegationIntegrationTests {
+    private static final java.util.concurrent.atomic.AtomicLong TEST_NAMES = new java.util.concurrent.atomic.AtomicLong();
     @Autowired private ChecklistRecordService service;
+    @Autowired private MockMvc mvc;
     @Autowired private ChecklistListingService listing;
     @Autowired private ChecklistRecordRepository records;
     @Autowired private ChecklistCategoryRepository categories;
@@ -59,7 +67,7 @@ class ChecklistDelegationIntegrationTests {
         role(creator, "ROLE_CHECKLIST_ADMIN"); role(operator, "ROLE_CHECKLIST_OPERATOR");
         creator.setActivated(true); operator.setActivated(true);
         when(authentication.authenticate()).thenReturn(creator);
-        category = new ChecklistCategory(); category.setName("Delegação " + UUID.randomUUID());
+        category = new ChecklistCategory(); category.setName("Delegação " + TEST_NAMES.incrementAndGet());
         category.setIntegration(ChecklistIntegration.NONE); category.setActive(true); category.setDocumentTitle("Inspeção");
         category.setFieldsJson("[]"); category.setCreatedAt(Instant.now()); category.setUpdatedAt(Instant.now());
         category.setOperators(new HashSet<>(Set.of(creator, operator))); categories.saveAndFlush(category);
@@ -131,6 +139,38 @@ class ChecklistDelegationIntegrationTests {
         assertThatThrownBy(() -> service.delegate(record.getId(), operator.getId())).isInstanceOf(UnprocessableEntityException.class);
         operator.setActivated(true); category.getOperators().remove(operator); categories.saveAndFlush(category);
         assertThatThrownBy(() -> service.delegate(record.getId(), operator.getId())).isInstanceOf(UnprocessableEntityException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "CHECKLIST_ADMIN")
+    void savesAccessChangesAcrossCategoriesInOneRequest() throws Exception {
+        ChecklistCategory other = new ChecklistCategory();
+        other.setName("Outra categoria " + TEST_NAMES.incrementAndGet());
+        other.setIntegration(ChecklistIntegration.NONE);
+        other.setActive(true);
+        other.setDocumentTitle("Inspeção");
+        other.setFieldsJson("[]");
+        other.setCreatedAt(Instant.now());
+        other.setUpdatedAt(Instant.now());
+        categories.saveAndFlush(other);
+
+        mvc.perform(patch("/api/checklist/access").contentType(MediaType.APPLICATION_JSON).content("""
+                [
+                  {"categoryId": %d, "userId": %d, "allowed": false},
+                  {"categoryId": %d, "userId": %d, "allowed": true}
+                ]
+                """.formatted(category.getId(), operator.getId(), other.getId(), operator.getId())))
+                .andExpect(status().isNoContent());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(categories.findAllowedCategoryIds(operator.getId())).contains(other.getId()).doesNotContain(category.getId());
+        assertThat(categories.findAllowedCategoryIds(creator.getId())).contains(category.getId());
+
+        mvc.perform(patch("/api/checklist/access").contentType(MediaType.APPLICATION_JSON).content("""
+                [{"categoryId": %d, "userId": %d}]
+                """.formatted(other.getId(), operator.getId())))
+                .andExpect(status().isBadRequest());
     }
 
     private void role(User user, String authority) {

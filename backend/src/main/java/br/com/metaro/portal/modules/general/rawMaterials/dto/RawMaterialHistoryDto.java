@@ -5,6 +5,7 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 @NoArgsConstructor
@@ -26,6 +27,11 @@ public class RawMaterialHistoryDto {
     }
 
     private static List<String> parseFields(String fields) {
-        return fields == null || fields.isBlank() ? List.of() : Arrays.asList(fields.split("\\|"));
+        if (fields == null || fields.isBlank()) return List.of();
+        // Only the field labels before the first newline are pipe-delimited.
+        String[] parts = fields.split("\n", 2);
+        List<String> labels = new ArrayList<>(Arrays.asList(parts[0].split("\\|")));
+        if (parts.length == 2) labels.add(parts[1]);
+        return labels;
     }
 }

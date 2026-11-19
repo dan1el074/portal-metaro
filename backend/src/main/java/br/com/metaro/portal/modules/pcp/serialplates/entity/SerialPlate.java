@@ -1,5 +1,6 @@
 package br.com.metaro.portal.modules.pcp.serialplates.entity;
 
+import br.com.metaro.portal.util.erp.ErpItemCode;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -43,4 +44,7 @@ public class SerialPlate {
     private String manufactured;
     @Column(nullable = false, columnDefinition = "TIMESTAMP WITHOUT TIME ZONE")
     private Instant updated;
+    public void setOrderItemCode(String code) {
+        this.orderItemCode = ErpItemCode.normalize(code);
+    }
 }
