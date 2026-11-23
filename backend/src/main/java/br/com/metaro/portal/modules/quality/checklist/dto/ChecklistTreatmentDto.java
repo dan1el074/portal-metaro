@@ -9,8 +9,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class ChecklistTreatmentDto {
-    @NotBlank
-    private String problemId;
+    @jakarta.validation.constraints.NotNull
+    private Long problemId;
     @NotBlank
     private String justification;
 }

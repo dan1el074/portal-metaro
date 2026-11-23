@@ -1,5 +1,6 @@
 package br.com.metaro.portal.modules.quality.checklist.service;
 
+import br.com.metaro.portal.util.erp.ErpItemCode;
 import br.com.metaro.portal.core.entities.User;
 import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityException;
 import br.com.metaro.portal.modules.pcp.serialplates.entity.SerialPlate;
@@ -36,10 +37,9 @@ public class ChecklistSerialPlateService {
     @Transactional(readOnly = true)
     public List<ChecklistSerialOptionDto> listAvailable(String order, String item, boolean readyStock) {
         if (!readyStock && (order == null || !order.matches("[0-9]{1,15}"))) return List.of();
-        if (!readyStock && itemCode(item).isEmpty()) return List.of();
-        List<SerialPlate> plates = plateRepository.findAvailableForChecklist(readyStock ? "" : canonicalOrder(order), readyStock);
-        return plates.stream().filter(plate -> readyStock || matchesItem(plate, item))
-                .map(plate -> new ChecklistSerialOptionDto(plate.getSerial().toString(), plate.getDescription())).toList();
+        String code = ErpItemCode.normalize(item == null ? null : item.split("\\s+-\\s*", 2)[0]);
+        if (!readyStock && code.isEmpty()) return List.of();
+        return plateRepository.findAvailableForChecklist(readyStock ? "" : canonicalOrder(order), code, readyStock);
     }
 
     // The plate lock serializes reservations with PCP mutations; the unique FK also protects the database.
@@ -60,12 +60,10 @@ public class ChecklistSerialPlateService {
         if (!eligible(plate, flow.getOrderNumber(), readyStock)) {
             throw invalid("O número de série não está disponível para este pedido ou para Pronta Entrega.");
         }
-        if (!readyStock && !matchesItem(plate, flow.getCommercialItem())) {
+        if (!readyStock && !Objects.equals(plate.getOrderItemCode(), flow.getCommercialItemCode())) {
             throw invalid("O número de série não pertence ao item selecionado do pedido.");
         }
-        if (!readyStock) {
-            plate.setOrderItemCode(itemCode(flow.getCommercialItem()));
-        }
+        if (readyStock) flow.setCommercialItemCode(null);
         flow.setSerialPlateId(serial);
         flow.setSerialNumber(serial.toString());
         flow.setNormalizedSerial(serial.toString());
@@ -110,6 +108,7 @@ public class ChecklistSerialPlateService {
         Map<String, String> equipment = equipmentData(plate, label);
         flow.setSerialPlateId(plate.getSerial());
         flow.setReadyStock(plate.getReadyStock());
+        flow.setCommercialItemCode(plate.getReadyStock() ? null : plate.getOrderItemCode());
         flow.setOrderNumber(newOrder.isBlank() ? null : newOrder);
         flow.setClientName(plate.getReadyStock() ? null : plate.getClient());
         if (orderChanged || plate.getReadyStock() || itemLabel != null) {
@@ -156,21 +155,10 @@ public class ChecklistSerialPlateService {
     }
 
     private String resolveCommercialItem(ErpOrderDto order, SerialPlate plate, String label) {
-        if (!itemCode(plate.getOrderItemCode()).isEmpty()) {
-            var codedItem = order.getItems().stream()
-                    .filter(item -> itemCode(item.getCode()).equals(itemCode(plate.getOrderItemCode()))).findFirst();
-            if (codedItem.isPresent()) return codedItem.get().getCode() + " - " + codedItem.get().getDescription();
-        }
-        var matches = order.getItems().stream().filter(item ->
-                label.equalsIgnoreCase(item.getCode() + " - " + item.getDescription())
-                || label.equalsIgnoreCase(item.getDescription() + " - " + plate.getDescription())
-                || plate.getDescription().equalsIgnoreCase(item.getDescription())).toList();
-        if (matches.isEmpty() && order.getItems().size() == 1) matches = order.getItems();
-        // The plate export has no commercial code. Preserve its selected label when
-        // the two ERP exports cannot be matched uniquely; quantities are independent.
-        if (matches.size() != 1) return label;
-        var item = matches.getFirst();
-        return item.getCode() + " - " + item.getDescription();
+        return order.getItems().stream()
+                .filter(item -> ErpItemCode.normalize(item.getCode()).equals(plate.getOrderItemCode()))
+                .map(item -> item.getCode() + " - " + item.getDescription())
+                .findFirst().orElse(label);
     }
 
     private Map<String, String> identification(ChecklistFlow flow) {
@@ -198,17 +186,6 @@ public class ChecklistSerialPlateService {
         return readyStock ? plate.getReadyStock() : !plate.getReadyStock()
                 && !plate.getOrder().isBlank() && !plate.getClient().isBlank()
                 && canonicalOrder(plate.getOrder()).equals(canonicalOrder(order));
-    }
-
-    private boolean matchesItem(SerialPlate plate, String item) {
-        String storedCode = itemCode(plate.getOrderItemCode());
-        return !storedCode.isEmpty() && storedCode.equals(itemCode(item));
-    }
-
-    private String itemCode(String value) {
-        if (value == null) return "";
-        String code = value.trim().split("\\s+-\\s*", 2)[0].trim().toUpperCase(Locale.ROOT);
-        return code.matches("[0-9]+") ? code.replaceFirst("^0+(?!$)", "") : code;
     }
 
     private String canonicalOrder(String value) {

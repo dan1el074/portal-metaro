@@ -27,10 +27,10 @@ describe('Checklist detail loading, history and deletion', () => {
   let navigate: jasmine.Spy;
   const category = { ...emptyChecklistCategory(), id: 'c', name: 'Inspeção', erp: false, serial: false };
   const snapshots = ['t1', 't2'].map((id, index) => ({ category, equipment: '', template: {
-    id, name: 'Modelo ' + (index + 1), categoryId: 'c', signature: false,
+    id, name: 'Modelo ' + (index + 1), categoryId: 'c', signature: false, title: 'Checklist ' + (index + 1),
     sections: [{ id: 's', name: 'Conferência', options: ['OK', 'NOK'], questions: [{ id: 'q', label: 'Verificar componente', fields: [] }] }],
   } }));
-  const flow = { id: 'f', plan: snapshots, skipped: { t2: 'Não se aplica' }, cancelled: false, clientId: '', serial: '', order: '' };
+  const flow = { id: 'f', plan: snapshots, skipped: { t2: 'Não se aplica' }, cancelled: false, clientId: '', serial: '', order: '688', item: '60310 - Item' };
   const records = ['1', '2'].map((id, index) => ({
     id, flowId: 'f', templateId: 't' + id, status: index ? 'Justificado' : 'Rascunho', creatorId: 1, ownerId: 1,
     fields: {}, departments: [], media: [], comments: [], revisions: [],
@@ -38,12 +38,24 @@ describe('Checklist detail loading, history and deletion', () => {
     logs: [{ id: 'a' + id, actor: 'PCP', action: 'Dados atualizados pelo PCP', details: 'Pedido: 900 → 901', displayDetails: 'Pedido: 900 → 901', at: '2026-10-29T12:00:00Z' }],
   }));
 
+  function contextFor(id: string) {
+    const record = records.find(record => record.id === id)!;
+    return {
+      record, flow: { ...flow, plan: snapshots.filter(item => item.template.id === record.templateId) },
+      editable: false, clientNokHistory: false, blocked: false, previousId: id === '2' ? '1' : null, nextId: id === '1' ? '2' : null,
+      steps: records.map(row => ({
+        templateId: row.templateId, label: category.name, title: snapshots.find(step => step.template.id === row.templateId)!.template.name,
+        recordId: row.id, status: row.status, skipped: row.id === '2',
+      })),
+    };
+  }
+
   beforeEach(async () => {
     params = new BehaviorSubject(convertToParamMap({ id: '1' }));
     store = { state: signal({ categories: [category], records, flows: [flow], templates: snapshots.map(item => item.template) }),
       user: { id: 1, name: 'Administrador' }, admin: true, operator: true,
       load: jasmine.createSpy().and.resolveTo(undefined),
-      loadRecordContext: jasmine.createSpy().and.callFake((id: string) => Promise.resolve(records.find(record => record.id === id))),
+      loadRecordContext: jasmine.createSpy().and.callFake((id: string) => Promise.resolve(contextFor(id))),
       flow: () => flow, snapshot: (record: any) => snapshots.find(item => item.template.id === record.templateId),
       visible: () => true, editable: () => false, title: (record: any) => 'Checklist ' + record.id,
       clientNokHistoryEnabled: () => false, deleteDraft: jasmine.createSpy(),
@@ -113,7 +125,7 @@ describe('Checklist detail loading, history and deletion', () => {
     expect(fixture.nativeElement.querySelector('.checklist-loading c-spinner')).toBeNull();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 1');
     expect(fixture.nativeElement.querySelector('.checklist-print-area').hasAttribute('inert')).toBeTrue();
-    context.resolve(records[1]); await settle();
+    context.resolve(contextFor('2')); await settle();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 1');
     links.next([]); links.complete(); await settle();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 2');
@@ -125,10 +137,10 @@ describe('Checklist detail loading, history and deletion', () => {
 
   it('ignores a slower response after navigation to a different checklist', async () => {
     const slow = deferred<any>();
-    store.loadRecordContext.and.callFake((id: string) => id === '2' ? slow.promise : Promise.resolve(records[0]));
+    store.loadRecordContext.and.callFake((id: string) => id === '2' ? slow.promise : Promise.resolve(contextFor('1')));
     params.next(convertToParamMap({ id: '2' })); await settle();
     params.next(convertToParamMap({ id: '1' })); await settle();
-    slow.resolve(records[1]); await settle();
+    slow.resolve(contextFor('2')); await settle();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 1');
     expect(fixture.nativeElement.querySelector('.detail-breadcrumb strong').textContent).toBe('Checklist 1');
   });
@@ -138,7 +150,7 @@ describe('Checklist detail loading, history and deletion', () => {
     params.next(convertToParamMap({ id: '2' })); await settle();
     expect(fixture.nativeElement.querySelector('.document-card')).toBeNull();
     expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Não foi possível carregar');
-    store.loadRecordContext.and.resolveTo(records[1]);
+    store.loadRecordContext.and.resolveTo(contextFor('2'));
     (fixture.nativeElement.querySelector('.checklist-loading button') as HTMLButtonElement).click();
     await settle();
     expect(fixture.nativeElement.querySelector('.document-header h1').textContent).toContain('Modelo 2');

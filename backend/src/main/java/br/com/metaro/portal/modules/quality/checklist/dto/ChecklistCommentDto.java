@@ -15,5 +15,5 @@ public class ChecklistCommentDto {
     private String author;
     private Instant at;
     private String text;
-    private String problemId;
+    private Long problemId;
 }

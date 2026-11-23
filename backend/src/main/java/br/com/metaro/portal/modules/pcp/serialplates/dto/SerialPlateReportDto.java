@@ -7,6 +7,6 @@ import java.util.List;
 @Getter
 @AllArgsConstructor
 public class SerialPlateReportDto {
-    private List<SerialPlateDto> records;
+    private List<SerialPlateReportRowDto> records;
     private SerialPlateSettingsDto settings;
 }

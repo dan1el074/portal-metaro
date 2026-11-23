@@ -1,5 +1,6 @@
 package br.com.metaro.portal.modules.pcp.serialplates.service;
 
+import br.com.metaro.portal.util.erp.ErpItemCode;
 import br.com.metaro.portal.integration.focco.FoccoPlateClient;
 import br.com.metaro.portal.integration.focco.FoccoIntegrationException;
 import br.com.metaro.portal.integration.focco.dto.FoccoPlateLineDto;
@@ -26,7 +27,7 @@ public class SerialPlateErpService {
                 throw new FoccoIntegrationException("O FoccoERP retornou dados inconsistentes para o pedido.");
             }
             SerialPlateOrderItemDto item = new SerialPlateOrderItemDto();
-            item.setItemCode(text(line.getItemCode()));
+            item.setItemCode(ErpItemCode.normalize(line.getItemCode()));
             if (item.getItemCode().isEmpty() || item.getItemCode().length() > 64) {
                 throw new FoccoIntegrationException("O FoccoERP não retornou um código de item válido para o pedido.");
             }

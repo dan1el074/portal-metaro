@@ -20,7 +20,7 @@ public class SerialPlateController {
     private final SerialPlateErpService erp;
 
     @GetMapping
-    public Page<SerialPlateDto> listPlates(Pageable pageable, @RequestParam(defaultValue = "") String search, @RequestParam(defaultValue = "") String status) {
+    public Page<SerialPlateListRowDto> listPlates(Pageable pageable, @RequestParam(defaultValue = "") String search, @RequestParam(defaultValue = "") String status) {
         return service.listPlates(pageable, search, status);
     }
 
@@ -40,10 +40,10 @@ public class SerialPlateController {
     public List<SerialPlateHistoryDto> getHistory(@PathVariable Long serial) { return service.getHistory(serial); }
 
     @PostMapping("/selection")
-    public List<SerialPlateDto> getSelection(@Valid @RequestBody SerialPlateSelectionDto dto) { return service.getSelection(dto.getSerials()); }
+    public List<SerialPlateBatchRowDto> getSelection(@Valid @RequestBody SerialPlateSelectionDto dto) { return service.getSelection(dto.getSerials()); }
 
     @GetMapping("/range")
-    public List<SerialPlateDto> getRange(@RequestParam String anchor, @RequestParam String target, Pageable pageable,
+    public List<String> getRange(@RequestParam String anchor, @RequestParam String target, Pageable pageable,
             @RequestParam(defaultValue = "") String search, @RequestParam(defaultValue = "") String status) {
         return service.getRange(anchor, target, pageable, search, status);
     }
@@ -51,7 +51,7 @@ public class SerialPlateController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_SERIAL_PLATES_OPERATOR')")
-    public List<SerialPlateDto> createPlates(@Valid @RequestBody SerialPlateCreateDto dto) { return service.createPlates(dto); }
+    public int createPlates(@Valid @RequestBody SerialPlateCreateDto dto) { return service.createPlates(dto); }
 
     @PutMapping("/{serial}")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_SERIAL_PLATES_OPERATOR')")
@@ -74,6 +74,10 @@ public class SerialPlateController {
     @GetMapping("/erp/orders/{number}")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_SERIAL_PLATES_OPERATOR')")
     public SerialPlateOrderDto findOrder(@PathVariable String number) { return erp.findOrder(number); }
+
+    @PostMapping("/report/preview")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_SERIAL_PLATES_OPERATOR')")
+    public SerialPlateReportDto previewReport(@Valid @RequestBody SerialPlateSelectionDto dto) { return service.previewReport(dto); }
 
     @PostMapping("/report")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_SERIAL_PLATES_OPERATOR')")

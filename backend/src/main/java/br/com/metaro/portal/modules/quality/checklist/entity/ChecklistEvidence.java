@@ -23,7 +23,7 @@ public class ChecklistEvidence {
     @JoinColumn(name = "record_id")
     private ChecklistRecord record;
     @Column(nullable = false, length = 120)
-    private String problemId;
+    private Long problemId;
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "picture_id")
     private Picture picture;

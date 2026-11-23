@@ -4,31 +4,28 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { ChecklistNewRecordModalComponent } from './checklist-new-record-modal.component';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
-import { Category, Template } from '../../../../app/interface/checklist.interface';
+import { ChecklistCreationOption } from '../../../../app/services/checklist.service';
 
 describe('New checklist serial selection', () => {
   let fixture: ComponentFixture<ChecklistNewRecordModalComponent>;
   let http: HttpTestingController;
-  let category: Category;
-  let template: Template;
+  let option: ChecklistCreationOption;
   let portalAdmin: boolean;
   const order = { number: 900, client: 'Cliente', cnpj: '123', salesperson: 'Vendedor', items: [{ code: 'MESA', description: 'Mesa', quantity: 2 }] };
 
   beforeEach(() => {
     portalAdmin = false;
-    category = { id: '1', name: 'Produção', integration: 'production', active: true, erp: true, serial: true } as Category;
-    template = { id: '2', categoryId: '1', name: 'Inspeção' } as Template;
+    option = { id: '2', name: 'Inspeção', categoryId: '1', categoryName: 'Produção',
+      integration: 'production', erp: true, serial: true, standalone: true, hasPredecessor: false };
     TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting(),
       { provide: ChecklistPreviewService, useValue: {
-        state: () => ({ categories: [category], templates: [template], records: [] }),
-        canOperate: () => true,
         get user() { return { roles: [{ authority: portalAdmin ? 'ROLE_ADMIN' : 'ROLE_CHECKLIST_ADMIN' }] }; },
       } },
     ] });
     fixture = TestBed.createComponent(ChecklistNewRecordModalComponent);
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
-    fixture.componentInstance.open();
+    fixture.componentInstance.open([option]);
   });
 
   afterEach(async () => { fixture.destroy(); http.verify(); await new Promise(resolve => setTimeout(resolve, 80)); });
@@ -79,12 +76,12 @@ describe('New checklist serial selection', () => {
     ] });
     await fixture.whenStable();
     http.expectNone(request => request.url.endsWith('/available-serials'));
-    await change('Item', '60310 - Mesmo modelo');
+    await change('Item', '60310');
     const first = http.expectOne(request => request.url.endsWith('/available-serials'));
     expect(first.request.params.get('order')).toBe('900'); expect(first.request.params.get('item')).toBe('60310');
     first.flush([{ serial: '18918', description: 'Modelo' }]); await fixture.whenStable();
     await change('Número de série', '18918');
-    await change('Item', '60297 - Mesmo modelo');
+    await change('Item', '60297');
     const second = http.expectOne(request => request.url.endsWith('/available-serials'));
     expect(second.request.params.get('item')).toBe('60297');
     second.flush([{ serial: '18919', description: 'Modelo' }]); await fixture.whenStable();
@@ -154,11 +151,11 @@ describe('New checklist serial selection', () => {
     const confirm = Array.from(modal.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Continuar')!;
     confirm.click(); await new Promise(resolve => setTimeout(resolve, 80)); await fixture.whenStable();
     expect(emitted).toHaveBeenCalledTimes(1);
-    expect(emitted).toHaveBeenCalledWith(jasmine.objectContaining({ confirmWithoutSerial: true, order: '900', item: 'MESA - Mesa' }));
+    expect(emitted).toHaveBeenCalledWith(jasmine.objectContaining({ confirmWithoutSerial: true, order: '900', item: 'MESA' }));
   });
 
   it('preserves KIT without series for checklist administrators', async () => {
-    template.name = 'KIT';
+    option.name = 'KIT';
     await change('Pedido', '900'); control('Pedido').dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter' }));
     http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush(order);
     http.expectOne(request => request.url.endsWith('/available-serials')).flush([]);
@@ -169,7 +166,8 @@ describe('New checklist serial selection', () => {
     expect(emitted).toHaveBeenCalledWith(jasmine.objectContaining({ confirmWithoutSerial: false, serial: undefined }));
   });
   it('asks before creating ready stock KIT without a serial and preserves the form when cancelled', async () => {
-    template.name = 'KIT';
+    option.name = 'KIT';
+    await fixture.whenStable();
     (control('Pronta Entrega') as HTMLInputElement).click();
     await fixture.whenStable();
     http.expectOne(request => request.url.endsWith('/available-serials')).flush([]);

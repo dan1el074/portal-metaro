@@ -4,6 +4,8 @@ import br.com.metaro.portal.modules.quality.checklist.dto.*;
 import br.com.metaro.portal.modules.quality.checklist.entity.ChecklistCatalogType;
 import br.com.metaro.portal.modules.quality.checklist.service.ChecklistConfigurationService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,12 +13,75 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/checklist")
 @RequiredArgsConstructor
 public class ChecklistConfigurationController {
     private final ChecklistConfigurationService service;
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
+    @GetMapping("/header")
+    public ChecklistHeaderDto header() {
+        return service.header();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/categories/summary")
+    public List<ChecklistCategorySummaryDto> categorySummaries() {
+        return service.listCategorySummaries();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/categories/model-options")
+    public List<ChecklistCategoryModelOptionDto> categoryModelOptions() {
+        return service.listCategoryModelOptions();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/categories/{id}")
+    public ChecklistCategoryDto getCategory(@PathVariable Long id) {
+        return service.getCategory(id);
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @PatchMapping("/categories/{id}/status")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void updateCategoryStatus(@PathVariable Long id, @Valid @RequestBody ChecklistCategoryStatusDto dto) {
+        service.updateCategoryStatus(id, dto);
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/categories/history-settings")
+    public List<ChecklistCategoryHistoryDto> categoryHistorySettings() {
+        return service.listCategoryHistorySettings();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @PatchMapping("/categories/history-settings")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void updateCategoryHistory(@RequestBody Map<Long, Boolean> settings) {
+        service.updateCategoryHistory(settings);
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/access/categories")
+    public List<ChecklistCategoryAccessDto> categoryAccess() {
+        return service.listCategoryAccess();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/templates/summary")
+    public List<ChecklistTemplateSummaryDto> templateSummaries() {
+        return service.listTemplateSummaries();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @GetMapping("/templates/{id}")
+    public ChecklistTemplateDto getTemplate(@PathVariable Long id) {
+        return service.getTemplate(id);
+    }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
     @GetMapping("/categories")
@@ -50,6 +115,14 @@ public class ChecklistConfigurationController {
     @PutMapping("/access")
     public ResponseEntity<Void> updateAccess(@Valid @RequestBody ChecklistAccessUpdateDto dto) {
         service.updateCategoryAccess(dto);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN')")
+    @PatchMapping("/access")
+    public ResponseEntity<Void> updateAccessBatch(
+            @RequestBody @NotEmpty List<@Valid @NotNull ChecklistAccessChangeDto> changes) {
+        service.updateCategoryAccessBatch(changes);
         return ResponseEntity.noContent().build();
     }
 

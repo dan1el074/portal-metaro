@@ -51,20 +51,19 @@ describe('Checklist server context and audit normalization', () => {
     await fullContext;
   });
 
-  function flushContext(id: string, actions: string[] = []): void {
-    http.expectOne(request => request.url.endsWith('/records/' + id)).flush({ id, flowId: id, templateId: 't', status: 'JUSTIFIED', answers: {},
-      logs: actions.map((action, index) => ({ id: index + 1, action, details: 'Detalhes do evento ' + action, actor: 'Operador' })),
+  function flushContext(id: string, actions: string[] = [], record: object = {}): void {
+    http.expectOne(request => request.url.endsWith('/records/' + id + '/context')).flush({
+      record: { id, flowId: id, templateId: 't', status: 'JUSTIFIED', answers: {},
+        logs: actions.map((action, index) => ({ id: index + 1, action, details: 'Detalhes do evento ' + action, actor: 'Operador' })),
+        ...record },
+      flow: { id, plan: [], skipped: {} },
+      editable: false, clientNokHistory: false, blocked: false, previousId: null, nextId: null, steps: [],
     });
-    http.expectOne(request => request.url.endsWith('/records/' + id + '/flow')).flush({ id, plan: [], skipped: {} });
-    const listing = http.match(request => request.url.endsWith('/records'));
-    listing[listing.length - 1].flush({ content: [] });
-    // More than one context can request the list concurrently.
-    for (const request of listing.slice(0, -1)) request.flush({ content: [] });
   }
 
   it('preserves the memorandum override observation for history-details', async () => {
     const loaded = store.loadRecordContext('1'); flushContext('1', ['FINISHED_WITH_OPEN_MEMORANDOS']);
-    const record = await loaded;
+    const { record } = await loaded;
     expect(record.logs[0].action).toBe('Confirmou a finalização com memorandos não aprovados');
     expect(record.logs[0].displayDetails).toBe('Detalhes do evento FINISHED_WITH_OPEN_MEMORANDOS');
   });
@@ -72,7 +71,7 @@ describe('Checklist server context and audit normalization', () => {
   it('normalizes Justificado and human audit messages without discarding details from other modules', async () => {
     const actions = ['CREATED', 'CLAIMED', 'FINISHED', 'PROBLEM_TREATED', 'GENERATED', 'REOPENED', 'DELEGATED', 'TREATMENT_REVERSED', 'CANCELLED', 'SERIAL_PLATE_UPDATED'];
     const loaded = store.loadRecordContext('1'); flushContext('1', actions);
-    const record = await loaded;
+    const { record } = await loaded;
     expect(record.status).toBe('Justificado');
     expect(record.logs.map(log => log.action)).toEqual(['Checklist iniciado', 'Assumiu o preenchimento do checklist', 'Checklist finalizado',
       'Tratou uma não conformidade (NOK)', 'Checklist gerado automaticamente pelo fluxo', 'Checklist reaberto para edição',
@@ -87,12 +86,10 @@ describe('Checklist server context and audit normalization', () => {
   it('shows only the previous and new order in PCP relocation messages while preserving the full audit', async () => {
     const loaded = store.loadRecordContext('1');
     const details = 'Atualização por Nº Série/Plaquetas (PCP), série 18918. Pedido: 246 → 244; Cliente: Antigo → Novo; Item: A → B';
-    http.expectOne(request => request.url.endsWith('/records/1')).flush({ id: '1', flowId: '1', templateId: 't', status: 'IN_PROGRESS',
+    flushContext('1', [], { status: 'IN_PROGRESS',
       logs: [{ id: 1, action: 'SERIAL_PLATE_UPDATED', actor: 'Daniel Vargas', details }],
     });
-    http.expectOne(request => request.url.endsWith('/records/1/flow')).flush({ id: '1', plan: [], skipped: {} });
-    http.expectOne(request => request.url.endsWith('/records')).flush({ content: [] });
-    const record = await loaded;
+    const { record } = await loaded;
     expect(record.logs[0].actor).toBe('Daniel Vargas');
     expect(record.logs[0].action).toBe('Pedido atualizado pelo PCP: 246 → 244.');
     expect(record.logs[0].displayDetails).toBeUndefined();
@@ -101,19 +98,16 @@ describe('Checklist server context and audit normalization', () => {
 
   it('identifies the NOK in historical treatment events that stored only its internal ID', async () => {
     const loaded = store.loadRecordContext('1');
-    http.expectOne(request => request.url.endsWith('/records/1')).flush({ id: '1', flowId: '1', templateId: 't', status: 'PENDING',
-      answers: { q: { problems: [{ id: 'internal-uuid', item: 'Mesa', code: 'M1', defect: 'Pintura' }] } },
-      logs: [{ id: 1, action: 'PROBLEM_TREATED', details: 'Problema internal-uuid tratado.' }],
+    flushContext('1', [], { status: 'PENDING',
+      answers: { q: { problems: [{ id: '42', item: 'Mesa', code: 'M1', defect: 'Pintura' }] } },
+      logs: [{ id: 1, action: 'PROBLEM_TREATED', details: 'Problema 42 tratado.' }],
     });
-    http.expectOne(request => request.url.endsWith('/records/1/flow')).flush({ id: '1', plan: [], skipped: {} });
-    http.expectOne(request => request.url.endsWith('/records')).flush({ content: [] });
-    const record = await loaded;
+    const { record } = await loaded;
     expect(record.logs[0].details).toBe('Não conformidade: Mesa — M1.');
   });
 
-  it('reports a successful deletion even if the subsequent list refresh fails', async () => {
+  it('deletes a draft without refreshing the global checklist lists', async () => {
     const loaded = store.loadRecordContext('1'); flushContext('1'); await loaded;
-    spyOn(store, 'load').and.rejectWith(new Error('List refresh failed'));
     const deleted = store.deleteDraft('1');
     http.expectOne(request => request.method === 'DELETE' && request.url.endsWith('/records/1')).flush(null);
     await expectAsync(deleted).toBeResolved();

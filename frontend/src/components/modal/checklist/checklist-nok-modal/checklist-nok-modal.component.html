@@ -1,11 +1,16 @@
 <c-modal size="xl" [visible]="visible" (visibleChange)="visible=$event" modalBackNavigation backdrop="static" [keyboard]="false"><c-modal-header><h5 cModalTitle>Descrever não conformidade</h5><button cButtonClose (click)="close()" cTooltip="Fechar" cTooltipPlacement="bottom" aria-label="Fechar"></button></c-modal-header><c-modal-body>
   <p class="intro">Um item NOK pode conter mais de um problema. Preencha os campos obrigatórios de cada ocorrência.</p>
+  @if (loadingOptions) { <p>Carregando opções da não conformidade...</p> }
+  @if (optionsError) {
+    <p role="alert">Não foi possível carregar as opções. <button cButton color="link" (click)="loadOptions()">Tentar novamente</button></p>
+  }
+  @if (itemError) { <p role="alert">Não foi possível cadastrar o tipo de item.</p> }
   <div class="problem-list">@for(problem of problems;track problem.id;let index=$index){<section class="problem-card"><header><strong>Problema {{ index+1 }}</strong><button cButton color="danger" variant="ghost" size="sm" (click)="remove(index)" cTooltip="Remover problema" cTooltipPlacement="top" aria-label="Remover problema"><app-checklist-icon name="trash" /></button></header><div class="problem-content"><div class="form-grid">
     @for(field of store.state().nokFields;track field.id){
       <div class="form-field" [class.wide]="field.type === 'textarea' || field.type === 'files'"><span class="field-label">{{ field.label }}@if(field.required){ <span class="required">*</span> }</span>
         @if(field.type === 'items'){
           <div class="select-with-action"><select cSelect [ngModel]="fieldValue(problem,field)" (ngModelChange)="setFieldValue(problem,field,$event)"><option value="">Selecione</option>@for(option of options(field);track option){<option [value]="option">{{ option }}</option>}</select><button cButton type="button" color="secondary" variant="outline" (click)="toggleItemCreator(problem.id)" cTooltip="Adicionar novo tipo de item" cTooltipPlacement="top" aria-label="Adicionar novo tipo de item"><app-checklist-icon name="plus" /></button></div>
-          @if(newItemProblemId===problem.id){<div class="catalog-add"><input cFormControl [(ngModel)]="newItem" (keyup.enter)="addCatalogItem(problem,field)" placeholder="Novo tipo de item" /><button cButton type="button" color="secondary" variant="outline" [disabled]="!newItem.trim()" (click)="addCatalogItem(problem,field)">Adicionar</button></div>}
+          @if(newItemProblemId===problem.id){<div class="catalog-add"><input cFormControl [(ngModel)]="newItem" (keyup.enter)="addCatalogItem(problem,field)" placeholder="Novo tipo de item" /><button cButton type="button" color="secondary" variant="outline" [disabled]="loadingOptions || optionsError || addingItem || !newItem.trim()" (click)="addCatalogItem(problem,field)">Adicionar</button></div>}
         }@else if(field.type === 'defects' || field.type === 'departments'){
           <select cSelect [ngModel]="fieldValue(problem,field)" (ngModelChange)="setFieldValue(problem,field,$event)"><option value="">Selecione</option>@if(field.type === 'departments' && fieldValue(problem,field) && !options(field).includes(fieldValue(problem,field))){<option [value]="fieldValue(problem,field)" disabled>{{ fieldValue(problem,field) }} (já registrado)</option>}@for(option of options(field);track option){<option [value]="option">{{ option }}</option>}</select>
         }@else if(field.type === 'textarea'){

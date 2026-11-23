@@ -296,7 +296,7 @@
 
         @if (editingItem.id) {
           <label class="active-control">
-            <input type="checkbox" [(ngModel)]="editingItem.active">
+            <input #activeCheckbox type="checkbox" [checked]="editingItem.active" (change)="toggleActive(activeCheckbox)">
             <span><strong>Item ativo</strong><small>Disponível nas consultas e operações</small></span>
           </label>
         }
@@ -337,6 +337,21 @@
         }
       </div>
     </div>
+  </c-modal-footer>
+</c-modal>
+
+<c-modal modalBackNavigation [visible]="deactivationModalVisible" (visibleChange)="onDeactivationModalVisibleChange($event)" alignment="center" backdrop="static">
+  <c-modal-header>
+    <h5 cModalTitle>Desativar registro · {{ editingItem?.code }}</h5>
+    <button cButtonClose (click)="closeDeactivationModal()" aria-label="Cancelar"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <label for="deactivationReason" class="form-label">Justificativa</label>
+    <textarea id="deactivationReason" class="form-control" rows="3" maxlength="500" required [(ngModel)]="deactivationReason"></textarea>
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton color="secondary" variant="outline" (click)="closeDeactivationModal()">Cancelar</button>
+    <button cButton color="primary" [disabled]="!deactivationReason.trim()" (click)="confirmDeactivation()">Confirmar</button>
   </c-modal-footer>
 </c-modal>
 

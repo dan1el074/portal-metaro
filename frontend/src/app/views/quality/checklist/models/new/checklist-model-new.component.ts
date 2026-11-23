@@ -14,12 +14,34 @@ export class ChecklistModelNewComponent implements OnInit, ChecklistPendingChang
   @ViewChild(ChecklistActionModalComponent) private actionModal!: ChecklistActionModalComponent;
   protected readonly store = inject(ChecklistPreviewService); private readonly router = inject(Router); private readonly route = inject(ActivatedRoute); private readonly toaster = inject(ToastrService);
   private readonly cdr = inject(ChangeDetectorRef);
+  protected context!: Awaited<ReturnType<ChecklistPreviewService['loadModelEditor']>>;
   protected model!: Template; protected dirty = false;
-  async ngOnInit(): Promise<void> { await this.store.load(); this.store.requireAdmin(); const source = this.store.state().templates.find(item => item.id === this.route.snapshot.queryParamMap.get('copy')); const sourceCategory = source && this.store.state().categories.find(item => item.id === source.categoryId); this.model = source ? { ...copy(source), id: uid(), name: sourceCategory?.integration === 'production' ? '' : `${source.name} (cópia)`, equipmentId: '', predecessorId: '', automatic: false, optionalPredecessor: false, version: 0 } : { id: uid(), categoryId: this.store.state().categories[0]?.id ?? '', name: '', equipmentId: '', title: '%data', sections: [emptySection(this.store.state().categories[0]?.integration === 'production')], signature: true, predecessorId: '', automatic: false, optionalPredecessor: false, version: 0 }; this.dirty = !!source; this.cdr.detectChanges(); }
+  async ngOnInit(): Promise<void> {
+    try {
+      this.context = await this.store.loadModelEditor(this.route.snapshot.queryParamMap.get('copy'));
+      const source = this.context.model;
+      const first = this.context.categories[0];
+      const sourceCategory = this.context.categories.find(item => item.id === source?.categoryId);
+      this.model = source ? {
+        ...copy(source), id: uid(), name: sourceCategory?.integration === 'production' ? '' : `${source.name} (cópia)`,
+        equipmentId: '', predecessorId: '', automatic: false, optionalPredecessor: false, version: 0,
+      } : {
+        id: uid(), categoryId: first?.id ?? '', name: '', equipmentId: '', title: '%data',
+        sections: [emptySection(first?.integration === 'production')], signature: true,
+        predecessorId: '', automatic: false, optionalPredecessor: false, version: 0,
+      };
+      this.dirty = !!source;
+      this.cdr.markForCheck();
+    } catch {
+      this.toaster.warning('Não foi possível carregar os dados do modelo.');
+      void this.router.navigate(['/qualidade/checklist/models']);
+    }
+  }
+
   @HostListener('window:beforeunload', ['$event']) beforeUnload(event: BeforeUnloadEvent): void { if (this.dirty) event.preventDefault(); }
   canDeactivate(): boolean | Promise<boolean> { return !this.dirty || this.confirmDiscard(); }
   private async confirmDiscard(): Promise<boolean> { return !!(await this.actionModal.open({ title: 'Descartar alterações?', message: 'As alterações feitas neste modelo ainda não foram salvas.', danger: true, confirmLabel: 'Descartar' })); }
   protected changed(): void { this.dirty = true; }
-  protected async save(): Promise<void> { try { await this.store.saveTemplate(this.model); this.dirty = false; this.toaster.success('Modelo salvo com sucesso.'); void this.router.navigate(['/qualidade/checklist/models']); } catch (error) { this.toaster.warning(error instanceof Error ? error.message : 'Não foi possível salvar.'); } }
+  protected async save(): Promise<void> { try { await this.store.saveTemplate(this.model, this.context); this.dirty = false; this.toaster.success('Modelo salvo com sucesso.'); void this.router.navigate(['/qualidade/checklist/models']); } catch (error) { this.toaster.warning(error instanceof Error ? error.message : 'Não foi possível salvar.'); } }
   protected cancel(): void { void this.router.navigate(['/qualidade/checklist/models']); }
 }

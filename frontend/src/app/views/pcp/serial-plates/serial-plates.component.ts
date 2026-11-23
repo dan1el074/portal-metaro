@@ -16,7 +16,7 @@ import { ToastrService } from '../../../services/toast.service';
 import { SerialPlatesService } from '../../../services/serial-plates.service';
 import { ReportPreviewService } from '../../../services/report-preview.service';
 import { DEFAULT_SETTINGS, STATUSES, FIELD_LABELS, SERIAL_PLATES_REPORT_COLUMNS, SERIAL_PLATES_REPORT_KEYS } from '../../../config/serial-plates.config';
-import { ErpOrderItem, SerialPlateBatchFields, PlateHistory, PlatePatch, PlateSettings, SerialPlate, SerialPlateDialog, SerialPlateCreateDraft, SerialPlateQuery } from '../../../interface/serial-plates.interface';
+import { SerialPlateVersion, SerialPlateReportRow, SerialPlateBatchRow, ErpOrderItem, SerialPlateBatchFields, PlateHistory, PlatePatch, PlateSettings, SerialPlate, SerialPlateListRow, SerialPlateDialog, SerialPlateCreateDraft, SerialPlateQuery } from '../../../interface/serial-plates.interface';
 import { ReportPreviewData } from '../../../interface/report-preview.interface';
 
 @Component({
@@ -53,12 +53,13 @@ export class SerialPlatesComponent implements OnDestroy {
   public readonly operator = this.authorities.some(role => ['ROLE_ADMIN', 'ROLE_SERIAL_PLATES_OPERATOR'].includes(role));
   public createDraft: SerialPlateCreateDraft = { quantity: 1, of: '', order: '', orderItemCode: '' };
   public view: 'operator' | 'consultation' = this.operator ? 'operator' : 'consultation';
-  public records: SerialPlate[] = [];
+  public records: SerialPlateListRow[] = [];
   public totalElements = 0;
   public totalPages = 1;
   public totals: Record<string, number> = {};
   public busy = false;
-  private readonly selectedRecords = new Map<string, SerialPlate>();
+  private batchRecords: SerialPlateBatchRow[] = [];
+  private reportRecords: SerialPlateReportRow[] = [];
   private readonly refreshRequests = new Subject<void>();
   private readonly destroy = new Subject<void>();
   private destroyed = false;
@@ -102,7 +103,6 @@ export class SerialPlatesComponent implements OnDestroy {
       this.totalElements = page.totalElements;
       this.totalPages = Math.max(1, page.totalPages);
       this.totals = summary;
-      this.records.forEach(row => { if (this.selected.has(row.serial)) this.selectedRecords.set(row.serial, row); });
       if (this.page > this.totalPages) { this.page = this.totalPages; this.refresh(); }
       this.updateView();
     });
@@ -138,20 +138,12 @@ export class SerialPlatesComponent implements OnDestroy {
     return [...new Set(this.settings.providers.split('\n').map(value => value.trim()).filter(Boolean))];
   }
 
-  public rows(): SerialPlate[] {
-    return this.records;
-  }
-
   public pages(): number {
     return this.totalPages;
   }
 
-  public pageRows(): SerialPlate[] {
+  public pageRows(): SerialPlateListRow[] {
     return this.records;
-  }
-
-  public selectedRows(): SerialPlate[] {
-    return [...this.selected].map(serial => this.selectedRecords.get(serial)).filter((row): row is SerialPlate => !!row);
   }
 
   public allSelected(): boolean {
@@ -163,7 +155,7 @@ export class SerialPlatesComponent implements OnDestroy {
   }
 
   public missing(): string[] {
-    return this.data.reportMissing(this.selectedRows(), this.settings);
+    return this.data.reportMissing(this.reportRecords, this.settings);
   }
 
   public historyEvents(): PlateHistory[] {
@@ -235,10 +227,10 @@ export class SerialPlatesComponent implements OnDestroy {
     try {
       const rows = event.shiftKey && this.anchor
         ? await this.request(this.data.range(this.anchor, serial, this.query()))
-        : this.records.filter(row => row.serial === serial);
+        : [serial];
       if (query !== JSON.stringify(this.query())) return;
       const selected = new Set(this.selected);
-      rows.forEach(row => { this.selectedRecords.set(row.serial, row); checked ? selected.add(row.serial) : selected.delete(row.serial); });
+      rows.forEach(id => { checked ? selected.add(id) : selected.delete(id); });
       this.selected = selected;
       this.anchor = serial;
     } catch (error) { this.showError(error); }
@@ -291,7 +283,7 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public reportRows(): string[][] {
     const indices = this.reportColumnIndices();
-    return this.selectedRows().map(row => [this.serialLabel(row.serial), row.description || '-', this.data.manufacturingLabel(row.manufactured),
+    return this.reportRecords.map(row => [this.serialLabel(row.serial), row.description || '-', this.data.manufacturingLabel(row.manufactured),
     row.voltage || '-', this.settings.crea || '-', row.weight === null ? '-' : `${row.weight.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} kg`].filter((_, index) => indices.includes(index)));
   }
 
@@ -302,7 +294,7 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public toggleAll(checked: boolean): void {
     const selected = new Set(this.selected);
-    this.pageRows().forEach(row => { this.selectedRecords.set(row.serial, row); checked ? selected.add(row.serial) : selected.delete(row.serial); });
+    this.pageRows().forEach(row => { checked ? selected.add(row.serial) : selected.delete(row.serial); });
     this.selected = selected;
     this.anchor = null;
   }
@@ -311,7 +303,8 @@ export class SerialPlatesComponent implements OnDestroy {
     this.error = '';
 
     if (['new', 'batch', 'settings', 'report'].includes(dialog) && !this.canEdit()) return;
-    if (dialog === 'report') { this.openReport(); return; }
+    if (dialog === 'report') { void this.openReport(); return; }
+    if (dialog === 'batch') { void this.openBatch(); return; }
 
     if (dialog === 'new') {
       this.createDraft.quantity = 1;
@@ -320,21 +313,32 @@ export class SerialPlatesComponent implements OnDestroy {
       this.createDraft.orderItemCode = '';
     }
 
-    if (dialog === 'batch') {
-      this.batch = {};
-      this.batchOrderItems = [];
-      this.batchFields = { of: false, order: false, readyStock: false, provider: false, status: false, manufactured: false, weight: false, voltage: false };
-    }
-
     if (dialog === 'settings') this.settingsDraft = { ...this.settings };
 
     this.dialog = dialog;
     this.modalVisible = true;
   }
 
-  public async openEdit(record: SerialPlate): Promise<void> {
+  private async openBatch(): Promise<void> {
+    if (!this.selected.size || this.busy) return;
+    const selection = this.selected;
+    this.busy = true;
     try {
-      const fresh = await this.request(this.data.findBySerial(record.serial));
+      const records = await this.request(this.data.selection([...selection]));
+      if (!this.canEdit() || selection !== this.selected) return;
+      this.batchRecords = records;
+      this.batch = {};
+      this.batchOrderItems = [];
+      this.batchFields = { of: false, order: false, readyStock: false, provider: false, status: false, manufactured: false, weight: false, voltage: false };
+      this.dialog = 'batch';
+      this.modalVisible = true;
+    } catch (error) { this.showError(error); }
+    finally { this.busy = false; this.updateView(); }
+  }
+
+  public async openEdit(serial: string): Promise<void> {
+    try {
+      const fresh = await this.request(this.data.findBySerial(serial));
       this.edit = { ...fresh, history: [] };
       this.loadedOrder = fresh.order;
       this.loadedOrderItemCode = fresh.orderItemCode;
@@ -376,9 +380,10 @@ export class SerialPlatesComponent implements OnDestroy {
     return value.replace(/^0+(?=\d)/, '');
   }
 
-  private finish(message: string): void {
+  private finish(message: string, resetFilters = false): void {
     this.close();
-    this.refresh();
+    if (resetFilters) this.clearFilters();
+    else this.refresh();
     this.toaster.success(message);
   }
 
@@ -462,8 +467,7 @@ export class SerialPlatesComponent implements OnDestroy {
         if (!confirmed || this.destroyed) return;
       }
       const created = await this.request(this.data.create(this.createDraft));
-      this.clearFilters();
-      this.finish(`${created.length} número(s) de série criado(s).`);
+      this.finish(`${created} número(s) de série criado(s).`, true);
     } catch (error) { this.showError(error); }
     finally { this.busy = false; this.updateView(); }
   }
@@ -507,7 +511,8 @@ export class SerialPlatesComponent implements OnDestroy {
   }
 
   public async saveBatch(): Promise<void> {
-    if (!this.canEdit() || !this.selected.size || this.busy) return;
+    if (!this.canEdit() || !this.batchRecords.length || this.busy) return;
+    const rows = this.batchRecords;
     const patch = this.data.batchPatch(this.batch, this.batchFields);
     if (!Object.keys(patch).length) { this.error = 'Marque pelo menos um campo para atualizar.'; return; }
     if (patch.order?.trim()) {
@@ -516,17 +521,16 @@ export class SerialPlatesComponent implements OnDestroy {
       try {
         const values = await this.erp(patch.order, patch.orderItemCode);
         if (!values) return;
-        const rows = await this.request(this.data.selection([...this.selected]));
         const apply = () => this.commit(rows, { ...patch, ...values, ...(this.batchFields.weight ? { weight: patch.weight } : {}), ...(this.batchFields.voltage ? { voltage: patch.voltage } : {}) }, true);
-        const affected = rows.filter(row => this.data.hasEquipmentData(row)).length;
+        const affected = rows.filter(row => row.equipmentData).length;
         if (affected) this.confirm(affected, () => { void apply(); });
         else { this.busy = false; await apply(); }
       } catch (error) { this.showError(error); }
       finally { this.busy = false; this.updateView(); }
-    } else await this.commit(this.selectedRows(), patch, true);
+    } else await this.commit(rows, patch, true);
   }
 
-  private async commit(records: SerialPlate[], patch: PlatePatch, batch: boolean): Promise<void> {
+  private async commit(records: SerialPlateVersion[], patch: PlatePatch, batch: boolean): Promise<void> {
     if (this.busy || !this.canEdit()) return;
     this.busy = true;
     try {
@@ -570,7 +574,6 @@ export class SerialPlatesComponent implements OnDestroy {
           (row.readyStock && 'pe pronta entrega'.includes(term)) ||
           [...Object.keys(FIELD_LABELS), 'serial'].some(key => String(row[key as keyof SerialPlate] ?? '').toLocaleLowerCase('pt-BR').includes(term)));
         if (!matches) selected.delete(row.serial);
-        this.selectedRecords.set(row.serial, row);
       });
       this.selected = selected;
       this.finish('Registro(s) atualizado(s).');
@@ -597,9 +600,11 @@ export class SerialPlatesComponent implements OnDestroy {
     this.busy = true;
     try {
       // Load authoritative records even when incomplete, so the existing warning list remains available.
-      const rows = await this.request(this.data.selection([...this.selected]));
-      rows.forEach(row => this.selectedRecords.set(row.serial, row));
-      this.settings = await this.request(this.data.settings());
+      const selection = this.selected;
+      const { records: rows, settings } = await this.request(this.data.previewReport([...selection]));
+      if (!this.canEdit() || selection !== this.selected) return;
+      this.reportRecords = this.orderReportRows(rows, selection);
+      this.settings = settings;
       this.dialog = 'report';
       this.modalVisible = true;
     } catch (error) { this.showError(error); }
@@ -607,13 +612,14 @@ export class SerialPlatesComponent implements OnDestroy {
   }
 
   public async printReport(): Promise<void> {
-    if (!this.canEdit() || !this.selected.size || this.missing().length || this.busy) return;
+    if (!this.canEdit() || !this.reportRecords.length || this.missing().length || this.busy) return;
     const preview = window.open('', '_blank');
     if (!preview) { this.error = 'Permita a abertura da janela de impressão no navegador.'; return; }
     this.busy = true;
     try {
-      const report = await this.request(this.data.report([...this.selected]));
-      report.records.forEach(row => this.selectedRecords.set(row.serial, row));
+      const selection = new Set(this.reportRecords.map(row => row.serial));
+      const report = await this.request(this.data.report([...selection]));
+      this.reportRecords = this.orderReportRows(report.records, selection);
       this.settings = report.settings;
       this.reports.open(this.reportData(), preview);
     } catch (error) { preview.close(); this.showError(error); }
@@ -630,8 +636,14 @@ export class SerialPlatesComponent implements OnDestroy {
 
   public clearSelection(): void {
     this.selected = new Set();
-    this.selectedRecords.clear();
+    this.batchRecords = [];
+    this.reportRecords = [];
     this.anchor = null;
+  }
+
+  private orderReportRows(rows: SerialPlateReportRow[], selection: ReadonlySet<string>): SerialPlateReportRow[] {
+    const bySerial = new Map(rows.map(row => [row.serial, row]));
+    return [...selection].map(serial => bySerial.get(serial)).filter((row): row is SerialPlateReportRow => !!row);
   }
 
   public reportData(): ReportPreviewData {
@@ -651,7 +663,7 @@ export class SerialPlatesComponent implements OnDestroy {
   private query(): SerialPlateQuery {
     return {
       page: this.page - 1, size: this.perPage, search: this.search, status: this.status,
-      sortColumn: (this.sorter.column || 'serial') as keyof SerialPlate, sortDirection: this.sorter.state === 'desc' ? 'desc' : 'asc'
+      sortColumn: (this.sorter.column || 'serial') as keyof SerialPlateListRow, sortDirection: this.sorter.state === 'desc' ? 'desc' : 'asc'
     };
   }
 }

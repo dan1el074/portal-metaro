@@ -40,7 +40,7 @@
   <ng-template cTemplateId="tableData" let-columnName="columnName" let-item="item" let-tdContent="tdContent">
     <td class="custom-td">
       @switch (columnName) {
-        @case ('number') { <span class="record-id">{{ item.number }}</span> }
+        @case ('id') { <span class="record-id">{{ item.id }}</span> }
         @case ('title') { <span class="title-field">{{ item.title }}</span><small>{{ item.serial || 'Sem série' }}</small> }
         @case ('category') { <span>{{ item.category }}</span> }
         @case ('model') { <span>{{ item.model }}</span> }
