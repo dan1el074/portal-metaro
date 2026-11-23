@@ -147,30 +147,47 @@ class RawMaterialsServiceValidationTests {
     }
 
     @Test
-    void requiresAndRecordsActivationReason() {
+    void requiresAndRecordsDeactivationReason() {
         RawMaterialCategory category = new RawMaterialCategory();
         category.setId(1L);
         RawMaterial item = material(category);
-        item.setActive(false);
+
         when(materialRepository.findById(11L)).thenReturn(Optional.of(item));
         RawMaterialInputDto dto = validItem();
-        dto.setActivationReason("  ");
+        dto.setActive(false);
+        dto.setDeactivationReason("  ");
 
         assertThatThrownBy(() -> service.update(11L, dto))
                 .isInstanceOf(UnprocessableEntityException.class).hasMessageContaining("justificativa");
-        assertThat(item.getActive()).isFalse();
+        assertThat(item.getActive()).isTrue();
         verifyNoInteractions(historyRepository);
 
-        dto.setActivationReason("  Liberado pelo PCP | pedido 2  ");
+        dto.setDeactivationReason("  Descontinuado pelo PCP | pedido 2  ");
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
         when(userService.authenticate()).thenReturn(new User());
         service.update(11L, dto);
 
         ArgumentCaptor<RawMaterialHistory> history = ArgumentCaptor.forClass(RawMaterialHistory.class);
         verify(historyRepository).save(history.capture());
-        assertThat(item.getActive()).isTrue();
+        assertThat(item.getActive()).isFalse();
         assertThat(history.getValue().getChangedFields())
-                .isEqualTo("Item ativado\nJustificativa: Liberado pelo PCP | pedido 2");
+                .isEqualTo("Item desativado\nJustificativa: Descontinuado pelo PCP | pedido 2");
+    }
+
+    @Test
+    void activatesItemWithoutJustification() {
+        RawMaterialCategory category = new RawMaterialCategory();
+        category.setId(1L);
+        RawMaterial item = material(category);
+        item.setActive(false);
+        when(materialRepository.findById(11L)).thenReturn(Optional.of(item));
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(userService.authenticate()).thenReturn(new User());
+
+        service.update(11L, validItem());
+
+        assertThat(item.getActive()).isTrue();
+        verify(materialRepository).save(item);
     }
 
     @Test

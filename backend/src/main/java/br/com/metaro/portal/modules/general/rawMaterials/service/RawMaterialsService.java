@@ -365,12 +365,12 @@ public class RawMaterialsService {
         if (!sameDecimal(item.getWeightPerLinearMeter(), dto.getWeightPerLinearMeter())) fields.add("Peso por metro linear");
         if (!Objects.equals(item.getCategory().getId(), dto.getCategoryId())) fields.add("Categoria");
         if (!Objects.equals(item.getActive(), dto.getActive())) {
-            if (Boolean.TRUE.equals(dto.getActive())) {
-                String reason = dto.getActivationReason();
+            if (Boolean.FALSE.equals(dto.getActive())) {
+                String reason = dto.getDeactivationReason();
                 if (reason == null || reason.isBlank()) {
-                    throw new UnprocessableEntityException("Informe a justificativa para ativar o item.");
+                    throw new UnprocessableEntityException("Informe a justificativa para desativar o item.");
                 }
-                fields.add("Item ativado\nJustificativa: " + reason.strip());
+                fields.add("Item desativado\nJustificativa: " + reason.strip());
             } else {
                 fields.add("Situação do item");
             }

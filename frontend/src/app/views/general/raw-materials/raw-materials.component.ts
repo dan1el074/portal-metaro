@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, CardBodyComponent, CardComponent, ContainerComponent, DropdownComponent, DropdownItemDirective, DropdownItemPlainDirective, DropdownMenuDirective, DropdownToggleDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, ModalToggleDirective, Tabs2Module } from '@coreui/angular';
 import { SmartPaginationComponent } from '@coreui/angular-pro';
@@ -13,6 +13,7 @@ import { RawMaterialsOverviewComponent } from '../../../../components/raw-materi
 import { ModalBackNavigationDirective } from '../../../directive/modal-back-navigation.directive';
 import { ErrorService } from '../../../services/error.service';
 import { ToastrService } from '../../../services/toast.service';
+import { BackNavigationService } from '../../../services/back-navigation.service';
 
 @Component({
   selector: 'app-raw-materials',
@@ -72,8 +73,8 @@ export class RawMaterialsComponent implements OnInit {
   protected activeInventoryTab = '';
 
   protected itemModalVisible = false;
-  protected activationModalVisible = false;
-  protected activationReason = '';
+  protected deactivationModalVisible = false;
+  protected deactivationReason = '';
   protected stockModalVisible = false;
   protected accessModalVisible = false;
   protected accessUsers: RawMaterialUserAccess[] = [];
@@ -112,6 +113,8 @@ export class RawMaterialsComponent implements OnInit {
 
   private currentSort?: { column: string; state: 'asc' | 'desc' };
   private searchTimer?: ReturnType<typeof setTimeout>;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly backNavigation = inject(BackNavigationService);
 
   constructor(
     private rawMaterialsService: RawMaterialsService,
@@ -220,8 +223,8 @@ export class RawMaterialsComponent implements OnInit {
     this.saving = false;
     this.itemSaveError = '';
     this.itemFormSubmitted = false;
-    this.activationReason = '';
-    this.activationModalVisible = false;
+    this.deactivationReason = '';
+    this.deactivationModalVisible = false;
     this.editingItem = item
       ? this.formatItemDimensions({ ...item, categoryId: this.categories.find(category => category.name === item.type)?.id })
       : {
@@ -254,19 +257,40 @@ export class RawMaterialsComponent implements OnInit {
 
   protected toggleActive(checkbox: HTMLInputElement): void {
     if (!this.editingItem) return;
-    this.activationReason = '';
-    if (checkbox.checked) {
-      checkbox.checked = false;
-      this.activationModalVisible = true;
+    this.deactivationReason = '';
+    if (!checkbox.checked) {
+      checkbox.checked = true;
+      // Finish removing the item's history entry before opening the confirmation.
+      this.backNavigation.runAfterOverlayClose(() => {
+        if (this.destroyRef.destroyed) return;
+        this.deactivationModalVisible = true;
+        this.cdf.detectChanges();
+      });
+      this.itemModalVisible = false;
     } else {
-      this.editingItem.active = false;
+      this.editingItem.active = true;
     }
   }
 
-  protected confirmActivation(): void {
-    if (!this.editingItem || !this.activationReason.trim()) return;
-    this.editingItem.active = true;
-    this.activationModalVisible = false;
+  protected confirmDeactivation(): void {
+    if (!this.editingItem || !this.deactivationReason.trim()) return;
+    this.editingItem.active = false;
+    this.closeDeactivationModal();
+  }
+
+  protected onDeactivationModalVisibleChange(visible: boolean): void {
+    if (!visible && this.deactivationModalVisible) this.closeDeactivationModal();
+  }
+
+  protected closeDeactivationModal(): void {
+    if (!this.deactivationModalVisible) return;
+    this.deactivationModalVisible = false;
+    // Reopen the item only after the confirmation's history entry is consumed.
+    this.backNavigation.runAfterOverlayClose(() => {
+      if (this.destroyRef.destroyed) return;
+      this.itemModalVisible = true;
+      this.cdf.detectChanges();
+    });
   }
 
   protected closeItemModal(): void {
@@ -294,7 +318,7 @@ export class RawMaterialsComponent implements OnInit {
     this.itemSaveError = '';
     this.saving = true;
     const isEditing = this.editingItem.id > 0;
-    const reason = this.editingItem.active ? this.activationReason.trim() : '';
+    const reason = !this.editingItem.active ? this.deactivationReason.trim() : '';
     this.rawMaterialsService.saveItem(this.editingItem, reason || undefined)
       .pipe(finalize(() => {
         this.saving = false;

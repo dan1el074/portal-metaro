@@ -45,7 +45,7 @@ public class RawMaterialInputDto {
     @NotNull
     private Boolean active;
     @Size(max = 500, message = "A justificativa deve ter no máximo 500 caracteres")
-    private String activationReason;
+    private String deactivationReason;
 
     public RawMaterialInputDto(String code, String name, String description, BigDecimal currentStorage,
                                BigDecimal minStorage, BigDecimal maxStorage, BigDecimal length, BigDecimal width,
