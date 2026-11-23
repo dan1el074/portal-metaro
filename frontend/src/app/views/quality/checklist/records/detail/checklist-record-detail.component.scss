@@ -993,9 +993,20 @@
   color: #fff;
 }
 
+.primary-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--cui-primary), #000 15%);
+  background: color-mix(in srgb, var(--cui-primary), #000 15%);
+}
+
 .neutral-action {
   background: var(--cui-body-bg);
   color: var(--cui-body-color);
+}
+
+.neutral-action:hover:not(:disabled) {
+  border-color: var(--cui-primary);
+  background: rgba(var(--cui-primary-rgb), 0.08);
+  color: var(--cui-primary);
 }
 
 .danger-action {
@@ -1004,7 +1015,7 @@
   color: var(--cui-danger);
 }
 
-.danger-action:hover {
+.danger-action:hover:not(:disabled) {
   border-color: var(--cui-danger);
   background: var(--cui-danger);
   color: #fff;

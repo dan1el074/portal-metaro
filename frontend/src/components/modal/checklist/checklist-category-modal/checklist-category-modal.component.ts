@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Output, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
 import { Category } from '../../../../app/interface/checklist.interface';
 import { checklistCopy as copy, emptyChecklistCategory as emptyCategory } from '../../../../app/shared/checklist-factory';
-import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
+import { firstValueFrom } from 'rxjs';
+import { ChecklistCategorySummary, ChecklistService } from '../../../../app/services/checklist.service';
 import { ToastrService } from '../../../../app/services/toast.service';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
 import { ChecklistCategoryFormComponent } from '../../../forms/checklist/checklist-category-form/checklist-category-form.component';
@@ -24,86 +25,136 @@ import { checklistIntegrationLabel } from '../../../../app/shared/checklist-rule
 })
 export class ChecklistCategoryModalComponent {
   @ViewChild(ChecklistActionModalComponent) private actionModal!: ChecklistActionModalComponent;
+  @Output() readonly changed = new EventEmitter<void>();
   protected visible = false;
   protected editing = false;
+  protected busy = false;
+  protected listError = false;
   protected category = emptyCategory();
+  protected categories: ChecklistCategorySummary[] = [];
   protected readonly integrationLabel = checklistIntegrationLabel;
 
-  protected get sortedCategories(): Category[] {
-    return [...this.store.state().categories].sort((first, second) =>
-      first.id.localeCompare(second.id, undefined, { numeric: true })
-    );
-  }
-
   constructor(
-    protected store: ChecklistPreviewService,
+    private api: ChecklistService,
     private toaster: ToastrService,
     private cdr: ChangeDetectorRef,
   ) {}
 
-  public open(): void { this.visible = true; this.editing = false; this.cdr.detectChanges(); }
-  protected close(): void { this.visible = false; this.editing = false; this.cdr.detectChanges(); }
-  protected onVisibleChange(visible: boolean): void { this.visible = visible; if (!visible) this.editing = false; }
+  public open(): void {
+    this.visible = true;
+    this.editing = false;
+    this.categories = [];
+    void this.load();
+  }
+
+  protected async load(): Promise<void> {
+    this.busy = true;
+    this.listError = false;
+    this.cdr.markForCheck();
+    try {
+      this.categories = await firstValueFrom(this.api.listCategorySummaries());
+    } catch {
+      this.listError = true;
+    } finally {
+      this.busy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  protected close(): void { this.onVisibleChange(false); }
+  protected onVisibleChange(visible: boolean): void {
+    this.visible = visible;
+    if (!visible) this.editing = false;
+    this.cdr.markForCheck();
+  }
   protected create(): void { this.category = emptyCategory(); this.editing = true; }
-  protected edit(category: Category): void { this.category = copy(category); this.editing = true; }
+
+  protected async edit(category: ChecklistCategorySummary): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const detail = await firstValueFrom(this.api.getCategory(category.id));
+      if (this.visible) { this.category = detail; this.editing = true; }
+    } catch {
+      this.toaster.warning('Não foi possível carregar a categoria.');
+    } finally {
+      this.busy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
   protected cancelEdit(): void { this.editing = false; }
   protected integrationChanged(): void {
     if (this.category.integration === 'production') { this.category.erp = true; this.category.serial = true; this.category.media = true; }
   }
 
   protected async save(): Promise<void> {
-    const state = copy(this.store.state());
-    this.category.logo = true;
-    this.category.dates = false;
-    if (!this.category.name.trim()) { this.toaster.warning('Informe o nome da categoria.'); return; }
-    if (!this.category.documentTitle.trim()) { this.toaster.warning('Informe o título do cabeçalho.'); return; }
-    if (state.categories.some(item => item.id !== this.category.id && item.name.toLocaleLowerCase() === this.category.name.trim().toLocaleLowerCase())) { this.toaster.warning('Já existe uma categoria com este nome.'); return; }
-    if (this.category.fields.some(field => !field.label.trim() || (field.type === 'select' && !field.options.length))) { this.toaster.warning('Configure todos os campos adicionais.'); return; }
-    const previous = state.categories.find(item => item.id === this.category.id);
-    if (previous && previous.integration !== this.category.integration) {
+    if (this.busy) return;
+    const category: Category = { ...copy(this.category), logo: true, dates: false };
+    category.name = category.name.trim();
+    category.documentTitle = category.documentTitle.trim();
+    if (!category.name) { this.toaster.warning('Informe o nome da categoria.'); return; }
+    if (!category.documentTitle) { this.toaster.warning('Informe o título do cabeçalho.'); return; }
+    if (this.categories.some(item => item.id !== category.id && item.name.toLocaleLowerCase() === category.name.toLocaleLowerCase())) {
+      this.toaster.warning('Já existe uma categoria com este nome.'); return;
+    }
+    if (category.fields.some(field => !field.label.trim() || (field.type === 'select' && !field.options.length))) {
+      this.toaster.warning('Configure todos os campos adicionais.'); return;
+    }
+    const previous = this.categories.find(item => item.id === category.id);
+    if (previous && previous.integration !== category.integration) {
       const confirmed = await this.openAction({
         title: 'Alterar tipo de integração',
         message: 'As configurações de integração dos modelos atuais serão limpas. Fluxos iniciados permanecerão com a versão anterior.',
         confirmLabel: 'Alterar integração',
       });
       if (!confirmed) return;
-      state.templates.filter(item => item.categoryId === this.category.id).forEach(template => {
-        template.equipmentId = ''; template.predecessorId = ''; template.automatic = false; template.version++;
-        if (this.category.integration === 'production') { template.name = ''; template.signature = true; }
-        template.sections.forEach(section => section.options = this.category.integration === 'production' ? [...new Set([...section.options, 'NOK'])] : section.options.filter(option => option !== 'NOK'));
-      });
     }
-    this.category.name = this.category.name.trim();
-    this.category.documentTitle = this.category.documentTitle.trim();
-    state.categories = [...state.categories.filter(item => item.id !== this.category.id), copy(this.category)];
-    const saved = await this.store.commit(state);
-    if (!saved) {
-      this.toaster.warning('Não foi possível salvar a categoria.');
-      this.cdr.detectChanges();
-      return;
-    }
-    this.editing = false;
-    this.toaster.success('Categoria salva com sucesso.');
-    this.cdr.detectChanges();
+    await this.mutate(() => firstValueFrom(previous ? this.api.updateCategory(category) : this.api.createCategory(category)),
+      'Categoria salva com sucesso.', 'Não foi possível salvar a categoria.');
   }
 
-  protected async toggle(category: Category): Promise<void> {
-    const state = copy(this.store.state()); const target = state.categories.find(item => item.id === category.id)!;
-    if (target.active && state.processes.some(process => !process.cancelled && process.categoryId === target.id)) { this.toaster.warning('A categoria é requisito de um Fluxo de etapas ativo.'); return; }
+  protected async toggle(category: ChecklistCategorySummary): Promise<void> {
+    if (this.busy) return;
     let reason = '';
-    if (target.active) {
-      const result = await this.openAction({ title: 'Desativar categoria', message: 'Registros criados poderão ser concluídos. Apenas etapas ainda não geradas serão puladas.', inputLabel: 'Justificativa', required: true, danger: true, confirmLabel: 'Desativar' });
-      if (!result) return; reason = result;
+    if (category.active) {
+      const result = await this.openAction({
+        title: 'Desativar categoria',
+        message: 'Registros criados poderão ser concluídos. Apenas etapas ainda não geradas serão puladas.',
+        inputLabel: 'Justificativa', required: true, danger: true, confirmLabel: 'Desativar',
+      });
+      if (!result) return;
+      reason = result;
     }
-    target.active = !target.active; target.reason = reason; this.store.refreshFlows(state); this.store.commit(state); this.cdr.detectChanges();
+    await this.mutate(() => firstValueFrom(this.api.updateCategoryStatus(category.id, !category.active, reason)),
+      'Status da categoria atualizado.', 'Não foi possível atualizar o status da categoria.');
   }
 
-  protected async remove(category: Category): Promise<void> {
-    const state = copy(this.store.state());
-    if (state.templates.some(item => item.categoryId === category.id) || state.flows.some(flow => flow.plan.some(step => step.category.id === category.id))) { this.toaster.warning('Categorias com modelos ou histórico não podem ser excluídas.'); return; }
-    const confirmed = await this.openAction({ title: 'Excluir categoria', message: `A categoria “${category.name}” será excluída definitivamente.`, confirmLabel: 'Excluir', danger: true });
+  protected async remove(category: ChecklistCategorySummary): Promise<void> {
+    if (this.busy) return;
+    const confirmed = await this.openAction({
+      title: 'Excluir categoria', message: `A categoria "${category.name}" será excluída definitivamente.`,
+      confirmLabel: 'Excluir', danger: true,
+    });
     if (!confirmed) return;
-    state.categories = state.categories.filter(item => item.id !== category.id); this.store.commit(state); this.cdr.detectChanges();
+    await this.mutate(() => firstValueFrom(this.api.deleteCategory(category.id)),
+      'Categoria excluída com sucesso.', 'Não foi possível excluir a categoria.');
+  }
+
+  private async mutate(request: () => Promise<unknown>, success: string, failure: string): Promise<void> {
+    this.busy = true;
+    try {
+      await request();
+      this.editing = false;
+      this.changed.emit();
+      this.toaster.success(success);
+      await this.load();
+    } catch (error) {
+      this.toaster.warning((error as { error?: { error?: string } }).error?.error || failure);
+    } finally {
+      this.busy = false;
+      this.cdr.markForCheck();
+    }
   }
 
   private async openAction(options: Parameters<ChecklistActionModalComponent['open']>[0]): Promise<string | null> {

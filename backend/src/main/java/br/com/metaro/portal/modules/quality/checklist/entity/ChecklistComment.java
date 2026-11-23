@@ -23,7 +23,7 @@ public class ChecklistComment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "author_id")
     private User author;
-    private String problemId;
+    private Long problemId;
     private String content;
     private boolean active;
     private Instant createdAt;

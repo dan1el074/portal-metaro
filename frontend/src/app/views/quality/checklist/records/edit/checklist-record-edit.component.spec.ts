@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -20,8 +20,8 @@ describe('Checklist memorandum alerts during filling and completion', () => {
   beforeEach(async () => {
     const record = { id: '1', flowId: 'f' };
     store = {
-      state: signal({ records: [record] }), load: jasmine.createSpy().and.resolveTo(),
-      editable: () => true, claim: jasmine.createSpy().and.resolveTo(), flow: () => ({ id: 'f', order: '688', item: '60310 - Item' }),
+      loadRecordContext: jasmine.createSpy().and.resolveTo({ record, flow: { id: 'f', order: '688', item: '60310 - Item' }, editable: true, blocked: false }),
+      claim: jasmine.createSpy().and.resolveTo(record),
       saveRecord: jasmine.createSpy().and.resolveTo(record),
     };
     api = { listRelatedMemorandos: jasmine.createSpy().and.returnValue(of([open, approved])) };
@@ -78,13 +78,13 @@ describe('Checklist memorandum alerts during filling and completion', () => {
     expect(fixture.nativeElement.textContent).toContain('Essa ação será registrada.');
     await component.save(true); expect(api.listRelatedMemorandos).toHaveBeenCalledTimes(2);
     await click('Continuar e finalizar'); await saving;
-    expect(store.saveRecord).toHaveBeenCalledOnceWith(component.record, component.flow, true, true);
+    expect(store.saveRecord).toHaveBeenCalledOnceWith(component.record, component.flow, true, true, { blocked: false });
   });
 
   it('uses the latest approval status without asking for an override', async () => {
     await click('Entendido'); api.listRelatedMemorandos.and.returnValue(of([approved]));
     await component.save(true);
-    expect(store.saveRecord).toHaveBeenCalledOnceWith(component.record, component.flow, true, false);
+    expect(store.saveRecord).toHaveBeenCalledOnceWith(component.record, component.flow, true, false, { blocked: false });
   });
 
   it('preserves the answers and does not save when the confirmation is canceled', async () => {
@@ -103,6 +103,6 @@ describe('Checklist memorandum alerts during filling and completion', () => {
     await click('Entendido'); api.listRelatedMemorandos.calls.reset();
     await component.save(false);
     expect(api.listRelatedMemorandos).not.toHaveBeenCalled();
-    expect(store.saveRecord).toHaveBeenCalledOnceWith(component.record, component.flow, false, false);
+    expect(store.saveRecord).toHaveBeenCalledOnceWith(component.record, component.flow, false, false, { blocked: false });
   });
 });

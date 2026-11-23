@@ -9,8 +9,9 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class ChecklistVideoCreateDto {
-    @NotBlank
-    private String problemId;
+    @jakarta.validation.constraints.PositiveOrZero
+    @jakarta.validation.constraints.NotNull
+    private Long problemId;
     @NotBlank
     private String name;
 }

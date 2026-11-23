@@ -30,7 +30,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ChecklistEvidenceService {
-    public static final String GENERAL_EVIDENCE_ID = "__checklist_body__";
+    public static final Long GENERAL_EVIDENCE_ID = 0L;
     private final ChecklistEvidenceRepository evidenceRepository;
     private final ChecklistRecordRepository recordRepository;
     private final br.com.metaro.portal.modules.quality.checklist.repository.ChecklistRevisionRepository revisionRepository;
@@ -39,9 +39,9 @@ public class ChecklistEvidenceService {
     private final UserService userService;
 
     @Transactional
-    public List<ChecklistEvidenceDto> uploadImages(Long recordId, String problemId, MultipartFile[] images) throws IOException {
+    public List<ChecklistEvidenceDto> uploadImages(Long recordId, Long problemId, MultipartFile[] images) throws IOException {
         ChecklistRecord record = editableRecord(recordId);
-        if (problemId == null || problemId.isBlank()) throw new UnprocessableEntityException("É necessário informar o ID do problema.");
+        if (problemId == null || problemId < 0) throw new UnprocessableEntityException("É necessário informar o ID do problema.");
         if (images == null || images.length == 0) throw new UnprocessableEntityException("É necessário informar pelo menos uma imagem.");
         User user = userService.authenticate();
         List<Picture> pictures = pictureService.saveChecklistImages(List.of(images));
@@ -122,11 +122,11 @@ public class ChecklistEvidenceService {
         return dto;
     }
 
-    private ChecklistEvidence baseEvidence(ChecklistRecord record, String problemId, String name, String contentType,
+    private ChecklistEvidence baseEvidence(ChecklistRecord record, Long problemId, String name, String contentType,
                                              long size, User user) {
         ChecklistEvidence evidence = new ChecklistEvidence();
         evidence.setRecord(record);
-        evidence.setProblemId(problemId.trim());
+        evidence.setProblemId(problemId);
         evidence.setOriginalName(name == null || name.isBlank() ? "evidence" : name);
         evidence.setContentType(contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType);
         evidence.setSize(size);

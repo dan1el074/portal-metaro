@@ -18,11 +18,16 @@ public class ChecklistMemorandoService {
 
     @Transactional(readOnly = true)
     public List<ChecklistMemorandoDto> findRelated(ChecklistFlow flow, User user) {
+        return findRelated(flow.getOrderNumber(), flow.getCommercialItemCode(), user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChecklistMemorandoDto> findRelated(String orderNumber, String commercialItemCode, User user) {
         boolean admin = user.hasRole("ROLE_ADMIN");
         if (!admin && !user.hasRole("ROLE_MEMORANDO")) return List.of();
 
-        BigInteger order = numericValue(flow.getOrderNumber());
-        BigInteger itemCode = itemCode(flow.getCommercialItem());
+        BigInteger order = numericValue(orderNumber);
+        BigInteger itemCode = numericValue(commercialItemCode);
         if (order == null || order.signum() <= 0 || order.bitLength() > 63 || itemCode == null) return List.of();
 
         return repository.findAccessibleByRequest(order.longValueExact(), admin, user.getId()).stream()

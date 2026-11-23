@@ -24,7 +24,7 @@ public class ChecklistEvidenceController {
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<List<ChecklistEvidenceDto>> uploadImages(@PathVariable Long recordId,
-                                                                    @RequestParam String problemId,
+                                                                    @RequestParam Long problemId,
                                                                     @RequestParam MultipartFile[] images) throws IOException {
         return ResponseEntity.ok(service.uploadImages(recordId, problemId, images));
     }

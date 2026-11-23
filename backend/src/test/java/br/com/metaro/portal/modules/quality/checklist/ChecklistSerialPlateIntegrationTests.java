@@ -17,6 +17,12 @@ import br.com.metaro.portal.modules.general.stepFlow.entities.*;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepository;
 import br.com.metaro.portal.util.erp.*;
 import br.com.metaro.portal.util.erp.dto.*;
+import br.com.metaro.portal.util.picture.Picture;
+import br.com.metaro.portal.util.picture.PictureService;
+import br.com.metaro.portal.util.video.Video;
+import br.com.metaro.portal.util.video.VideoProvider;
+import br.com.metaro.portal.util.video.VideoService;
+import org.springframework.mock.web.MockMultipartFile;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +44,11 @@ import static org.mockito.Mockito.*;
     "external.datasource.username=sa", "external.datasource.password="
 })
 class ChecklistSerialPlateIntegrationTests {
+    private static final java.util.concurrent.atomic.AtomicLong TEST_NAMES = new java.util.concurrent.atomic.AtomicLong();
     @Autowired private ChecklistRecordService records;
+    @Autowired private ChecklistEvidenceService evidence;
+    @MockBean private PictureService pictures;
+    @MockBean private VideoService videos;
     @Autowired private ChecklistSerialPlateService serials;
     @Autowired private ChecklistStepFlowService steps;
     @Autowired private SerialPlateService plates;
@@ -65,7 +75,7 @@ class ChecklistSerialPlateIntegrationTests {
         actor.setRoles(new HashSet<>(roles.findAll().stream().filter(role -> role.getAuthority().equals("ROLE_CHECKLIST_ADMIN")).toList()));
         when(userService.authenticate()).thenReturn(actor);
         ChecklistCategory category = new ChecklistCategory();
-        category.setName("Integração " + UUID.randomUUID()); category.setIntegration(ChecklistIntegration.PRODUCTION);
+        category.setName("Integração " + TEST_NAMES.incrementAndGet()); category.setIntegration(ChecklistIntegration.PRODUCTION);
         category.setActive(true); category.setDocumentTitle("Produção"); category.setFieldsJson("[]");
         category.setSerialRequired(true); category.setErpRequired(true); category.setDepartments(false);
         category.setCreatedAt(Instant.now()); category.setUpdatedAt(Instant.now());
@@ -80,6 +90,8 @@ class ChecklistSerialPlateIntegrationTests {
 
 
     @Autowired private ChecklistListingService listing;
+    @Autowired private ChecklistConfigurationService configuration;
+    @Autowired private ChecklistEquipmentRepository equipment;
     @Autowired private ChecklistDepartmentService departmentSettings;
     @Autowired private PositionRepository positions;
 
@@ -103,6 +115,80 @@ class ChecklistSerialPlateIntegrationTests {
         assertThat(listing.list(request, template.getCategory().getId(), "312", "", false, false).getTotalElements()).isEqualTo(1);
         assertThat(listing.list(request, template.getCategory().getId(), "%", "", false, false).getTotalElements()).isZero();
         assertThat(listing.counts(false).get(template.getCategory().getId().toString())).isEqualTo(3);
+    }
+
+    @Test
+    void keepsHistoricalLabelsAndLoadsManagementListsFromSummaries() {
+        var category = template.getCategory();
+        String originalCategory = category.getName();
+        String originalModel = template.getName();
+        plate(317, true);
+        var record = records.createRecord(input("317", true));
+
+        category.setName("Categoria atualizada");
+        template.setName("Modelo atualizado");
+        entityManager.flush();
+        entityManager.clear();
+
+        var header = configuration.header();
+        assertThat(header.getCategories()).anySatisfy(tab -> {
+            assertThat(tab.getId()).isEqualTo(category.getId());
+            assertThat(tab.getName()).isEqualTo("Categoria atualizada");
+        });
+        assertThat(header.getHeaderCount()).singleElement().satisfies(count -> {
+            assertThat(count.getCategories()).isEqualTo(categories.count());
+            assertThat(count.getModels()).isEqualTo(templates.count());
+            assertThat(count.getEquipment()).isEqualTo(equipment.count());
+        });
+        assertThat(configuration.listTemplateSummaries()).anySatisfy(summary -> {
+            assertThat(summary.getId()).isEqualTo(template.getId());
+            assertThat(summary.getName()).isEqualTo("Modelo atualizado");
+            assertThat(summary.getPredecessorId()).isNull();
+            assertThat(summary.isUsed()).isTrue();
+        });
+
+        var rows = listing.list(org.springframework.data.domain.PageRequest.of(0, 10),
+                category.getId(), originalModel, "", false, false).getContent();
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getId()).isEqualTo(record.getId().toString());
+            assertThat(row.getCategory()).isEqualTo(originalCategory);
+            assertThat(row.getModel()).isEqualTo(originalModel);
+        });
+    }
+
+    @Test
+    void loadsOnlyTheCurrentDocumentAndUsesIdsForNavigation() {
+        plate(318, true); plate(319, true); plate(320, true);
+        var older = records.createRecord(input("318", true));
+        var current = records.createRecord(input("319", true));
+        var newer = records.createRecord(input("320", true));
+        Instant timestamp = Instant.parse("2026-11-19T12:00:00Z");
+        for (var record : List.of(older, current, newer)) {
+            recordRepository.findById(record.getId()).orElseThrow().setUpdatedAt(timestamp);
+        }
+        var comment = new ChecklistCommentInputDto();
+        comment.setText("Comentário da inspeção");
+        records.addComment(current.getId(), comment);
+        entityManager.flush();
+        entityManager.clear();
+
+        var view = records.getContext(current.getId(), false);
+        assertThat(view.getPreviousId()).isEqualTo(newer.getId());
+        assertThat(view.getNextId()).isEqualTo(older.getId());
+        assertThat(view.getFlow().getPlan()).extracting(step -> step.getTemplate().getId()).containsExactly(template.getId());
+        assertThat(view.getSteps()).extracting(ChecklistRecordStepDto::getRecordId).containsExactly(current.getId());
+        assertThat(view.getRecord().getComments()).hasSize(1);
+        assertThat(view.getRecord().getLogs()).isNotEmpty();
+
+        var editor = records.getContext(current.getId(), true);
+        assertThat(editor.isEditable()).isTrue();
+        assertThat(editor.getRecord().getId()).isEqualTo(current.getId());
+        assertThat(editor.getRecord().getVersion()).isEqualTo(view.getRecord().getVersion());
+        assertThat(editor.getRecord().getComments()).isEmpty();
+        assertThat(editor.getRecord().getLogs()).isEmpty();
+        assertThat(editor.getSteps()).isEmpty();
+        assertThat(editor.getPreviousId()).isNull();
+        assertThat(editor.getNextId()).isNull();
     }
 
     @Test
@@ -312,8 +398,66 @@ class ChecklistSerialPlateIntegrationTests {
     }
 
     @Test
+    void reservesDisjointIdBlocksAndReturnsOneModelForDirectCreation() {
+        long first = records.reserveNestedIds();
+        assertThat(records.reserveNestedIds()).isGreaterThanOrEqualTo(first + 256);
+        assertThat(records.newContext(template.getId(), null).getPlan()).singleElement()
+                .satisfies(step -> assertThat(step.getTemplate().getId()).isEqualTo(template.getId()));
+    }
+
+    @Test
+    void reopensDraftWithPhotoAndVideoAttachedToTheSameNumericProblem() throws Exception {
+        template.setSectionsJson("""
+                [{"id":1,"name":"Inspecao","options":["OK","NOK"],"questions":[{"id":2,"label":"Conferir","fields":[]}]}]
+                """);
+        plate(900001, true);
+        var draft = records.createRecord(input("900001", true));
+        long problemId = records.reserveNestedIds();
+        var problem = new ChecklistProblemDto();
+        problem.setId(problemId);
+        var answer = new ChecklistAnswerDto();
+        answer.setValue("NOK");
+        answer.setProblems(List.of(problem));
+        draft.setAnswers(Map.of("2", answer));
+
+        var picture = new Picture();
+        picture.setName("Foto");
+        entityManager.persist(picture);
+        var file = new MockMultipartFile("images", "foto.png", "image/png", new byte[]{1});
+        when(pictures.saveChecklistImages(List.of(file))).thenReturn(List.of(picture));
+        var photo = evidence.uploadImages(draft.getId(), problemId, new MockMultipartFile[]{file}).getFirst();
+
+        var video = new Video();
+        video.setName("Video");
+        video.setProvider(VideoProvider.BUNNY);
+        video.setProviderVideoId("test-video");
+        video.setPlaybackUrl("/video/test");
+        entityManager.persist(video);
+        var request = new ChecklistVideoCreateDto();
+        request.setName("video.mp4");
+        request.setProblemId(problemId);
+        when(videos.createPendingVideo("EVIDENCIA_video.mp4")).thenReturn(video);
+        var clip = evidence.createVideo(draft.getId(), request).getEvidence();
+        evidence.completeVideo(draft.getId(), Long.valueOf(clip.getId()));
+
+        problem.setMedia(List.of(photo, clip));
+        records.saveRecord(draft.getId(), draft, false);
+        entityManager.flush();
+        entityManager.clear();
+        var reopened = records.getRecord(draft.getId());
+        assertThat(reopened.getMedia()).isEmpty();
+        assertThat(reopened.getAnswers().get("2").getProblems()).singleElement().satisfies(saved -> {
+            assertThat(saved.getId()).isEqualTo(problemId);
+            assertThat(saved.getMedia()).extracting(ChecklistEvidenceDto::getId)
+                    .containsExactlyInAnyOrder(photo.getId(), clip.getId());
+        });
+        assertThat(recordRepository.findById(draft.getId()).orElseThrow().getAnswersJson())
+                .doesNotContain("foto.png", "video.mp4");
+    }
+
+    @Test
     void justifiedChecklistHasBlankFormKeepsRevisionAndCanBeReopened() {
-        template.setSectionsJson("[{\"id\":\"s\",\"name\":\"Inspeção\",\"options\":[\"OK\",\"NOK\"],\"questions\":[{\"id\":\"q\",\"label\":\"Conferir\",\"fields\":[{\"id\":\"extra\",\"label\":\"Campo\",\"type\":\"text\",\"defaultValue\":\"Padrão\",\"options\":[]}]}]}]");
+        template.setSectionsJson("[{\"id\":1,\"name\":\"Inspeção\",\"options\":[\"OK\",\"NOK\"],\"questions\":[{\"id\":2,\"label\":\"Conferir\",\"fields\":[{\"id\":3,\"label\":\"Campo\",\"type\":\"text\",\"defaultValue\":\"Padrão\",\"options\":[]}]}]}]");
         templates.saveAndFlush(template);
         ChecklistTemplate successor = new ChecklistTemplate(); successor.setName("Próximo"); successor.setCategory(template.getCategory());
         successor.setTitleExpression("Próximo"); successor.setSectionsJson("[]"); successor.setPredecessor(template);
@@ -321,15 +465,15 @@ class ChecklistSerialPlateIntegrationTests {
         plate(900001, true);
         ChecklistRecordDto record = records.createRecord(input("900001", true));
         var entity = recordRepository.findById(record.getId()).orElseThrow();
-        entity.setAnswersJson("{\"q\":{\"value\":\"OK\",\"description\":\"Preenchido antes\",\"fields\":{\"extra\":\"Valor anterior\"},\"problems\":[]}}");
+        entity.setAnswersJson("{\"2\":{\"value\":\"OK\",\"description\":\"Preenchido antes\",\"fields\":{\"3\":\"Valor anterior\"},\"problems\":[]}}");
         entity.setDepartmentsJson("[\"PCP\"]"); recordRepository.saveAndFlush(entity);
         ChecklistReasonDto reason = new ChecklistReasonDto(); reason.setReason("Não se aplica");
         records.skipChecklist(record.getId(), reason);
         ChecklistRecordDto justified = records.getRecord(record.getId());
         assertThat(justified.getStatus()).isEqualTo("JUSTIFIED");
-        assertThat(justified.getAnswers().get("q").getValue()).isNull();
-        assertThat(justified.getAnswers().get("q").getFields()).containsEntry("extra", "");
-        assertThat(justified.getAnswers().get("q").getProblems()).isEmpty();
+        assertThat(justified.getAnswers().get("2").getValue()).isNull();
+        assertThat(justified.getAnswers().get("2").getFields()).containsEntry("3", "");
+        assertThat(justified.getAnswers().get("2").getProblems()).isEmpty();
         assertThat(justified.getDepartments()).isEmpty();
         assertThat(justified.getRevisions()).hasSize(1);
         assertThat(justified.getRevisions().getFirst().getRecord().toString()).contains("Valor anterior");
@@ -338,7 +482,7 @@ class ChecklistSerialPlateIntegrationTests {
         reason.setReason("Revisar a necessidade");
         ChecklistRecordDto reopened = records.reopenRecord(record.getId(), reason);
         assertThat(reopened.getStatus()).isEqualTo("IN_PROGRESS");
-        assertThat(reopened.getAnswers().get("q").getFields()).containsEntry("extra", "");
+        assertThat(reopened.getAnswers().get("2").getFields()).containsEntry("3", "");
         assertThat(records.getFlow(record.getFlowId()).getSkipped()).doesNotContainKey(template.getId().toString());
         assertThatThrownBy(() -> records.saveRecord(next.getId(), records.getRecord(next.getId()), true)).hasMessageContaining("checklist anterior");
         assertThat(reopened.getLogs()).anyMatch(log -> log.getAction().equals("REOPENED") && log.getDetails().contains("Revisar a necessidade"));
@@ -600,10 +744,44 @@ class ChecklistSerialPlateIntegrationTests {
         successor.setCreatedAt(Instant.now()); successor.setUpdatedAt(Instant.now()); templates.save(successor);
         plate(900001, true); ChecklistRecordDto previous = finish(records.createRecord(input("900001", true)));
         ChecklistRecordCreateDto dto = new ChecklistRecordCreateDto(); dto.setTemplateId(successor.getId()); dto.setPredecessorRecordId(previous.getId());
+        // The flow keeps the manual transition even when the live template becomes automatic.
+        successor.setAutomatic(true);
+        assertThat(records.creationOptions()).anyMatch(option -> option.getId().equals(successor.getId()) && !option.isStandalone());
+        assertThat(records.eligiblePredecessors(successor.getId(), 0).getContent())
+                .extracting(ChecklistPredecessorDto::getId).containsExactly(previous.getId());
+        assertThat(records.eligiblePredecessors(successor.getId(), 1)).isEmpty();
         ChecklistRecordDto next = records.createRecord(dto);
+        assertThat(records.eligiblePredecessors(successor.getId(), 0)).isEmpty();
+        assertThat(records.creationOptions()).noneMatch(option -> option.getId().equals(successor.getId()));
         assertThat(next.getFlowId()).isEqualTo(previous.getFlowId());
         assertThat(records.getFlow(next.getFlowId()).getSerialPlateId()).isEqualTo(900001L);
         assertThat(serials.listAvailable("", "", true)).isEmpty();
+    }
+
+    @Test
+    void pagesOnlyEligiblePredecessorsForTheOperatorsCategory() {
+        ChecklistTemplate successor = new ChecklistTemplate();
+        successor.setCategory(template.getCategory()); successor.setName("Inspeção seguinte");
+        successor.setTitleExpression("Seguinte"); successor.setSectionsJson("[]"); successor.setPredecessor(template);
+        successor.setCreatedAt(Instant.now()); successor.setUpdatedAt(Instant.now()); templates.save(successor);
+        List<Long> eligible = new ArrayList<>();
+        for (int serial = 1001; serial <= 1031; serial++) {
+            plate(serial, true);
+            eligible.add(finish(records.createRecord(input(Integer.toString(serial), true))).getId());
+        }
+        actor.setRoles(new HashSet<>(roles.findAll().stream()
+                .filter(role -> role.getAuthority().equals("ROLE_CHECKLIST_OPERATOR")).toList()));
+        assertThat(records.creationOptions()).noneMatch(option -> option.getId().equals(successor.getId()));
+        assertThat(records.eligiblePredecessors(successor.getId(), 0)).isEmpty();
+
+        template.getCategory().getOperators().add(actor);
+        var first = records.eligiblePredecessors(successor.getId(), 0);
+        var last = records.eligiblePredecessors(successor.getId(), 1);
+        assertThat(first.hasNext()).isTrue();
+        assertThat(first.getContent()).extracting(ChecklistPredecessorDto::getId)
+                .containsExactlyElementsOf(eligible.reversed().subList(0, 30));
+        assertThat(last.hasNext()).isFalse();
+        assertThat(last.getContent()).extracting(ChecklistPredecessorDto::getId).containsExactly(eligible.getFirst());
     }
 
     private Order emptyOrder() {

@@ -2,13 +2,11 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Output, ViewChild, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
-import { Checklist, Category, Template } from '../../../../app/interface/checklist.interface';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
-import { ChecklistErpOrder, ChecklistRecordCreate, ChecklistService } from '../../../../app/services/checklist.service';
+import { ChecklistCreationOption, ChecklistPredecessor, ChecklistErpOrder, ChecklistRecordCreate, ChecklistService } from '../../../../app/services/checklist.service';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
 import { Subscription } from 'rxjs';
 import { ChecklistActionModalComponent } from '../checklist-action-modal/checklist-action-modal.component';
-import { isProductionKit } from '../../../../app/shared/checklist-rules';
 import { BackNavigationService } from '../../../../app/services/back-navigation.service';
 
 @Component({
@@ -50,8 +48,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
   }
 
   protected get productionKit(): boolean {
-    const template = this.templates.find(item => item.id === this.templateId);
-    return !!template && !!this.category && isProductionKit({ template, category: this.category, equipment: '' });
+    return this.production && this.selectedModel?.name.trim().toUpperCase() === 'KIT';
   }
 
   protected readyStockChanged(): void {
@@ -75,8 +72,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
 
     this.loadingSerials = true;
 
-    const itemCode = this.erpOrder?.items.find(option => this.formatItem(option) === this.item)?.code ?? '';
-    this.serialRequest = this.api.availableSerials(this.readyStock ? '' : this.order.trim(), this.readyStock, itemCode).subscribe({
+    this.serialRequest = this.api.availableSerials(this.readyStock ? '' : this.order.trim(), this.readyStock, this.item).subscribe({
       next: options => { this.availableSerials = options; this.loadingSerials = false; this.cdr.markForCheck(); },
       error: () => { this.serialError = 'Não foi possível consultar os números de série. Tente novamente.'; this.loadingSerials = false; this.cdr.markForCheck(); },
     });
@@ -84,6 +80,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
 
   public ngOnDestroy(): void {
     this.destroyed = true;
+    this.predecessorRequest?.unsubscribe();
     this.orderRequest?.unsubscribe();
     this.serialRequest?.unsubscribe();
   }
@@ -95,8 +92,9 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
     private readonly backNavigation: BackNavigationService,
   ) {}
 
-  public open(): void {
-    this.categoryId = this.availableCategories[0]?.id ?? '';
+  public open(options: ChecklistCreationOption[]): void {
+    this.options = options;
+    this.categoryId = this.availableCategories[0]?.categoryId ?? '';
     this.selectDefaultTemplate();
     this.visible = true;
     this.cdr.detectChanges();
@@ -104,6 +102,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
 
   protected close(): void {
     this.visible = false;
+    this.predecessorRequest?.unsubscribe();
     this.orderRequest?.unsubscribe();
     this.serialRequest?.unsubscribe();
     this.cdr.detectChanges();
@@ -118,46 +117,40 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
     this.resetIdentification();
   }
 
-  protected get category(): Category | undefined {
-    return this.store.state().categories.find((item) => item.id === this.categoryId);
-  }
+  private options: ChecklistCreationOption[] = [];
+  protected predecessors: ChecklistPredecessor[] = [];
+  protected morePredecessors = false;
+  protected loadingPredecessors = false;
+  protected predecessorError = false;
+  private predecessorPage = 0;
+  private predecessorRequest?: Subscription;
 
-  protected get availableCategories(): Category[] {
-    return this.store.state().categories.filter((item) => item.active && this.store.canOperate(item.id) && this.templatesForCategory(item.id).length > 0);
+  protected get category() { return this.options.find(option => option.categoryId === this.categoryId); }
+  protected get availableCategories() {
+    return Array.from(new Map(this.options.map(option => [option.categoryId, option])).values());
   }
+  protected get templates() { return this.options.filter(option => option.categoryId === this.categoryId); }
+  protected get selectedModel() { return this.templates.find(option => option.id === this.templateId); }
+  protected get needsPredecessor() { return !!this.selectedModel && !this.selectedModel.standalone; }
+  protected get hasPredecessor() { return !!this.selectedModel?.hasPredecessor; }
 
-  protected get templates(): Template[] {
-    return this.templatesForCategory(this.categoryId);
-  }
-
-  private templatesForCategory(categoryId: string): Template[] {
-    const models = this.store.state().templates.filter((item) => item.categoryId === categoryId && (!item.predecessorId || item.optionalPredecessor));
-    for (const record of this.store.state().records) {
-      if (!this.store.visible(record) || record.status !== 'Finalizado' || this.store.blocked(record)) continue;
-      const flow = this.store.flow(record);
-      const index = flow.plan.findIndex((step) => step.template.id === record.templateId);
-      const next = flow.plan.slice(index + 1).find((step) => !flow.skipped[step.template.id]);
-      if (next?.category.id === categoryId && !next.template.automatic && !this.store.state().records.some((item) => item.flowId === flow.id && item.templateId === next.template.id) && !models.some((item) => item.id === next.template.id)) models.push(next.template);
-    }
-    return models;
-  }
-
-  protected get needsPredecessor(): boolean {
-    const template = this.templates.find((item) => item.id === this.templateId);
-    return !!template?.predecessorId && !template.optionalPredecessor;
-  }
-
-  protected get hasPredecessor(): boolean {
-    return !!this.templates.find((item) => item.id === this.templateId)?.predecessorId;
-  }
-
-  protected get predecessors(): Checklist[] {
-    return this.store.state().records.filter((record) => {
-      if (!this.store.visible(record) || record.status !== 'Finalizado' || this.store.blocked(record)) return false;
-      const flow = this.store.flow(record);
-      const index = flow.plan.findIndex((step) => step.template.id === record.templateId);
-      const next = flow.plan.slice(index + 1).find((step) => !flow.skipped[step.template.id]);
-      return next?.template.id === this.templateId && !next.template.automatic && !this.store.state().records.some((item) => item.flowId === flow.id && item.templateId === this.templateId);
+  protected loadPredecessors(): void {
+    if (this.loadingPredecessors) return;
+    this.loadingPredecessors = true;
+    this.predecessorError = false;
+    this.predecessorRequest = this.api.eligiblePredecessors(this.templateId, this.predecessorPage).subscribe({
+      next: result => {
+        this.predecessors = [...this.predecessors, ...result.content];
+        this.predecessorPage++;
+        this.morePredecessors = !result.last;
+        this.loadingPredecessors = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.predecessorError = true;
+        this.loadingPredecessors = false;
+        this.cdr.markForCheck();
+      },
     });
   }
 
@@ -173,11 +166,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
     const template = this.templates.find((item) => item.id === this.templateId);
     if (!template || !this.showsSerial) return false;
     if (this.production && this.portalAdmin) return false;
-    return !isProductionKit({
-      template,
-      category: this.category!,
-      equipment: '',
-    });
+    return !this.productionKit;
   }
 
   protected get canConfirm(): boolean {
@@ -207,7 +196,7 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
     this.orderRequest = this.api.findErpOrder(order).subscribe({
       next: (result) => {
         this.erpOrder = result;
-        this.item = result.items.length === 1 ? this.formatItem(result.items[0]) : '';
+        this.item = result.items.length === 1 ? result.items[0].code : '';
         this.loadingOrder = false;
         this.loadSerials();
         this.cdr.detectChanges();
@@ -300,6 +289,13 @@ export class ChecklistNewRecordModalComponent implements OnDestroy {
   }
 
   private resetIdentification(): void {
+    this.predecessorRequest?.unsubscribe();
+    this.predecessorPage = 0;
+    this.predecessors = [];
+    this.morePredecessors = false;
+    this.loadingPredecessors = false;
+    this.predecessorError = false;
+    if (this.hasPredecessor) this.loadPredecessors();
     this.orderRequest?.unsubscribe();
     this.serialRequest?.unsubscribe();
     this.readyStock = false;

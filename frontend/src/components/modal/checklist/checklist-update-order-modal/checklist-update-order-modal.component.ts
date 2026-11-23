@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Ou
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
 import { ModalBackNavigationDirective } from '../../../../app/directive/modal-back-navigation.directive';
+import { Flow } from '../../../../app/interface/checklist.interface';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
 import { ToastrService } from '../../../../app/services/toast.service';
 import { ChecklistErpOrder, ChecklistService } from '../../../../app/services/checklist.service';
@@ -16,7 +17,8 @@ import { ChecklistErpOrder, ChecklistService } from '../../../../app/services/ch
 export class ChecklistUpdateOrderModalComponent {
   @Output() updated = new EventEmitter<void>();
   protected visible = false;
-  protected flowId = '';
+  protected flow?: Flow;
+  private recordId = '';
   protected selectedOrder = '';
   protected selected?: ChecklistErpOrder;
   protected selectedItem = '';
@@ -24,17 +26,14 @@ export class ChecklistUpdateOrderModalComponent {
 
   constructor(protected store: ChecklistPreviewService, private api: ChecklistService, private toaster: ToastrService, private cdr: ChangeDetectorRef) {}
 
-  public open(flowId: string): void {
-    this.flowId = flowId;
+  public open(recordId: string, flow: Flow): void {
+    this.recordId = recordId;
+    this.flow = flow;
     this.selectedOrder = '';
     this.selected = undefined;
     this.selectedItem = '';
     this.visible = true;
     this.cdr.detectChanges();
-  }
-
-  protected get flow() {
-    return this.store.state().flows.find((item) => item.id === this.flowId);
   }
 
   protected get canSave(): boolean {
@@ -50,7 +49,7 @@ export class ChecklistUpdateOrderModalComponent {
     this.api.findErpOrder(this.selectedOrder).subscribe({
       next: (order) => {
         this.selected = order;
-        this.selectedItem = order.items.length === 1 ? this.formatItem(order.items[0]) : '';
+        this.selectedItem = order.items.length === 1 ? order.items[0].code : '';
         this.loading = false;
         this.cdr.detectChanges();
       },
@@ -66,7 +65,7 @@ export class ChecklistUpdateOrderModalComponent {
   protected async save(): Promise<void> {
     try {
       if (!this.canSave) return;
-      await this.store.updateFlowOrder(this.flowId, this.selectedOrder, this.selectedItem);
+      await this.store.updateFlowOrder(this.recordId, this.selectedOrder, this.selectedItem);
       this.close();
       this.updated.emit();
     } catch (error) {

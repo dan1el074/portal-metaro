@@ -6,14 +6,14 @@
         <label>Categoria
           <select cSelect [(ngModel)]="model.categoryId" (ngModelChange)="categoryChanged()">
             <option value="">Selecione</option>
-            @for (item of store.state().categories; track item.id) { <option [value]="item.id">{{ item.name }}</option> }
+            @for (item of categoryOptions; track item.id) { <option [value]="item.id">{{ item.name }}</option> }
           </select>
         </label>
         @if (category?.integration === 'production') {
           <label>Equipamento
             <select cSelect [(ngModel)]="model.equipmentId" (ngModelChange)="equipmentChanged()">
               <option value="">Selecione</option>
-              @for (item of store.state().equipment; track item.id) { <option [value]="item.id">{{ item.abbreviation }} — {{ item.name }}</option> }
+              @for (item of equipmentOptions; track item.id) { <option [value]="item.id">{{ item.abbreviation }} — {{ item.name }}</option> }
             </select>
           </label>
         } @else {

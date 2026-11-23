@@ -11,7 +11,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 public class ChecklistSectionDto {
-    private String id;
+    private Long id;
     private String name;
     private List<String> options = new ArrayList<>();
     private List<ChecklistQuestionDto> questions = new ArrayList<>();

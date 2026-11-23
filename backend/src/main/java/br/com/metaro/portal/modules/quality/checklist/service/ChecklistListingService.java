@@ -5,7 +5,10 @@ import br.com.metaro.portal.modules.quality.checklist.dto.*;
 import br.com.metaro.portal.modules.quality.checklist.entity.*;
 import br.com.metaro.portal.modules.quality.checklist.repository.ChecklistRecordRepository;
 import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityException;
-import com.fasterxml.jackson.core.type.TypeReference;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
+import org.springframework.data.support.PageableExecutionUtils;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
@@ -19,9 +22,9 @@ import java.util.*;
 public class ChecklistListingService {
     private final ChecklistRecordRepository repository;
     private final UserService users;
-    private final ChecklistMapper mapper;
-    private static final Map<String, String> SORTS = Map.of("number", "id", "title", "listingTitle",
-            "category", "template.category.name", "model", "template.name", "status", "status", "updated", "updatedAt");
+    private final EntityManager entityManager;
+    private static final Map<String, String> SORTS = Map.of("id", "id", "number", "id", "title", "listingTitle",
+            "category", "listingCategoryName", "model", "listingModelName", "status", "status", "updated", "updatedAt");
     private static final Map<ChecklistStatus, String> STATUSES = Map.of(ChecklistStatus.DRAFT, "Rascunho",
             ChecklistStatus.IN_PROGRESS, "Em andamento", ChecklistStatus.PENDING, "Pendente", ChecklistStatus.FINISHED, "Finalizado",
             ChecklistStatus.JUSTIFIED, "Justificado", ChecklistStatus.CANCELLED, "Cancelado");
@@ -40,7 +43,7 @@ public class ChecklistListingService {
             predicates.add(cb.or(cb.notEqual(root.get("status"), ChecklistStatus.DRAFT),
                     cb.equal(cb.coalesce(root.get("owner").get("id"), root.get("creator").get("id")), user.getId()), cb.isTrue(cb.literal(admin))));
             if (consultation) predicates.add(cb.notEqual(root.get("status"), ChecklistStatus.DRAFT));
-            if (categoryId != null) predicates.add(cb.equal(root.get("template").get("category").get("id"), categoryId));
+            if (categoryId != null) predicates.add(cb.equal(root.get("listingCategoryId"), categoryId));
             if (selectedStatus != null) predicates.add(cb.equal(root.get("status"), selectedStatus));
             if (actionable) {
                 predicates.add(root.get("status").in(ChecklistStatus.DRAFT, ChecklistStatus.IN_PROGRESS));
@@ -53,7 +56,8 @@ public class ChecklistListingService {
             if (search != null && !search.isBlank()) {
                 String term = "%" + search.trim().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
                 predicates.add(cb.or(cb.like(cb.lower(root.get("listingTitle")), term, '!'),
-                        cb.like(cb.lower(root.get("template").get("name")), term, '!'),
+                        cb.like(cb.lower(root.get("listingCategoryName")), term, '!'),
+                        cb.like(cb.lower(root.get("listingModelName")), term, '!'),
                         cb.like(cb.lower(root.get("flow").get("serialNumber")), term, '!')));
             }
             if (query.getResultType() != Long.class && query.getResultType() != long.class) {
@@ -77,7 +81,24 @@ public class ChecklistListingService {
             }
             return cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
-        return repository.findAll(spec, PageRequest.of(pageable.getPageNumber(), Math.min(pageable.getPageSize(), 200))).map(this::row);
+        var page = PageRequest.of(pageable.getPageNumber(), Math.min(pageable.getPageSize(), 200));
+        var builder = entityManager.getCriteriaBuilder();
+        var query = builder.createTupleQuery();
+        var record = query.from(ChecklistRecord.class);
+        var flow = record.join("flow");
+        query.select(builder.tuple(
+                record.get("id").alias("id"), record.get("listingTitle").alias("title"),
+                record.get("listingModelName").alias("model"), record.get("status").alias("status"),
+                record.get("updatedAt").alias("updated"), record.get("listingCategoryId").alias("categoryId"),
+                flow.get("serialNumber").alias("serial"), flow.get("orderNumber").alias("order"),
+                record.get("listingCategoryName").alias("category")));
+        query.where(spec.toPredicate(record, query, builder));
+
+        var rows = entityManager.createQuery(query)
+                .setFirstResult(Math.toIntExact(page.getOffset()))
+                .setMaxResults(page.getPageSize())
+                .getResultList().stream().map(this::row).toList();
+        return PageableExecutionUtils.getPage(rows, page, () -> repository.count(spec));
     }
 
     public Map<String, Long> counts(boolean consultation) {
@@ -88,12 +109,10 @@ public class ChecklistListingService {
         return counts;
     }
 
-    private ChecklistTableRowDto row(ChecklistRecord record) {
-        List<ChecklistSnapshotDto> plan = mapper.read(record.getFlow().getPlanJson(), new TypeReference<>() {});
-        var snapshot = plan.stream().filter(step -> step.getTemplate().getId().equals(record.getTemplate().getId())).findFirst().orElseThrow();
-        return new ChecklistTableRowDto(record.getId().toString(), record.getId(), record.getListingTitle(), snapshot.getCategory().getName(),
-                snapshot.getCategory().getId().toString(), snapshot.getTemplate().getName(), snapshot.getEquipment(),
-                snapshot.getTemplate().getEquipmentId() == null ? "" : snapshot.getTemplate().getEquipmentId().toString(),
-                record.getFlow().getSerialNumber(), record.getFlow().getOrderNumber(), STATUSES.get(record.getStatus()), record.getUpdatedAt());
+    private ChecklistTableRowDto row(Tuple result) {
+        return new ChecklistTableRowDto(result.get("id").toString(), result.get("title", String.class),
+                result.get("category", String.class), result.get("categoryId").toString(), result.get("model", String.class),
+                result.get("serial", String.class), result.get("order", String.class),
+                STATUSES.get(result.get("status", ChecklistStatus.class)), result.get("updated", Instant.class));
     }
 }

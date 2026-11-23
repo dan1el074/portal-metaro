@@ -2,8 +2,9 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, QueryList, ViewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonDirective, CardBodyComponent, CardComponent, FormCheckInputDirective, FormControlDirective, FormSelectDirective, TooltipDirective } from '@coreui/angular';
-import { Field, Template } from '../../../../app/interface/checklist.interface';
+import { Equipment, Field, Template } from '../../../../app/interface/checklist.interface';
 import { emptyChecklistField as emptyField, emptyChecklistQuestion as emptyQuestion, emptyChecklistSection as emptySection } from '../../../../app/shared/checklist-factory';
+import { ChecklistCategoryModelOption, ChecklistTemplateOption } from '../../../../app/services/checklist.service';
 import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
 import { checklistIntegrationLabel } from '../../../../app/shared/checklist-rules';
 import { ChecklistIconComponent } from '../../../icons/checklist-icon/checklist-icon.component';
@@ -30,6 +31,9 @@ import { ToastrService } from '../../../../app/services/toast.service';
 export class ChecklistModelFormComponent {
   @ViewChildren(TooltipDirective) private readonly tooltips!: QueryList<TooltipDirective>;
   @Input({ required: true }) model!: Template;
+  @Input() categories?: ChecklistCategoryModelOption[];
+  @Input() equipment?: Equipment[];
+  @Input() modelOptions?: ChecklistTemplateOption[];
   @Output() modelChange = new EventEmitter<Template>();
   @Output() saveModel = new EventEmitter<void>();
   @Output() cancel = new EventEmitter<void>();
@@ -47,8 +51,20 @@ export class ChecklistModelFormComponent {
 
   constructor(protected store: ChecklistPreviewService, private readonly toaster: ToastrService) {}
 
+  protected get categoryOptions(): Array<Omit<ChecklistCategoryModelOption, 'fieldIds'>> {
+    return this.categories ?? this.store.state().categories;
+  }
+
+  protected get equipmentOptions(): Equipment[] {
+    return this.equipment ?? this.store.state().equipment;
+  }
+
+  private get templates(): ChecklistTemplateOption[] {
+    return this.modelOptions ?? this.store.state().templates;
+  }
+
   protected get category() {
-    return this.store.state().categories.find((item) => item.id === this.model.categoryId);
+    return this.categoryOptions.find((item) => item.id === this.model.categoryId);
   }
 
   protected get titleVariables(): { key: string; label: string }[] {
@@ -76,8 +92,8 @@ export class ChecklistModelFormComponent {
   }
 
   protected get predecessors() {
-    return this.store.state().templates.filter((item) => {
-      const predecessorIntegration = this.store.state().categories.find((category) =>
+    return this.templates.filter((item) => {
+      const predecessorIntegration = this.categoryOptions.find((category) =>
         category.id === item.categoryId)?.integration;
       return item.id !== this.model.id
       && item.categoryId !== this.model.categoryId
@@ -86,21 +102,21 @@ export class ChecklistModelFormComponent {
     });
   }
 
-  protected predecessorLabel(template: Template): string {
-    const category = this.store.state().categories.find((item) => item.id === template.categoryId);
+  protected predecessorLabel(template: ChecklistTemplateOption): string {
+    const category = this.categoryOptions.find((item) => item.id === template.categoryId);
     return `${category?.name || 'Categoria não encontrada'} - ${template.name}`;
   }
 
   protected predecessorChanged(value: string): void {
-    const successor = value && this.store.state().templates.find((item) =>
+    const successor = value && this.templates.find((item) =>
       item.id !== this.model.id && item.predecessorId === value);
     if (successor) {
       this.toaster.error(`Este requisito já tem um sucessor. Bifurcações não são permitidas.\n${this.predecessorLabel(successor)}`);
       return;
     }
     this.model.predecessorId = value;
+    this.model.automatic = !!value;
     if (!value) {
-      this.model.automatic = false;
       this.model.optionalPredecessor = false;
     }
     this.changed();
@@ -125,7 +141,7 @@ export class ChecklistModelFormComponent {
     this.model.predecessorId = '';
     this.model.automatic = false;
     this.model.optionalPredecessor = false;
-    const equipment = this.store.state().equipment.find((item) => item.id === this.model.equipmentId);
+    const equipment = this.equipmentOptions.find((item) => item.id === this.model.equipmentId);
     this.model.name = equipment?.abbreviation || '';
     this.changed();
   }

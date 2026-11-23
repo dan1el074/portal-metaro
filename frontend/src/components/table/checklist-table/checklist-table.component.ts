@@ -29,7 +29,7 @@ export class ChecklistTableComponent {
 
   protected readonly statuses: Status[] = ['Rascunho', 'Em andamento', 'Pendente', 'Finalizado', 'Justificado', 'Cancelado'];
   protected readonly columns: IColumn[] = [
-    this.column('number', '#'),
+    this.column('id', '#'),
     this.column('title', 'Título'),
     this.column('category', 'Categoria'),
     this.column('model', 'Modelo'),

@@ -1,5 +1,8 @@
 package br.com.metaro.portal.modules.quality.checklist.service;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
+import br.com.metaro.portal.util.erp.ErpItemCode;
 import br.com.metaro.portal.core.entities.User;
 import br.com.metaro.portal.core.repositories.UserRepository;
 import br.com.metaro.portal.core.services.UserService;
@@ -47,9 +50,9 @@ public class ChecklistRecordService {
     @Transactional(readOnly = true)
     public List<ChecklistMemorandoDto> listRelatedMemorandos(Long id) {
         User user = userService.authenticate();
-        ChecklistRecord record = findRecord(id);
-        assertVisible(record, user);
-        return memorandoService.findRelated(record.getFlow(), user);
+        Object[] orderItem = recordRepository.findVisibleOrderItem(id, user.getId(), isAdministrator(user))
+                .stream().findFirst().orElseThrow(ResourceNotFoundException::new);
+        return memorandoService.findRelated((String) orderItem[0], (String) orderItem[1], user);
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +78,70 @@ public class ChecklistRecordService {
     }
 
     @Transactional(readOnly = true)
+    public ChecklistRecordContextDto getContext(Long id, boolean editing) {
+        User user = userService.authenticate();
+        ChecklistRecord record = recordRepository.findContextById(id).orElseThrow(ResourceNotFoundException::new);
+        assertVisible(record, user);
+
+        ChecklistFlow flow = record.getFlow();
+        List<ChecklistSnapshotDto> plan = plan(flow);
+        int index = indexOf(plan, record.getTemplate().getId());
+        ChecklistFlowDto flowDto = mapper.toScreenFlowDto(flow, plan.get(index));
+        boolean administrator = isAdministrator(user);
+        Long categoryId = plan.get(index).getCategory().getId();
+        boolean editable = (record.getStatus() == ChecklistStatus.DRAFT || record.getStatus() == ChecklistStatus.IN_PROGRESS)
+                && !flow.isCancelled() && canOperate(categoryId, user)
+                && (administrator || record.getOwner() == null || record.getOwner().getId().equals(user.getId()));
+
+        Map<Long, ChecklistFlowRecordSummaryDto> byTemplate = new HashMap<>();
+        if (!editing || (editable && index > 0)) {
+            recordRepository.findFlowSummaries(flow.getId()).forEach(row -> byTemplate.put(row.getTemplateId(), row));
+        }
+        boolean blocked = editing && editable && plan.subList(0, index).stream()
+                .map(step -> step.getTemplate().getId())
+                .filter(templateId -> !flowDto.getSkipped().containsKey(templateId.toString()))
+                .anyMatch(templateId -> {
+                    var predecessor = byTemplate.get(templateId);
+                    return predecessor == null || predecessor.getStatus() != ChecklistStatus.FINISHED;
+                });
+
+        Long previous = null;
+        Long next = null;
+        List<ChecklistRecordStepDto> steps = List.of();
+        if (!editing) {
+            var limit = PageRequest.of(0, 1);
+            boolean seeOwnDrafts = user.hasRole("ROLE_CHECKLIST_OPERATOR");
+            Long visibleUserId = seeOwnDrafts ? user.getId() : null;
+            previous = recordRepository.findPreviousVisibleId(record.getUpdatedAt(), id, visibleUserId, administrator, limit)
+                    .stream().findFirst().orElse(null);
+            next = recordRepository.findNextVisibleId(record.getUpdatedAt(), id, visibleUserId, administrator, limit)
+                    .stream().findFirst().orElse(null);
+            steps = plan.stream().map(step -> {
+                Long templateId = step.getTemplate().getId();
+                var row = byTemplate.get(templateId);
+                boolean visible = row != null && (row.getStatus() != ChecklistStatus.DRAFT || administrator
+                        || (seeOwnDrafts && user.getId().equals(row.getResponsibleId())));
+                return new ChecklistRecordStepDto(templateId, step.getCategory().getName(), step.getTemplate().getName(),
+                        visible ? row.getRecordId() : null, visible ? row.getStatus() : null,
+                        flowDto.getSkipped().containsKey(templateId.toString()));
+            }).toList();
+        }
+        return new ChecklistRecordContextDto(mapper.toScreenRecordDto(record, editing), flowDto, editable,
+                !editing && flow.getClientId() != null && !flow.getClientId().isBlank()
+                        && categoryRepository.existsByIdAndClientNokHistoryTrue(categoryId), blocked, previous, next, steps);
+    }
+
+    @Transactional(readOnly = true)
+    public ChecklistFlowDto getFlowForRecord(Long recordId) {
+        User user = userService.authenticate();
+        ChecklistRecord record = recordRepository.findContextById(recordId).orElseThrow(ResourceNotFoundException::new);
+        assertVisible(record, user);
+        ChecklistFlow flow = record.getFlow();
+        assertVisible(recordRepository.findFirstByFlowIdOrderByIdAsc(flow.getId()).orElseThrow(ResourceNotFoundException::new), user);
+        return mapper.toDto(flow);
+    }
+
+    @Transactional(readOnly = true)
     public ChecklistFlowDto getFlow(Long id) {
         ChecklistFlow flow = flowRepository.findById(id).orElseThrow(ResourceNotFoundException::new);
         List<ChecklistRecord> records = recordRepository.findByFlowId(id);
@@ -90,6 +157,45 @@ public class ChecklistRecordService {
     }
 
     @Transactional
+    public Long reserveNestedIds() {
+        return recordRepository.reserveNestedIds();
+    }
+
+    @Transactional(readOnly = true)
+    public ChecklistFlowDto newContext(Long templateId, Long previous) {
+        var actor = userService.authenticate();
+        var template = templateRepository.findById(templateId).orElseThrow(ResourceNotFoundException::new);
+        assertCanOperate(template.getCategory(), actor);
+        if (!template.getCategory().isActive()) throw new UnprocessableEntityException("Categoria inativa.");
+        if (previous != null) {
+            var flow = resolveManualSuccessorFlow(template, previous, actor);
+            return mapper.toScreenFlowDto(flow, snapshot(flow, templateId));
+        }
+        if (template.getPredecessor() != null && !template.isOptionalPredecessor())
+            throw new UnprocessableEntityException("É necessário informar o registro predecessor.");
+        var step = new ChecklistSnapshotDto();
+        step.setTemplate(mapper.toDto(template));
+        step.setCategory(mapper.toDto(template.getCategory()));
+        step.setEquipment(template.getEquipment() == null ? "" : template.getEquipment().getName());
+        var flow = new ChecklistFlowDto();
+        flow.setPlan(List.of(step));
+        return flow;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChecklistCreationOptionDto> creationOptions() {
+        User user = userService.authenticate();
+        return recordRepository.creationOptions(user.getId(), isAdministrator(user));
+    }
+
+    @Transactional(readOnly = true)
+    public Slice<ChecklistPredecessorDto> eligiblePredecessors(Long templateId, int page) {
+        User user = userService.authenticate();
+        return recordRepository.eligiblePredecessors(templateId, user.getId(), isAdministrator(user),
+                PageRequest.of(Math.max(0, page), 30));
+    }
+
+    @Transactional
     public ChecklistRecordDto createRecord(ChecklistRecordCreateDto input) {
         User user = userService.authenticate();
         ChecklistTemplate template = templateRepository.findById(input.getTemplateId()).orElseThrow(ResourceNotFoundException::new);
@@ -99,9 +205,9 @@ public class ChecklistRecordService {
         }
 
         ChecklistFlow flow;
-        if (template.getPredecessor() == null || input.getPredecessorRecordId() == null && template.isOptionalPredecessor()) {
-            if (input.getPredecessorRecordId() != null) {
-                throw new UnprocessableEntityException("Um modelo raiz não aceita um registro predecessor.");
+        if (input.getPredecessorRecordId() == null) {
+            if (template.getPredecessor() != null && !template.isOptionalPredecessor()) {
+                throw new UnprocessableEntityException("É necessário informar o registro predecessor.");
             }
             flow = createFlow(template, input);
         } else {
@@ -118,6 +224,11 @@ public class ChecklistRecordService {
 
     @Transactional
     public ChecklistRecordDto claimRecord(Long id) {
+        return claimRecord(id, false);
+    }
+
+    @Transactional
+    public ChecklistRecordDto claimRecord(Long id, boolean editing) {
         User user = userService.authenticate();
         ChecklistRecord record = findRecord(id);
         assertEditable(record, user);
@@ -126,7 +237,8 @@ public class ChecklistRecordService {
             record.setUpdatedAt(Instant.now());
             addAudit(record, user, "CLAIMED", "Responsabilidade pelo checklist assumida.");
         }
-        return mapper.toDto(recordRepository.save(record));
+        ChecklistRecord saved = recordRepository.saveAndFlush(record);
+        return editing ? mapper.toScreenRecordDto(saved, true) : mapper.toDto(saved);
     }
 
     @Transactional
@@ -149,6 +261,15 @@ public class ChecklistRecordService {
         }
         Map<String, ChecklistAnswerDto> previousAnswers = readAnswers(record);
         Map<String, ChecklistAnswerDto> submittedAnswers = nonNull(input.getAnswers(), new HashMap<>());
+        Set<Long> problemIds = new HashSet<>();
+        for (var answer : submittedAnswers.values()) {
+            for (var problem : problems(answer)) {
+                if (problem.getId() == null || problem.getId() <= 0 || !problemIds.add(problem.getId()))
+                    throw new UnprocessableEntityException("Identificador de não conformidade inválido ou repetido.");
+                // Evidence associations are persisted by the upload endpoints.
+                problem.setMedia(List.of());
+            }
+        }
         validateTreatmentIntegrity(previousAnswers, submittedAnswers);
         record.setAnswersJson(mapper.write(submittedAnswers));
         record.setFieldsJson(mapper.write(nonNull(input.getFields(), new HashMap<>())));
@@ -410,9 +531,11 @@ public class ChecklistRecordService {
         flow.setClientName(order.getClient());
         flow.setSalesperson(order.getSalesperson());
         flow.setCommercialItem(formatItem(item));
+        flow.setCommercialItemCode(ErpItemCode.normalize(item.getCode()));
         flow.setUpdatedAt(Instant.now());
         flowRepository.save(flow);
         for (ChecklistRecord record : recordRepository.findByFlowId(flow.getId())) {
+            record.refreshListingTitle();
             addAudit(record, actor, "ORDER_UPDATED", "Pedido alterado de " + previousOrder + " para "
                     + flow.getOrderNumber() + "; cliente alterado de " + previousClient + " para " + flow.getClientName()
                     + "; item alterado de " + previousItem + " para " + flow.getCommercialItem() + ".");
@@ -444,6 +567,7 @@ public class ChecklistRecordService {
         flow.setUpdatedAt(Instant.now());
         flowRepository.save(flow);
         for (ChecklistRecord record : recordRepository.findByFlowId(flow.getId())) {
+            record.refreshListingTitle();
             addAudit(record, actor, "SERIAL_UPDATED", "Número de série alterado de " + previous + " para " + serial + ".");
         }
         return mapper.toDto(flow);
@@ -470,14 +594,12 @@ public class ChecklistRecordService {
     }
 
     private ChecklistFlow resolveManualSuccessorFlow(ChecklistTemplate template, Long predecessorRecordId, User user) {
-        if (template.isAutomatic()) throw new UnprocessableEntityException("Sucessores automáticos não podem ser criados manualmente.");
-        if (predecessorRecordId == null) throw new UnprocessableEntityException("É necessário informar o registro predecessor.");
         ChecklistRecord predecessor = findRecord(predecessorRecordId);
         assertVisible(predecessor, user);
         if (predecessor.getStatus() != ChecklistStatus.FINISHED || hasBlockingPredecessor(predecessor)) {
             throw new UnprocessableEntityException("O predecessor deve estar finalizado e desbloqueado.");
         }
-        if (!Objects.equals(template.getPredecessor().getId(), predecessor.getTemplate().getId())) {
+        if (!Objects.equals(predecessor.getManualSuccessorId(), template.getId())) {
             throw new UnprocessableEntityException("O registro selecionado não é o predecessor deste modelo.");
         }
         if (recordRepository.existsByFlowIdAndTemplateId(predecessor.getFlow().getId(), template.getId())) {
@@ -502,28 +624,32 @@ public class ChecklistRecordService {
     }
 
     private ChecklistRecord createEmptyRecord(ChecklistFlow flow, ChecklistTemplate template, User actor, boolean automatic) {
-        ChecklistTemplateDto snapshotTemplate = snapshot(flow, template.getId()).getTemplate();
+        var step = snapshot(flow, template.getId());
+        ChecklistTemplateDto snapshotTemplate = step.getTemplate();
         Map<String, ChecklistAnswerDto> answers = new LinkedHashMap<>();
         for (ChecklistSectionDto section : snapshotTemplate.getSections()) {
             for (ChecklistQuestionDto question : section.getQuestions()) {
                 ChecklistAnswerDto answer = new ChecklistAnswerDto();
                 for (ChecklistFieldDto field : question.getFields()) {
-                    answer.getFields().put(field.getId(), Objects.requireNonNullElse(field.getDefaultValue(), ""));
+                    answer.getFields().put(field.getId().toString(), Objects.requireNonNullElse(field.getDefaultValue(), ""));
                 }
-                answers.put(question.getId(), answer);
+                answers.put(question.getId().toString(), answer);
             }
         }
         ChecklistRecord record = new ChecklistRecord();
         record.setFlow(flow);
         record.setTemplate(template);
+        record.setListingCategoryId(step.getCategory().getId());
+        record.setListingCategoryName(step.getCategory().getName());
+        record.setListingModelName(snapshotTemplate.getName());
         record.setCreator(actor);
         record.setOwner(automatic ? null : actor);
         record.setStatus(automatic ? ChecklistStatus.IN_PROGRESS : ChecklistStatus.DRAFT);
         record.setAutomatic(automatic);
         record.setAnswersJson(mapper.write(answers));
         Map<String, String> fields = new LinkedHashMap<>();
-        for (ChecklistFieldDto field : snapshot(flow, template.getId()).getCategory().getFields()) {
-            fields.put(field.getId(), Objects.requireNonNullElse(field.getDefaultValue(), ""));
+        for (ChecklistFieldDto field : step.getCategory().getFields()) {
+            fields.put(field.getId().toString(), Objects.requireNonNullElse(field.getDefaultValue(), ""));
         }
         record.setFieldsJson(mapper.write(fields));
         record.setDepartmentsJson("[]");
@@ -557,12 +683,14 @@ public class ChecklistRecordService {
         flow.setClientId(order == null ? trim(input.getClientId()) : order.getCnpj());
         flow.setClientName(order == null ? trim(input.getClient()) : order.getClient());
         flow.setCommercialItem(item == null ? trim(input.getItem()) : formatItem(item));
+        flow.setCommercialItemCode(item == null ? null : ErpItemCode.normalize(item.getCode()));
         flow.setSalesperson(order == null ? trim(input.getSeller()) : order.getSalesperson());
         if (flow.isReadyStock()) {
             flow.setOrderNumber(null);
             flow.setClientId(null);
             flow.setClientName(null);
             flow.setCommercialItem(null);
+            flow.setCommercialItemCode(null);
             flow.setSalesperson(null);
         }
     }
@@ -579,17 +707,17 @@ public class ChecklistRecordService {
         if (snapshot.getCategory().isDepartments() && (departments == null || departments.isEmpty())) {
             throw new UnprocessableEntityException("É necessário informar pelo menos um departamento.");
         }
-        for (ChecklistFieldDto field : snapshot.getCategory().getFields()) requireValue(fields.get(field.getId()), "É necessário preencher o campo da categoria.");
+        for (ChecklistFieldDto field : snapshot.getCategory().getFields()) requireValue(fields.get(field.getId().toString()), "É necessário preencher o campo da categoria.");
         Set<String> items = activeCatalogNames(ChecklistCatalogType.ITEM);
         Set<String> defects = activeCatalogNames(ChecklistCatalogType.DEFECT);
         for (ChecklistSectionDto section : snapshot.getTemplate().getSections()) {
             for (ChecklistQuestionDto question : section.getQuestions()) {
-                ChecklistAnswerDto answer = answers.get(question.getId());
+                ChecklistAnswerDto answer = answers.get(question.getId().toString());
                 if (answer == null || !section.getOptions().contains(answer.getValue())) {
                     throw new UnprocessableEntityException("Todas as perguntas do checklist precisam de uma resposta válida.");
                 }
                 if (!"N/A".equals(answer.getValue())) {
-                    for (ChecklistFieldDto field : question.getFields()) requireValue(answer.getFields().get(field.getId()), "É necessário preencher o campo da pergunta.");
+                    for (ChecklistFieldDto field : question.getFields()) requireValue(answer.getFields().get(field.getId().toString()), "É necessário preencher o campo da pergunta.");
                 }
                 if ("NOK".equals(answer.getValue())) {
                     if (answer.getProblems() == null || answer.getProblems().isEmpty()) {
@@ -604,7 +732,6 @@ public class ChecklistRecordService {
     }
 
     private void validateProblem(ChecklistProblemDto problem, Set<String> items, Set<String> defects) {
-        requireValue(problem.getId(), "É necessário informar o ID do problema.");
         requireValue(problem.getItem(), "É necessário informar o tipo de item do problema.");
         requireValue(problem.getDefect(), "É necessário informar o defeito do problema.");
         requireValue(problem.getDepartment(), "É necessário informar o departamento do problema.");
@@ -626,6 +753,7 @@ public class ChecklistRecordService {
             if (skipped.containsKey(templateId.toString())) continue;
             ChecklistCategory currentCategory = categoryRepository.findById(next.getCategory().getId()).orElseThrow(ResourceNotFoundException::new);
             if (!currentCategory.isActive()) {
+                if (templateId.equals(record.getManualSuccessorId())) record.setManualSuccessorId(null);
                 skipped.put(templateId.toString(), Objects.requireNonNullElse(currentCategory.getDeactivationReason(), "Categoria inativa"));
                 flow.setSkippedJson(mapper.write(skipped));
                 flow.setUpdatedAt(Instant.now());
@@ -638,6 +766,8 @@ public class ChecklistRecordService {
                 ChecklistRecord generated = createEmptyRecord(flow, template, actor, true);
                 recordRepository.save(generated);
                 addAudit(generated, null, "GENERATED", "Gerado automaticamente após a conclusão do predecessor.");
+            } else {
+                record.setManualSuccessorId(templateId);
             }
             return;
         }
@@ -716,12 +846,12 @@ public class ChecklistRecordService {
         return !problems.isEmpty() && problems.stream().allMatch(ChecklistProblemDto::isTreated);
     }
 
-    private ChecklistProblemDto findProblem(Map<String, ChecklistAnswerDto> answers, String problemId) {
+    private ChecklistProblemDto findProblem(Map<String, ChecklistAnswerDto> answers, Long problemId) {
         return answers.values().stream().flatMap(answer -> problems(answer).stream())
                 .filter(problem -> Objects.equals(problem.getId(), problemId)).findFirst().orElseThrow(ResourceNotFoundException::new);
     }
 
-    private ChecklistComment createComment(ChecklistRecord record, User author, String content, String problemId) {
+    private ChecklistComment createComment(ChecklistRecord record, User author, String content, Long problemId) {
         ChecklistComment comment = new ChecklistComment();
         comment.setRecord(record);
         comment.setAuthor(author);
@@ -793,8 +923,12 @@ public class ChecklistRecordService {
     }
 
     private boolean canOperate(ChecklistCategory category, User user) {
+        return canOperate(category.getId(), user);
+    }
+
+    private boolean canOperate(Long categoryId, User user) {
         return isAdministrator(user) || user.hasRole("ROLE_CHECKLIST_OPERATOR")
-                && categoryRepository.findAllowedCategoryIds(user.getId()).contains(category.getId());
+                && categoryRepository.existsByIdAndOperatorsId(categoryId, user.getId());
     }
 
     private void assertAdministrator(User user) {
@@ -837,7 +971,7 @@ public class ChecklistRecordService {
 
     private void validateTreatmentIntegrity(Map<String, ChecklistAnswerDto> previous,
                                             Map<String, ChecklistAnswerDto> submitted) {
-        Map<String, ChecklistProblemDto> existingProblems = new HashMap<>();
+        Map<Long, ChecklistProblemDto> existingProblems = new HashMap<>();
         previous.values().forEach(answer -> problems(answer).forEach(problem -> existingProblems.put(problem.getId(), problem)));
         submitted.values().forEach(answer -> problems(answer).forEach(problem -> {
             ChecklistProblemDto existing = existingProblems.get(problem.getId());

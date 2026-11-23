@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ButtonDirective, CardBodyComponent, CardComponent, ContainerComponent, DropdownComponent, DropdownItemDirective, DropdownItemPlainDirective, DropdownMenuDirective, DropdownToggleDirective } from '@coreui/angular';
-import { SmartPaginationComponent } from '@coreui/angular-pro';
+import { ISorterValue, SmartPaginationComponent } from '@coreui/angular-pro';
 import { ChecklistTableRow } from '../../../interface/checklist.interface';
 import { ChecklistPreviewService } from '../../../services/checklist-preview.service';
 import { BackNavigationService } from '../../../services/back-navigation.service';
@@ -13,8 +13,8 @@ import { ChecklistEquipmentModalComponent } from '../../../../components/modal/c
 import { ChecklistAccessModalComponent } from '../../../../components/modal/checklist/checklist-access-modal/checklist-access-modal.component';
 import { ChecklistCatalogModalComponent } from '../../../../components/modal/checklist/checklist-catalog-modal/checklist-catalog-modal.component';
 import { ChecklistNewRecordModalComponent } from '../../../../components/modal/checklist/checklist-new-record-modal/checklist-new-record-modal.component';
-import { forkJoin, Subject, Subscription, debounceTime } from 'rxjs';
-import { ChecklistRecordCreate, ChecklistService } from '../../../services/checklist.service';
+import { firstValueFrom, Subject, Subscription, debounceTime } from 'rxjs';
+import { ChecklistCategoryTab, ChecklistHeader, ChecklistRecordCreate, ChecklistService } from '../../../services/checklist.service';
 import { ToastrService } from '../../../services/toast.service';
 
 type ChecklistView = 'admin' | 'operator' | 'consultation';
@@ -58,7 +58,13 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   private readonly toaster = inject(ToastrService);
   private readonly api = inject(ChecklistService);
   protected readonly pageRows = signal<ChecklistTableRow[]>([]);
-  protected readonly todoRows = signal<Array<ChecklistTableRow & { order?: string }>>([]);
+  protected readonly todoRows = signal<ChecklistTableRow[]>([]);
+  protected readonly categoryTabs = signal<ChecklistCategoryTab[]>([]);
+  protected readonly headerCount = signal<ChecklistHeader['headerCount'][number] | undefined>(undefined);
+  private readonly headerError = signal(false);
+  private readonly rowsError = signal(false);
+  private readonly countsError = signal(false);
+  private readonly todosError = signal(false);
   protected readonly pages = signal(0);
   protected readonly loadingRows = signal(false);
   protected readonly counts = signal<Record<string, number>>({});
@@ -67,10 +73,14 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   protected readonly todoTotal = signal(0);
   private request?: Subscription;
   private todoRequest?: Subscription;
+  private headerRequest?: Subscription;
+  private countsRequest?: Subscription;
   private readonly searches = new Subject<void>();
   private readonly searchSubscription = this.searches.pipe(debounceTime(300)).subscribe(() => this.refreshRows());
 
   private categoryHistoryRegistered = false;
+  private headerLoaded = false;
+  protected readonly loadingCreation = signal(false);
   protected currentView: ChecklistView = 'consultation';
   protected readonly views: Array<{ value: ChecklistView; label: string }> = [
     { value: 'admin', label: 'Administrador' },
@@ -80,7 +90,7 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   protected categoryId = '';
   protected search = '';
   protected status = '';
-  protected sorter: any = { column: 'updated', state: 'desc' };
+  protected sorter: { column?: string; state?: 'asc' | 'desc' } = { column: 'updated', state: 'desc' };
   protected page = 1;
   protected itemsPerPage = 10;
   protected readonly reloading = signal(false);
@@ -88,40 +98,75 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   public ngOnDestroy(): void {
     this.request?.unsubscribe();
     this.todoRequest?.unsubscribe();
+    this.headerRequest?.unsubscribe();
+    this.countsRequest?.unsubscribe();
     this.searchSubscription.unsubscribe();
     this.searches.complete();
   }
 
   protected refreshRows(): void {
+    if (!this.headerLoaded) return;
     this.request?.unsubscribe();
     this.loadingRows.set(true);
 
-    this.request = forkJoin({
-      rows: this.api.listRecordRows({ page: this.page - 1, size: this.itemsPerPage, categoryId: this.activeCategoryId,
-        search: this.search, status: this.status, sort: `${this.sorter.column || 'updated'},${this.sorter.state || 'desc'}`,
-        consultation: this.currentView === 'consultation' }),
-      counts: this.api.recordCounts(this.currentView === 'consultation'),
-    }).subscribe(
-      {
-        next: result => {
-          this.pageRows.set(result.rows.content);
-          this.pages.set(result.rows.totalPages);
-          this.counts.set(result.counts);
-          this.loadingRows.set(false);
-          this.store.warning.set('');
-
-          if (this.page > Math.max(1, result.rows.totalPages)) {
-            this.page = Math.max(1, result.rows.totalPages);
-            this.refreshRows();
-          }
-        },
-        error: () => {
-          this.loadingRows.set(false);
-          this.pageRows.set([]);
-          this.store.warning.set('Não foi possível carregar os checklists do servidor. Tente novamente.');
+    this.request = this.api.listRecordRows({
+      page: this.page - 1, size: this.itemsPerPage, categoryId: this.activeCategoryId,
+      search: this.search, status: this.status, sort: `${this.sorter.column || 'updated'},${this.sorter.state || 'desc'}`,
+      consultation: this.currentView === 'consultation',
+    }).subscribe({
+      next: result => {
+        this.pageRows.set(result.content);
+        this.pages.set(result.totalPages);
+        this.loadingRows.set(false);
+        this.rowsError.set(false);
+        if (this.page > Math.max(1, result.totalPages)) {
+          this.page = Math.max(1, result.totalPages);
+          this.refreshRows();
         }
-      }
-    );
+      },
+      error: () => {
+        this.loadingRows.set(false);
+        this.pageRows.set([]);
+        this.pages.set(0);
+        this.rowsError.set(true);
+      },
+    });
+  }
+
+  private loadCounts(): void {
+    this.countsRequest?.unsubscribe();
+    this.countsRequest = this.api.recordCounts(this.currentView === 'consultation').subscribe({
+      next: counts => { this.counts.set(counts); this.countsError.set(false); },
+      error: () => { this.counts.set({}); this.countsError.set(true); },
+    });
+  }
+
+  protected loadHeader(refreshRecords = false): void {
+    refreshRecords ||= !this.headerLoaded;
+    this.headerRequest?.unsubscribe();
+    this.reloading.set(true);
+    if (refreshRecords) this.loadingRows.set(true);
+    this.headerRequest = this.api.header().subscribe({
+      next: header => {
+        const previousCategory = this.activeCategoryId;
+        this.categoryTabs.set(header.categories);
+        this.headerLoaded = true;
+        if (this.activeCategoryId !== previousCategory) this.page = 1;
+        this.headerCount.set(header.headerCount[0]);
+        this.headerError.set(false);
+        this.reloading.set(false);
+        if (refreshRecords) this.refreshRows();
+      },
+      error: () => {
+        this.headerError.set(true);
+        this.reloading.set(false);
+        if (refreshRecords) this.loadingRows.set(false);
+      },
+    });
+  }
+
+  protected hasLoadError(): boolean {
+    return this.headerError() || this.countsError() || this.rowsError() || this.todosError();
   }
 
   protected changeSearch(value: string): void {
@@ -132,8 +177,11 @@ export class ChecklistComponent implements OnInit, OnDestroy {
     this.status = value; this.page = 1; this.refreshRows();
   }
 
-  protected changeSort(value: any): void {
-    this.sorter = value; this.page = 1; this.refreshRows();
+  protected changeSort(value: ISorterValue): void {
+    const state = value?.state;
+    this.sorter = { column: value?.column, state: state === 'asc' || state === 'desc' ? state : undefined };
+    this.page = 1;
+    this.refreshRows();
   }
 
   protected changeSize(value: number): void {
@@ -147,54 +195,49 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   protected loadTodos(page = 1): void {
     this.todoPage = page; this.todoRequest?.unsubscribe();
 
+    this.todosError.set(false);
     if (this.currentView !== 'operator') return;
 
     this.todoRequest = this.api.listRecordRows({ page: page - 1, size: 10, actionable: true }).subscribe({
       next: result => { this.todoRows.set(result.content); this.todoPages.set(result.totalPages); this.todoTotal.set(result.totalElements); },
-      error: () => { this.todoRows.set([]); this.store.warning.set('Não foi possível carregar os checklists do servidor. Tente novamente.'); },
+      error: () => { this.todoRows.set([]); this.todosError.set(true); },
     });
   }
 
   protected async openNewRecord(): Promise<void> {
+    if (this.loadingCreation()) return;
+    this.loadingCreation.set(true);
     try {
-      await this.store.load(true); this.newRecordModal.open();
+      const options = await firstValueFrom(this.api.creationOptions());
+      this.newRecordModal?.open(options);
     } catch {
       this.toaster.warning('Não foi possível carregar os dados para criar o checklist.');
-    }
-  }
-
-  protected async reload(): Promise<void> {
-    if (this.reloading()) return;
-
-    this.reloading.set(true);
-
-    try {
-      await this.store.load(true, true);
-      this.refreshRows();
-      this.loadTodos();
-    } catch {
-      /* The alert keeps the server error and allows another attempt. */
     } finally {
-      this.reloading.set(false);
+      this.loadingCreation.set(false);
     }
   }
 
-  public async ngOnInit(): Promise<void> {
-    this.currentView = this.store.admin ? 'admin' : this.store.operator ? 'operator' : 'consultation';
+  protected reload(): void {
+    this.loadHeader(true);
+    this.loadCounts();
+    this.loadTodos();
+  }
 
-    try {
-      await this.store.load(false, true);
-      this.refreshRows();
-      this.loadTodos();
-    } catch {
-      /* The reload action retries configuration and records together. */
-    }
+  protected categoriesChanged(): void {
+    this.loadHeader(true);
+    this.loadCounts();
+  }
+
+  public ngOnInit(): void {
+    this.currentView = this.store.admin ? 'admin' : this.store.operator ? 'operator' : 'consultation';
+    this.reload();
   }
 
   protected setView(view: ChecklistView): void {
     this.currentView = view;
     this.page = 1;
     this.refreshRows();
+    this.loadCounts();
     this.loadTodos();
   }
 
@@ -228,7 +271,7 @@ export class ChecklistComponent implements OnInit, OnDestroy {
   }
 
   protected get activeCategoryId(): string {
-    const categories = this.store.state().categories;
+    const categories = this.categoryTabs();
     return categories.some(category => category.id === this.categoryId) ? this.categoryId : categories[0]?.id ?? '';
   }
 

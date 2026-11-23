@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
-import { NgScrollbar } from 'ngx-scrollbar';
 import { INavData, ShadowOnScrollDirective, SidebarBrandComponent, SidebarComponent, SidebarFooterComponent, SidebarHeaderComponent, SidebarNavComponent, SidebarService, SidebarToggleDirective, SidebarTogglerDirective} from '@coreui/angular';
 import { Me } from '../../interface/user.interface';
 import { UserService } from '../../services/user.service';
@@ -37,7 +36,6 @@ interface BirthdayConfettiStorage {
     SidebarTogglerDirective,
     DefaultFooterComponent,
     DefaultHeaderComponent,
-    NgScrollbar,
     RouterOutlet,
     ShadowOnScrollDirective,
     LayoutSearchModalComponent,

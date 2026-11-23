@@ -54,27 +54,34 @@ export class ChecklistRecordEditComponent implements OnInit, ChecklistPendingCha
   protected memorandosError = false;
   protected readonly memorandoStatuses = { CREATED: 'Rascunho', PUBLISH: 'Publicado', APPROVED: 'Aprovado', CANCELED: 'Cancelado' };
 
+  private blocked = false;
+  protected loadError = false;
+
   async ngOnInit(): Promise<void> {
-    await this.store.load();
     const id = this.route.snapshot.paramMap.get('id') ?? '';
-    const source = this.store.state().records.find((item) => item.id === id);
-
-    if (!source || !this.store.editable(source)) {
-      void this.router.navigate(['/qualidade/checklist', id]);
-      return;
+    this.loadError = false;
+    try {
+      const context = await this.store.loadRecordContext(id, true);
+      if (this.destroyRef.destroyed) return;
+      if (!context.editable) {
+        void this.router.navigate(['/qualidade/checklist', id]);
+        return;
+      }
+      const current = await this.store.claim(context.record);
+      if (this.destroyRef.destroyed) return;
+      this.blocked = context.blocked;
+      this.record = copy(current);
+      this.flow = copy(context.flow);
+      this.loadRelatedMemorandos(true);
+    } catch {
+      this.loadError = true;
+    } finally {
+      if (!this.destroyRef.destroyed) this.cdr.markForCheck();
     }
-
-    await this.store.claim(id);
-    if (this.destroyRef.destroyed) return;
-    const current = this.store.state().records.find((item) => item.id === id)!;
-    this.record = copy(current);
-    this.flow = copy(this.store.flow(current));
-    this.loadRelatedMemorandos(true);
-    this.cdr.detectChanges();
   }
 
   protected loadRelatedMemorandos(showAlert = false): void {
-    if (this.saving) return;
+    if (this.saving || !this.flow.order || !this.flow.item) return;
     const request = ++this.memorandosRequest;
     this.relatedMemorandos = [];
     this.memorandosError = false;
@@ -120,7 +127,7 @@ export class ChecklistRecordEditComponent implements OnInit, ChecklistPendingCha
     this.cdr.markForCheck();
     try {
       let confirmed = false;
-      if (finish) {
+      if (finish && this.flow.order && this.flow.item) {
         ++this.memorandosRequest;
         const memorandos = await firstValueFrom(this.checklistApi.listRelatedMemorandos(this.record.id));
         if (this.destroyRef.destroyed) return;
@@ -136,7 +143,7 @@ export class ChecklistRecordEditComponent implements OnInit, ChecklistPendingCha
           if (!confirmed || this.destroyRef.destroyed) return;
         }
       }
-      const saved = await this.store.saveRecord(this.record, this.flow, finish, confirmed);
+      const saved = await this.store.saveRecord(this.record, this.flow, finish, confirmed, { blocked: this.blocked });
       this.dirty = false;
       this.toaster.success(finish ? 'Checklist concluído.' : 'Alterações salvas.');
       void this.router.navigate(['/qualidade/checklist', saved.id]);

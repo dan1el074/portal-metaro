@@ -52,7 +52,7 @@ export class RawMaterialsService {
     return this.http.get<RawMaterialsTable>(`${this.api}/${id}`);
   }
 
-  saveItem(item: RawMaterialsTable): Observable<RawMaterialsTable> {
+  saveItem(item: RawMaterialsTable, deactivationReason?: string): Observable<RawMaterialsTable> {
     const body = {
       code: item.code,
       name: item.name,
@@ -69,6 +69,7 @@ export class RawMaterialsService {
       weightPerLinearMeter: this.optionalDecimal(item.weightPerLinearMeter),
       categoryId: item.categoryId,
       active: item.active,
+      deactivationReason,
     };
     return item.id
       ? this.http.put<RawMaterialsTable>(`${this.api}/${item.id}`, body)

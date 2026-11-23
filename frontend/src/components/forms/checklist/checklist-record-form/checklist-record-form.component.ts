@@ -54,6 +54,7 @@ export class ChecklistRecordFormComponent implements OnInit {
   ) {}
 
   public ngOnInit(): void {
+    if (!this.snapshot.category.departments) return;
     this.positionService.list().subscribe({
       next: (departments: PositionMin[]) => {
         this.departments = departments;

@@ -13,8 +13,8 @@ import { ChecklistClientHistoryComponent } from '../../../../../../components/of
 import { ChecklistUpdateOrderModalComponent } from '../../../../../../components/modal/checklist/checklist-update-order-modal/checklist-update-order-modal.component';
 import { ChecklistEvidenceComponent } from '../../../../../../components/cards/checklist-evidence/checklist-evidence.component';
 import { ChecklistDelegateModalComponent } from '../../../../../../components/modal/checklist/checklist-delegate-modal/checklist-delegate-modal.component';
-import { ChecklistLinkedStepFlow, ChecklistMemorando, ChecklistService } from '../../../../../services/checklist.service';
-import { isProductionKit } from '../../../../../shared/checklist-rules';
+import { ChecklistLinkedStepFlow, ChecklistMemorando, ChecklistRecordContext, ChecklistService } from '../../../../../services/checklist.service';
+import { isProductionKit, recordTitle } from '../../../../../shared/checklist-rules';
 import { ReportPreviewService } from '../../../../../services/report-preview.service';
 import { firstValueFrom } from 'rxjs';
 import { BackNavigationService } from '../../../../../services/back-navigation.service';
@@ -63,7 +63,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
   private readonly backNavigation = inject(BackNavigationService);
   private recordId = '';
   private loadVersion = 0;
-  private initialLoad?: Promise<void>;
+  protected context!: ChecklistRecordContext;
   protected loading = true;
   protected loadError = '';
   protected deleting = false;
@@ -76,7 +76,6 @@ export class ChecklistRecordDetailComponent implements OnInit {
   protected readonly memorandoStatuses = { CREATED: 'Rascunho', PUBLISH: 'Publicado', APPROVED: 'Aprovado', CANCELED: 'Cancelado' };
 
   ngOnInit(): void {
-    this.initialLoad = this.store.load();
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       this.recordId = params.get('id') ?? '';
       this.commentText = '';
@@ -90,15 +89,17 @@ export class ChecklistRecordDetailComponent implements OnInit {
     this.loadError = '';
     this.cdr.markForCheck();
     try {
-      await (this.initialLoad ??= this.store.load());
-      const record = await this.store.loadRecordContext(id);
-      const linked = await firstValueFrom(this.checklistApi.listLinkedStepFlows(record.flowId));
+      const context = await this.store.loadRecordContext(id);
       if (version !== this.loadVersion || this.destroyRef.destroyed) return;
-      if (!this.store.visible(record)) {
+      if (!this.store.visible(context.record)) {
         void this.router.navigate(['/qualidade/checklist']);
         return;
       }
-      this.record = record;
+      const linked = await firstValueFrom(this.checklistApi.listLinkedStepFlows(context.flow.id)
+        .pipe(takeUntilDestroyed(this.destroyRef)));
+      if (version !== this.loadVersion || this.destroyRef.destroyed) return;
+      this.context = context;
+      this.record = context.record;
       this.linkedStepFlows = linked;
       this.loadRelatedMemorandos();
     } catch {
@@ -112,7 +113,6 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected retryLoad(): void {
-    this.initialLoad = undefined;
     void this.loadContext(this.recordId);
   }
 
@@ -124,8 +124,6 @@ export class ChecklistRecordDetailComponent implements OnInit {
       return;
     }
     this.record = record;
-    this.loadLinkedStepFlows(record.flowId);
-    this.loadRelatedMemorandos();
   }
 
   protected loadRelatedMemorandos(): void {
@@ -134,6 +132,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
     const request = ++this.memorandosRequest;
     this.relatedMemorandos = [];
     this.memorandosError = false;
+    if (!this.flow.order || !this.flow.item) return;
     this.checklistApi.listRelatedMemorandos(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (items) => {
         if (version !== this.loadVersion || request !== this.memorandosRequest) return;
@@ -149,11 +148,15 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected get flow() {
-    return this.store.flow(this.record);
+    return this.context.flow;
   }
 
   protected get snapshot() {
-    return this.store.snapshot(this.record);
+    return this.flow.plan[0];
+  }
+
+  protected get title(): string {
+    return recordTitle(this.record, this.flow);
   }
 
   protected get problems() {
@@ -178,39 +181,12 @@ export class ChecklistRecordDetailComponent implements OnInit {
     );
   }
 
-  private loadLinkedStepFlows(flowId: string): void {
-    this.linkedStepFlows = [];
-    this.checklistApi.listLinkedStepFlows(flowId).subscribe({
-      next: (items) => {
-        if (this.record?.flowId !== flowId) return;
-        this.linkedStepFlows = items;
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        if (this.record?.flowId !== flowId) return;
-        this.linkedStepFlows = [];
-        this.cdr.markForCheck();
-      },
-    });
-  }
-
-  protected get visibleRecords(): Checklist[] {
-    return this.store.state().records.filter((item) => this.store.visible(item));
-  }
-
   protected get previousId(): string | null {
-    const index = this.visibleRecords.findIndex(
-      (item) => item.id === this.record.id,
-    );
-    return index > 0 ? this.visibleRecords[index - 1].id : null;
+    return this.context.previousId;
   }
 
   protected get nextId(): string | null {
-    const index = this.visibleRecords.findIndex(
-      (item) => item.id === this.record.id,
-    );
-
-    return index >= 0 && index < this.visibleRecords.length - 1 ? this.visibleRecords[index + 1].id : null;
+    return this.context.nextId;
   }
 
   protected get statusClass(): string {
@@ -236,19 +212,13 @@ export class ChecklistRecordDetailComponent implements OnInit {
   }
 
   protected get navigationSteps() {
-    return this.flow.plan.map(step => {
-      const record = this.store.state().records.find(item => item.flowId === this.flow.id && item.templateId === step.template.id);
-      const skipped = this.flow.skipped[step.template.id];
-      return {
-        templateId: step.template.id,
-        label: step.category.name,
-        title: step.template.name,
-        recordId: record && this.store.visible(record) ? record.id : '',
-        current: record?.id === this.record.id,
-        status: record?.status ?? (skipped ? 'Etapa pulada' : 'Ainda não gerado'),
-        tone: record ? this.statusTone(record.status) : skipped ? 'justified' : 'draft',
-      };
-    });
+    return this.context.steps.map(step => ({
+      ...step,
+      recordId: step.recordId ?? '',
+      current: step.recordId === this.record.id,
+      status: step.status ?? (step.skipped ? 'Etapa pulada' : 'Ainda não gerado'),
+      tone: step.status ? this.statusTone(step.status) : step.skipped ? 'justified' : 'draft',
+    }));
   }
 
   protected open(id: string): void {
@@ -266,7 +236,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
 
   protected print(): void {
     try {
-      const opened = this.reportPreview.openElement(this.printArea.nativeElement, `Checklist · ${this.store.title(this.record)}`);
+      const opened = this.reportPreview.openElement(this.printArea.nativeElement, `Checklist · ${this.title}`);
       if (!opened) this.toaster.warning('Permita a abertura da aba de visualização no navegador.');
     } catch (error) {
       console.error('Falha ao gerar a prévia do checklist', error);
@@ -287,7 +257,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
 
     try {
       await this.store.treat(this.record.id, problem.id, reason);
-      this.load();
+      await this.loadContext(this.recordId);
       this.toaster.success('Ocorrência tratada.');
       this.cdr.detectChanges();
     } catch (error) {
@@ -352,7 +322,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
 
     try {
       await this.store.reopen(this.record.id, reason);
-      this.load();
+      await this.loadContext(this.recordId);
       this.toaster.success('Checklist liberado para edição.');
       this.cdr.detectChanges();
     } catch (error) {
@@ -378,7 +348,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
 
     try {
       await this.store.updateSerial(this.record.id, serial);
-      this.load();
+      await this.loadContext(this.recordId);
       this.toaster.success('Número de série atualizado em todo o fluxo.');
       this.cdr.detectChanges();
     } catch (error) {
@@ -386,8 +356,8 @@ export class ChecklistRecordDetailComponent implements OnInit {
     }
   }
 
-  protected delegated(): void {
-    this.load();
+  protected async delegated(): Promise<void> {
+    await this.loadContext(this.recordId);
     this.toaster.success('Checklist delegado.');
     this.cdr.detectChanges();
   }
@@ -431,7 +401,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
     if (!reason) return;
 
     await this.store.cancelFlow(this.record.id, reason);
-    this.load();
+    await this.loadContext(this.recordId);
     this.cdr.detectChanges();
   }
 
@@ -449,7 +419,7 @@ export class ChecklistRecordDetailComponent implements OnInit {
 
     try {
       await this.store.skipChecklist(this.record.id, reason);
-      this.load();
+      await this.loadContext(this.recordId);
       this.toaster.success('Checklist pulado com justificativa.');
       this.cdr.detectChanges();
     } catch (error) {
@@ -457,8 +427,8 @@ export class ChecklistRecordDetailComponent implements OnInit {
     }
   }
 
-  protected orderUpdated(): void {
-    this.load();
+  protected async orderUpdated(): Promise<void> {
+    await this.loadContext(this.recordId);
     this.toaster.success('Pedido, cliente e item atualizados em todo o fluxo.');
     this.cdr.detectChanges();
   }

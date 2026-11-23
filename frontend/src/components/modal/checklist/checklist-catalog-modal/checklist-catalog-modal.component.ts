@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonCloseDirective, ButtonDirective, FormCheckInputDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective } from '@coreui/angular';
 import { NokFormField, NokFieldType } from '../../../../app/interface/checklist.interface';
@@ -9,19 +9,30 @@ import { ModalBackNavigationDirective } from '../../../../app/directive/modal-ba
 import { ChecklistIconComponent } from '../../../icons/checklist-icon/checklist-icon.component';
 import { ChecklistActionModalComponent } from '../checklist-action-modal/checklist-action-modal.component';
 import { checklistIntegrationLabel } from '../../../../app/shared/checklist-rules';
-import { ChecklistDepartment, ChecklistService } from '../../../../app/services/checklist.service';
-import { Observable } from 'rxjs';
+import { ChecklistCatalogEntry, ChecklistCategoryHistory, ChecklistCategorySummary, ChecklistDepartment, ChecklistService } from '../../../../app/services/checklist.service';
+import { firstValueFrom, forkJoin, Observable, Subscription } from 'rxjs';
+
+type CatalogTab = 'items' | 'defects';
+type SettingsTab = CatalogTab | 'form' | 'history' | 'requirements' | 'departments';
 
 @Component({ selector: 'app-checklist-catalog-modal', imports: [FormsModule, ButtonCloseDirective, ButtonDirective, FormCheckInputDirective, FormControlDirective, FormSelectDirective, ModalBodyComponent, ModalComponent, ModalFooterComponent, ModalHeaderComponent, ModalTitleDirective, TooltipDirective, ModalBackNavigationDirective, ChecklistIconComponent, ChecklistActionModalComponent], templateUrl: './checklist-catalog-modal.component.html', styleUrl: './checklist-catalog-modal.component.scss', changeDetection: ChangeDetectionStrategy.OnPush })
-export class ChecklistCatalogModalComponent {
+export class ChecklistCatalogModalComponent implements OnDestroy {
   @ViewChild(ChecklistActionModalComponent) private actionModal!: ChecklistActionModalComponent;
-  protected visible = false; protected tab: 'items' | 'defects' | 'form' | 'history' | 'requirements' | 'departments' = 'items';
+  protected visible = false;
+  protected tab: SettingsTab = 'items';
   protected value = '';
   protected readonly integrationLabel = checklistIntegrationLabel;
   protected departments: ChecklistDepartment[] = [];
-  protected savingDepartments = false;
-  protected loadingDepartments = false;
-  protected departmentError = '';
+  protected categories: ChecklistCategorySummary[] = [];
+  protected historyCategories: ChecklistCategoryHistory[] = [];
+  protected busy = false;
+  protected loading = false;
+  protected loadError = false;
+  protected catalog: Partial<Record<CatalogTab, ChecklistCatalogEntry[]>> = {};
+  private readonly loadedTabs = new Set<SettingsTab>();
+  private request?: Subscription;
+
+  protected get historyLoaded(): boolean { return this.loadedTabs.has('history'); }
   protected formFields: NokFormField[] = [];
   protected historySettings: Record<string, boolean> = {};
   protected requirements: Record<string, string> = {};
@@ -52,157 +63,165 @@ export class ChecklistCatalogModalComponent {
     private cdr: ChangeDetectorRef
   ) {}
 
+  ngOnDestroy(): void { this.request?.unsubscribe(); }
+
   public open(): void {
     this.formFields = copy(this.store.state().nokFields);
-
-    this.historySettings = Object.fromEntries(
-      this.store.state().categories.map(category => [category.id, category.clientNokHistory]),
-    );
-
-    this.departmentError = '';
-    this.loadingDepartments = true;
-    this.api.listDepartments().subscribe({
-      next: values => {
-        this.departments = values;
-        this.loadingDepartments = false;
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.departments = [];
-        this.loadingDepartments = false;
-        this.departmentError = 'Não foi possível carregar os setores. Reabra as configurações para tentar novamente.';
-        this.cdr.markForCheck();
-      }
-    });
-
+    this.loadedTabs.clear();
+    this.catalog = {};
     this.visible = true;
-
-    if (this.store.admin) this.loadRequirements();
-
-    this.cdr.detectChanges();
+    this.changeTab('items');
   }
 
-  protected close(): void {
-    this.visible = false;
-    this.cdr.detectChanges();
+  protected close(): void { this.onVisibleChange(false); }
+
+  protected onVisibleChange(visible: boolean): void {
+    this.visible = visible;
+    if (!visible) this.request?.unsubscribe();
+    this.cdr.markForCheck();
   }
 
-  protected changeTab(tab: 'items' | 'defects' | 'history' | 'requirements' | 'departments'): void {
-    this.tab = tab; this.value = '';
+  protected changeTab(tab: SettingsTab): void {
+    if (this.busy) return;
+    this.tab = tab;
+    this.value = '';
+    this.loadTab();
   }
 
-  protected saveDepartments(): void {
-    if (this.loadingDepartments || this.savingDepartments || this.departmentError) return;
+  protected loadTab(): void {
+    this.request?.unsubscribe();
+    this.loadError = false;
+    this.loading = false;
+    const tab = this.tab;
+    if (this.loadedTabs.has(tab)) { this.cdr.markForCheck(); return; }
 
-    this.savingDepartments = true;
-    this.api.saveDepartments(this.departments.filter(item => item.enabled).map(item => item.id)).subscribe({
-      next: values => {
-        this.departments = values;
-        this.savingDepartments = false;
-        this.toaster.success('Setores responsáveis atualizados.');
+    switch (tab) {
+      case 'items':
+      case 'defects':
+        this.load(this.api.listCatalog(tab === 'items' ? 'ITEM' : 'DEFECT'),
+          values => this.catalog[tab] = values.filter(entry => entry.active));
+        break;
+      case 'departments':
+        this.load(this.api.listDepartments(), values => this.departments = values);
+        break;
+      case 'requirements':
+        this.load(forkJoin({
+          requirements: this.api.listStepRequirements(),
+          categories: this.api.listCategorySummaries(),
+        }), ({ categories, requirements }) => {
+          this.categories = categories;
+          this.requirements = Object.fromEntries(requirements.map(value => [value.stepType, String(value.categoryId)]));
+        });
+        break;
+      case 'history':
+        this.load(this.api.listCategoryHistorySettings(), values => {
+          this.historyCategories = values;
+          this.historySettings = Object.fromEntries(values.map(category => [category.id, category.clientNokHistory]));
+        });
+        break;
+    }
+  }
+
+  private load<T>(request: Observable<T>, apply: (value: T) => void): void {
+    const tab = this.tab;
+    this.loading = true;
+    this.request = request.subscribe({
+      next: value => {
+        apply(value);
+        this.loadedTabs.add(tab);
+        this.loading = false;
         this.cdr.markForCheck();
       },
       error: () => {
-        this.savingDepartments = false;
-        this.toaster.warning('Não foi possível salvar os setores responsáveis.');
+        this.loading = false;
+        this.loadError = true;
         this.cdr.markForCheck();
       },
     });
+    this.cdr.markForCheck();
   }
 
-  private loadRequirements(): void {
-    this.api.listStepRequirements().subscribe({
-      next: values => {
-        this.requirements = Object.fromEntries(values.map(value => [value.stepType, String(value.categoryId)]));
-        this.cdr.detectChanges();
-      }
-    });
+  protected async saveDepartments(): Promise<void> {
+    await this.save(this.api.saveDepartments(this.departments.filter(item => item.enabled).map(item => item.id)),
+      'Não foi possível salvar os setores responsáveis.', values => {
+        this.departments = values;
+        this.toaster.success('Setores responsáveis atualizados.');
+      });
   }
 
-
-  protected saveRequirement(stepType: string): void {
+  protected async saveRequirement(stepType: string): Promise<void> {
     const categoryId = this.requirements[stepType];
     const request: Observable<unknown> = categoryId
       ? this.api.saveStepRequirement(stepType, categoryId)
       : this.api.deleteStepRequirement(stepType);
-
-    request.subscribe({
-      next: () => {
-        this.toaster.success('Requisito do Fluxo de etapas atualizado.');
-        this.loadRequirements();
-      },
-      error: () => this.toaster.warning('Não foi possível atualizar o requisito.')
+    await this.save(request, 'Não foi possível atualizar o requisito.', () => {
+      this.toaster.success('Requisito do Fluxo de etapas atualizado.');
     });
   }
 
-  protected add(): void {
-    if (this.tab !== 'items' && this.tab !== 'defects' || (this.tab === 'defects' && !this.store.admin)) return;
-
-    const tab: 'items' | 'defects' = this.tab;
-    const raw = this.value.trim();
-
-    if (!raw) return;
-
-    const value = tab === 'items'
-      ? raw.charAt(0).toLocaleUpperCase() + raw.slice(1).toLocaleLowerCase()
-      : raw; const data = copy(this.store.state());
-
-    if (data[tab].some(item => item.toLocaleLowerCase() === value.toLocaleLowerCase())) {
-      this.toaster.warning('Opção já cadastrada.');
-      return;
-    }
-
-    data[tab].push(value);
-    this.store.commit(data);
-    this.value = '';
+  protected async add(): Promise<void> {
+    const tab = this.tab;
+    if ((tab !== 'items' && tab !== 'defects') || (tab === 'defects' && !this.store.admin)) return;
+    const name = this.value.trim();
+    if (!name || this.duplicate(tab, name)) return;
+    await this.save(this.api.createCatalog(tab === 'items' ? 'ITEM' : 'DEFECT', name),
+      'Não foi possível adicionar a opção.', entry => {
+        this.setEntries(tab, [...(this.catalog[tab] ?? []), entry]);
+        this.value = '';
+      });
   }
 
-
-  protected async edit(current: string): Promise<void> {
-    if (this.tab !== 'items' && this.tab !== 'defects') return;
-
-    const tab: 'items' | 'defects' = this.tab;
-    const raw = await this.openAction({
+  protected async edit(entry: ChecklistCatalogEntry): Promise<void> {
+    const tab = this.tab;
+    if (this.busy || (tab !== 'items' && tab !== 'defects')) return;
+    const name = await this.openAction({
       title: 'Editar opção',
       message: 'Problemas já registrados preservarão o texto original.',
-      inputLabel: 'Descrição',
-      inputValue: current,
-      required: true,
-      confirmLabel: 'Salvar'
+      inputLabel: 'Descrição', inputValue: entry.name, required: true, confirmLabel: 'Salvar',
     });
+    if (!name || name === entry.name || this.duplicate(tab, name, entry.id)) return;
 
-    if (!raw || raw === current) return;
-
-    const value = tab === 'items'
-      ? raw.charAt(0).toLocaleUpperCase() + raw.slice(1).toLocaleLowerCase()
-      : raw; const data = copy(this.store.state());
-
-    if (data[tab].some(item => item !== current && item.toLocaleLowerCase() === value.toLocaleLowerCase())) {
-      this.toaster.warning('Opção já cadastrada.');
-      return;
-    }
-
-    data[tab] = data[tab].map(item => item === current ? value : item);
-    this.store.commit(data);
-    this.cdr.detectChanges();
+    await this.save(this.api.updateCatalog({ ...entry, name }), 'Não foi possível editar a opção.', saved => {
+      this.setEntries(tab, (this.catalog[tab] ?? []).map(item => item.id === saved.id ? saved : item));
+    });
   }
 
-  protected async remove(value: string): Promise<void> {
-    if (this.tab !== 'items' && this.tab !== 'defects') return;
-    const tab: 'items' | 'defects' = this.tab;
+  protected async remove(entry: ChecklistCatalogEntry): Promise<void> {
+    const tab = this.tab;
+    if (this.busy || (tab !== 'items' && tab !== 'defects')) return;
     const confirmed = await this.openAction({
       title: 'Remover opção',
       message: 'A opção deixará de aparecer nas novas seleções. Respostas existentes serão preservadas.',
-      confirmLabel: 'Remover',
-      danger: true
+      confirmLabel: 'Remover', danger: true,
     });
-
     if (!confirmed) return;
 
-    const data = copy(this.store.state());
-    data[tab] = data[tab].filter(item => item !== value);
-    this.store.commit(data);
-    this.cdr.detectChanges();
+    await this.save(this.api.updateCatalog({ ...entry, active: false }), 'Não foi possível remover a opção.', () => {
+      this.setEntries(tab, (this.catalog[tab] ?? []).filter(item => item.id !== entry.id));
+    });
+  }
+
+  private duplicate(tab: CatalogTab, name: string, exceptId?: number): boolean {
+    const duplicate = this.catalog[tab]?.some(item => item.id !== exceptId && item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (duplicate) this.toaster.warning('Opção já cadastrada.');
+    return !!duplicate;
+  }
+
+  private setEntries(tab: CatalogTab, values: ChecklistCatalogEntry[]): void {
+    this.catalog[tab] = values.sort((first, second) => first.name.localeCompare(second.name, 'pt-BR'));
+  }
+
+  private async save<T>(request: Observable<T>, errorMessage: string, apply: (value: T) => void): Promise<void> {
+    if (this.busy || this.loading || this.loadError) return;
+    this.busy = true;
+    try {
+      apply(await firstValueFrom(request));
+    } catch (error) {
+      this.toaster.warning((error as { error?: { error?: string } }).error?.error || errorMessage);
+    } finally {
+      this.busy = false;
+      this.cdr.markForCheck();
+    }
   }
 
   protected fieldTypeLabel(type: NokFieldType): string {
@@ -258,22 +277,14 @@ export class ChecklistCatalogModalComponent {
     this.cdr.detectChanges();
   }
 
-  protected saveHistory(): void {
-    this.store.requireAdmin();
-    const data = copy(this.store.state());
-
-    data.categories.forEach(category => {
-      category.clientNokHistory = this.historyEnabled(category.id);
+  protected async saveHistory(): Promise<void> {
+    const changed = this.historyCategories.filter(category => category.clientNokHistory !== this.historyEnabled(category.id));
+    if (!changed.length) return;
+    const settings = Object.fromEntries(changed.map(category => [category.id, this.historyEnabled(category.id)]));
+    await this.save(this.api.updateCategoryHistory(settings), 'Não foi possível salvar o histórico por categoria.', () => {
+      changed.forEach(category => category.clientNokHistory = this.historyEnabled(category.id));
+      this.toaster.success('Histórico por categoria atualizado.');
     });
-
-    this.store.commit(data);
-
-    this.historySettings = Object.fromEntries(
-      data.categories.map(category => [category.id, category.clientNokHistory]),
-    );
-
-    this.toaster.success('Histórico por categoria atualizado.');
-    this.cdr.detectChanges();
   }
 
   private async openAction(options: Parameters<ChecklistActionModalComponent['open']>[0]): Promise<string | null> {

@@ -1,5 +1,6 @@
 package br.com.metaro.portal.modules.quality.checklist.controller;
 
+import org.springframework.data.domain.Slice;
 import br.com.metaro.portal.modules.quality.checklist.dto.*;
 import br.com.metaro.portal.modules.quality.checklist.service.ChecklistRecordService;
 import br.com.metaro.portal.modules.quality.checklist.service.ChecklistSerialPlateService;
@@ -21,6 +22,31 @@ public class ChecklistRecordController {
     private final ChecklistRecordService service;
     private final ChecklistSerialPlateService serialPlateService;
     private final br.com.metaro.portal.modules.quality.checklist.service.ChecklistListingService listing;
+
+    @PostMapping("/id-block")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
+    public String reserveNestedIds() {
+        return service.reserveNestedIds().toString();
+    }
+
+    @GetMapping("/new-context")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
+    public ChecklistFlowDto newContext(@RequestParam Long templateId, @RequestParam(required = false) Long previous) {
+        return service.newContext(templateId, previous);
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
+    @GetMapping("/creation-options")
+    public List<ChecklistCreationOptionDto> creationOptions() {
+        return service.creationOptions();
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
+    @GetMapping("/eligible-predecessors")
+    public Slice<ChecklistPredecessorDto> eligiblePredecessors(
+            @RequestParam Long templateId, @RequestParam(defaultValue = "0") int page) {
+        return service.eligiblePredecessors(templateId, page);
+    }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
     @GetMapping("/table")
@@ -65,10 +91,16 @@ public class ChecklistRecordController {
     }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
+    @GetMapping("/{id}/context")
+    public ResponseEntity<ChecklistRecordContextDto> getContext(@PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean editing) {
+        return ResponseEntity.ok(service.getContext(id, editing));
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
     @GetMapping("/{id}/flow")
     public ResponseEntity<ChecklistFlowDto> getFlow(@PathVariable Long id) {
-        ChecklistRecordDto record = service.getRecord(id);
-        return ResponseEntity.ok(service.getFlow(record.getFlowId()));
+        return ResponseEntity.ok(service.getFlowForRecord(id));
     }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR','ROLE_CHECKLIST_CONSULTATION')")
@@ -105,8 +137,9 @@ public class ChecklistRecordController {
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")
     @PutMapping("/{id}/claim")
-    public ResponseEntity<ChecklistRecordDto> claimRecord(@PathVariable Long id) {
-        return ResponseEntity.ok(service.claimRecord(id));
+    public ResponseEntity<ChecklistRecordDto> claimRecord(@PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean editing) {
+        return ResponseEntity.ok(service.claimRecord(id, editing));
     }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_CHECKLIST_ADMIN','ROLE_CHECKLIST_OPERATOR')")

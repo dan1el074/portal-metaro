@@ -36,6 +36,10 @@ public class ChecklistRecord {
     private long lockVersion;
     @Column(columnDefinition = "TEXT")
     private String listingTitle;
+    private Long listingCategoryId;
+    private String listingCategoryName;
+    private String listingModelName;
+    private Long manualSuccessorId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "flow_id")

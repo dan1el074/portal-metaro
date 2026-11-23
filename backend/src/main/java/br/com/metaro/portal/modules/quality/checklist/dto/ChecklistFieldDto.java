@@ -11,7 +11,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 public class ChecklistFieldDto {
-    private String id;
+    private Long id;
     private String label;
     private String type;
     private List<String> options = new ArrayList<>();
