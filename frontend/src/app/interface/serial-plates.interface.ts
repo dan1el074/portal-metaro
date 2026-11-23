@@ -1,5 +1,5 @@
-// Terceiro is read-only legacy data; new selections use STATUSES.
-export type PlateStatus = 'Criado' | 'Programado' | 'Recebido' | 'Devolvido' | 'Finalizado' | 'Terceiro';
+// Terceiro and Migrado are read-only legacy data; new selections use STATUSES.
+export type PlateStatus = 'Criado' | 'Programado' | 'Recebido' | 'Devolvido' | 'Finalizado' | 'Terceiro' | 'Migrado';
 export type PlatePatch = Partial<Omit<SerialPlate, 'serial' | 'history' | 'updated' | 'version'>>;
 export type SerialPlateDialog = '' | 'new' | 'edit' | 'batch' | 'settings' | 'report';
 
@@ -18,6 +18,7 @@ export interface SerialPlateRelocation {
 export interface SerialPlate {
   serial: string;
   version: number;
+  lot: string;
   of: string;
   order: string;
   orderItemCode: string;

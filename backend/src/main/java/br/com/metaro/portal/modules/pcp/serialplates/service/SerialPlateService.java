@@ -429,14 +429,20 @@ public class SerialPlateService {
     }
 
     private void validate(SerialPlate plate, String previousStatus, boolean allowMissingOf) {
+        String lot = text(plate.getLot());
+        if (!lot.matches("[0-9]{0,80}")) throw invalid("Lote deve conter somente números (até 80 dígitos).");
+        lot = lot.replaceFirst("^0+(?!$)", "");
+        plate.setLot(lot.length() == 1 ? "0" + lot : lot);
         plate.setOf(text(plate.getOf()));
         if ((!allowMissingOf && plate.getOf().isBlank()) || plate.getOf().length() > 80) throw invalid("Informe a ordem de fabricação (até 80 caracteres).");
         if (!plate.getOrder().matches("[0-9]{0,15}")) throw invalid("Número do pedido inválido.");
-        if (!plate.getManufactured().matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) throw invalid("Informe mês e ano de fabricação válidos.");
+        boolean migrated = "Migrado".equals(plate.getStatus());
+        if (!(migrated && text(plate.getManufactured()).isEmpty()) && !plate.getManufactured().matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) throw invalid("Informe mês e ano de fabricação válidos.");
         // Retired status may be preserved on existing records, but never assigned again.
-        boolean preservingLegacyStatus = "Terceiro".equals(previousStatus) && "Terceiro".equals(plate.getStatus());
+        boolean preservingLegacyStatus = Set.of("Terceiro", "Migrado").contains(plate.getStatus())
+                && plate.getStatus().equals(previousStatus);
         if (!STATUSES.contains(plate.getStatus()) && !preservingLegacyStatus) throw invalid("Status inválido.");
-        if (!plate.getStatus().equals("Criado") && text(plate.getProvider()).isEmpty()) throw invalid("Informe o prestador de serviço para esse status.");
+        if (!migrated && !plate.getStatus().equals("Criado") && text(plate.getProvider()).isEmpty()) throw invalid("Informe o prestador de serviço para esse status.");
 
         for (BigDecimal value : Arrays.asList(plate.getCapacity(), plate.getWeight())) {
             if (value != null && (value.signum() <= 0 || value.scale() > 6 || value.precision() - value.scale() > 12)) throw invalid("Capacidade e peso devem ser positivos, com até seis casas decimais.");
@@ -538,7 +544,7 @@ public class SerialPlateService {
     private static Map<String, String> labels() {
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put("of", "Ordem de fabricação"); labels.put("order", "Nº Pedido"); labels.put("orderItemCode", "Item do pedido");
-        labels.put("readyStock", "Pronta Entrega"); labels.put("client", "Cliente"); labels.put("description", "Modelo");
+        labels.put("lot", "Lote"); labels.put("readyStock", "Pronta Entrega"); labels.put("client", "Cliente"); labels.put("description", "Modelo");
         labels.put("capacity", "Capacidade"); labels.put("voltage", "Voltagem"); labels.put("weight", "Peso");
         labels.put("provider", "Prestador de serviço"); labels.put("status", "Status"); labels.put("notes", "Observações");
         labels.put("manufactured", "Data de fabricação");

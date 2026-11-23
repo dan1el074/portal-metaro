@@ -12,6 +12,7 @@ public class SerialPlatePatchDto {
     private String orderItemCode;
     private Boolean readyStock;
     private String client;
+    private String lot;
     private String description;
     private BigDecimal capacity;
     private String voltage;

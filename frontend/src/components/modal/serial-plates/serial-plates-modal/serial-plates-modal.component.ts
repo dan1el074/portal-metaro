@@ -85,6 +85,11 @@ export class SerialPlatesModalComponent {
     return value.replace(/^0+(?=\d)/, '');
   }
 
+  public normalizeLot(): void {
+    if (this.edit && /^[0-9]+$/.test(this.edit.lot?.trim()))
+      this.edit.lot = this.edit.lot.trim().replace(/^0+(?=\d)/, '').padStart(2, '0');
+  }
+
   public batchIsReadyStock(): boolean {
     return this.batchFields.readyStock && this.batch.readyStock === true;
   }
