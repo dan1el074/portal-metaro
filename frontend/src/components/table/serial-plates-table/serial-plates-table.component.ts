@@ -90,6 +90,7 @@ export class SerialPlatesTableComponent implements OnChanges {
   }
 
   public statusClass(status: string): string {
+    if (status === 'Migrado') return 'migrated';
     return ['draft', 'in-progress', 'received', 'pending', 'complete'][STATUSES.indexOf(status as typeof STATUSES[number])] || 'draft';
   }
 }
