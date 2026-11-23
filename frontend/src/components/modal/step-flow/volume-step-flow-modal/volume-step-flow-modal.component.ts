@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, SimpleChanges, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import {
@@ -54,8 +54,8 @@ export class VolumeStepFlowModalComponent implements OnChanges {
 
   constructor(private formBuilder: FormBuilder) {}
 
-  public ngOnChanges(): void {
-    if (!this.visible) return;
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (!this.visible || (!changes['volume'] && !changes['visible'])) return;
 
     this.form.reset({
       quantity: this.volume?.quantity ?? 1,

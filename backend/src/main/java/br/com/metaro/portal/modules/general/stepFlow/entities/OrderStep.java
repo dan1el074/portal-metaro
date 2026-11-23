@@ -27,6 +27,8 @@ public class OrderStep {
     private StepType step;
     @Enumerated(EnumType.STRING)
     private StepStatus status;
+    @Column(nullable = false)
+    private boolean checklistPending;
 
     // auditoria
     @Column(columnDefinition = "TIMESTAMP WITHOUT TIME ZONE")

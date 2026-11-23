@@ -255,7 +255,7 @@
                     <div class="status-cell">
                       <div
                         class="badge"
-                        [class.late]="item.status == 'Atrasado' || item.status == 'Cancelado'"
+                        [class.pending]="item.status === 'Pendente'" [class.late]="item.status == 'Atrasado' || item.status == 'Cancelado'"
                         [class.in-progress]="item.status == 'Andamento'"
                         [class.complete]="item.status == 'Concluído'"
                       >
@@ -293,7 +293,7 @@
         (nextStepTask)="onNextStep($event)"
         (reloadOrders)="reloadOrders()"
       ></app-step-flow-input-offcanvas>
-      <app-new-step-flow-modal [visible]="showNewModal" (closeModal)="toggleNewModal(false)" (createNewOrder)="createNewOrder($event)"></app-new-step-flow-modal>
+      <app-new-step-flow-modal [visible]="showNewModal" [isAdmin]="isAdmin" (closeModal)="toggleNewModal(false)" (createNewOrder)="createNewOrder($event)" (createLegacyOrder)="createLegacyOrder($event)"></app-new-step-flow-modal>
     }
   }
 
@@ -329,5 +329,5 @@
     </c-card-body>
   </c-card>
 
-  <app-step-flow-offcanvas #stepFlowOffcanvas [isAdmin]="isAdmin" [showMoney]="showMoney"></app-step-flow-offcanvas>
+  <app-step-flow-offcanvas #stepFlowOffcanvas [isAdmin]="isAdmin" [showMoney]="showMoney" [steps]="steps" (reloadOrders)="reloadOrders()"></app-step-flow-offcanvas>
 </c-container>

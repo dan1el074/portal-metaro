@@ -50,4 +50,22 @@ describe('DefaultHeaderComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('shows the complete checklist model hierarchy', () => {
+    (component as any).updateChecklistBreadcrumbs('/qualidade/checklist/models/new');
+    expect((component as any).checklistBreadcrumbs().map((item: { label: string }) => item.label))
+      .toEqual(['Home', 'Checklist', 'Modelos', 'Novo modelo']);
+  });
+
+  it('shows the complete checklist editing hierarchy', () => {
+    (component as any).updateChecklistBreadcrumbs('/qualidade/checklist/registro-1/edit');
+    expect((component as any).checklistBreadcrumbs().map((item: { label: string }) => item.label))
+      .toEqual(['Home', 'Checklist', 'Inspeção', 'Editar checklist']);
+  });
+
+  it('shows the complete memorando visualization hierarchy', () => {
+    (component as any).updateChecklistBreadcrumbs('/general/memorando/1');
+    expect((component as any).checklistBreadcrumbs().map((item: { label: string }) => item.label))
+      .toEqual(['Home', 'Geral', 'Memorando', 'Visualização']);
+  });
 });

@@ -74,6 +74,7 @@ public class StepFlowVideoService {
         if (
             !me.getPosition().getName().equals("Montagem Final")
             && !me.getPosition().getName().equals("Almoxarifado")
+            && !me.getPosition().getName().equals("Qualidade")
             && me.getAuthorities().stream().noneMatch(x ->
                     x.getAuthority().equals("ROLE_ADMIN"))
         ) {

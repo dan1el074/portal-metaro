@@ -1,0 +1,90 @@
+<c-modal
+  modalBackNavigation
+  [visible]="visible"
+  (visibleChange)="visible = $event"
+  alignment="center"
+  backdrop="static"
+  size="xl"
+>
+  <c-modal-header
+    ><h5 cModalTitle>Controle de acesso</h5>
+    <button
+      cButtonClose
+      type="button"
+      aria-label="Fechar"
+      cTooltip="Fechar"
+      cTooltipPlacement="bottom"
+      [disabled]="saving"
+      (click)="close()"
+    ></button
+  ></c-modal-header>
+  <c-modal-body
+    ><p class="description">
+      Defina as categorias em que cada usuário com perfil Operador poderá
+      iniciar e preencher checklists.
+    </p>
+    @if (loading) {
+      <p class="state">Carregando operadores...</p>
+    }
+    @if (error) {
+      <div class="warning" role="alert">{{ error }}</div>
+    }
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Operador</th>
+            @for (category of categories; track category.id) {
+              <th>{{ category.name }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (operator of operators; track operator.id) {
+            <tr>
+              <td class="user-id">#{{ operator.id }}</td>
+              <td>
+                <strong>{{ operator.name }}</strong>
+                @if (!operator.activated) {
+                  <small>Desativado</small>
+                }
+              </td>
+              @for (category of categories; track category.id) {
+                <td class="permission">
+                  <input
+                    type="checkbox"
+                    [checked]="isAllowed(category, operator.id)"
+                    [disabled]="!operator.activated || saving"
+                    [attr.aria-label]="operator.name + ' / ' + category.name"
+                    (change)="toggle(category, operator.id, $event)"
+                  />
+                </td>
+              }
+            </tr>
+          } @empty {
+            @if (!loading) {
+              <tr>
+                <td
+                  [attr.colspan]="categories.length + 2"
+                  class="state"
+                >
+                  Nenhum operador disponível.
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    <small class="local-note">Clique em Salvar para aplicar as alterações de acesso.</small>
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton type="button" color="secondary" variant="outline" [disabled]="saving" (click)="close()">
+      Fechar
+    </button>
+    <button cButton type="button" color="primary" [disabled]="loading || saving || !changes.size" (click)="save()">
+      {{ saving ? 'Salvando...' : 'Salvar' }}
+    </button>
+  </c-modal-footer>
+</c-modal>

@@ -17,6 +17,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from Order o where o.id = :id")
+    Optional<Order> findLockedById(Long id);
+
     @Query("""
         SELECT
             COUNT(o) AS totalCount,
@@ -59,6 +63,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         WHERE o.currentStep = :step
             AND s.step = :step
             AND s.status = :status
+            AND s.checklistPending = false
             AND o.status <> :orderStatus
         ORDER BY o.id DESC
     """)
@@ -97,6 +102,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             OR LOWER(o.currentStep) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(
                 CASE
+                    WHEN o.status = 'IN_PROGRESS' AND o.checklistIntegration = true AND EXISTS (SELECT pending.id FROM OrderStep pending WHERE pending.order = o AND pending.step = o.currentStep AND pending.checklistPending = true) THEN 'Pendente'
                     WHEN o.status = 'LATE'
                         OR (o.status = 'IN_PROGRESS' AND o.dueDate < CURRENT_DATE) THEN 'LATE'
                     ELSE CAST(o.status AS string)
@@ -114,6 +120,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             OR LOWER(o.currentStep) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(
                 CASE
+                    WHEN o.status = 'IN_PROGRESS' AND o.checklistIntegration = true AND EXISTS (SELECT pending.id FROM OrderStep pending WHERE pending.order = o AND pending.step = o.currentStep AND pending.checklistPending = true) THEN 'Pendente'
                     WHEN o.status = 'LATE'
                         OR (o.status = 'IN_PROGRESS' AND o.dueDate < CURRENT_DATE) THEN 'LATE'
                     ELSE CAST(o.status AS string)
@@ -122,6 +129,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             OR CAST(o.number AS string) LIKE CONCAT('%', :search, '%')
         ORDER BY (
             CASE
+                WHEN o.status = 'IN_PROGRESS' AND o.checklistIntegration = true AND EXISTS (SELECT pending.id FROM OrderStep pending WHERE pending.order = o AND pending.step = o.currentStep AND pending.checklistPending = true) THEN -1
                 WHEN o.status = 'LATE'
                     OR (o.status = 'IN_PROGRESS' AND o.dueDate < CURRENT_DATE) THEN 0
                 WHEN o.status = 'IN_PROGRESS' THEN 1
@@ -146,6 +154,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 LOWER(o.client) LIKE LOWER(CONCAT('%', :search, '%'))
                 OR LOWER(
                     CASE
+                        WHEN o.status = 'IN_PROGRESS' AND o.checklistIntegration = true AND EXISTS (SELECT pending.id FROM OrderStep pending WHERE pending.order = o AND pending.step = o.currentStep AND pending.checklistPending = true) THEN 'Pendente'
                         WHEN o.status = 'LATE'
                             OR (o.status = 'IN_PROGRESS' AND o.dueDate < CURRENT_DATE) THEN 'LATE'
                         ELSE CAST(o.status AS string)
@@ -166,6 +175,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 LOWER(o.client) LIKE LOWER(CONCAT('%', :search, '%'))
                 OR LOWER(
                     CASE
+                        WHEN o.status = 'IN_PROGRESS' AND o.checklistIntegration = true AND EXISTS (SELECT pending.id FROM OrderStep pending WHERE pending.order = o AND pending.step = o.currentStep AND pending.checklistPending = true) THEN 'Pendente'
                         WHEN o.status = 'LATE'
                             OR (o.status = 'IN_PROGRESS' AND o.dueDate < CURRENT_DATE) THEN 'LATE'
                         ELSE CAST(o.status AS string)
@@ -175,6 +185,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             )
         ORDER BY (
             CASE
+                WHEN o.status = 'IN_PROGRESS' AND o.checklistIntegration = true AND EXISTS (SELECT pending.id FROM OrderStep pending WHERE pending.order = o AND pending.step = o.currentStep AND pending.checklistPending = true) THEN -1
                 WHEN o.status = 'LATE'
                     OR (o.status = 'IN_PROGRESS' AND o.dueDate < CURRENT_DATE) THEN 0
                 WHEN o.status = 'IN_PROGRESS' THEN 1

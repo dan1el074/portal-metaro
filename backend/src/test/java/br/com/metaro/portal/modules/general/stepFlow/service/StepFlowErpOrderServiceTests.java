@@ -88,6 +88,25 @@ class StepFlowErpOrderServiceTests {
         assertThat(result.getSource()).isEqualTo(ErpSource.FOCCO);
     }
 
+    @Test
+    void reprocessesUsingTheOriginalSourceWithoutLocalAvailabilityRules() {
+        var focco = createErpOrder(10);
+        focco.getItems().getFirst().addProducedQuantity(10);
+        when(foccoOrderClient.findProductionOrderByNumber(14064)).thenReturn(focco);
+        assertThat(service.findOrderForReprocessing(14064, ErpSource.FOCCO).getSource()).isEqualTo(ErpSource.FOCCO);
+        var probus = createErpOrder(10);
+        when(erpOrderQueryService.findProductionOrderByNumberWithoutRules(14064)).thenReturn(Optional.of(probus));
+        assertThat(service.findOrderForReprocessing(14064, ErpSource.PROBUS).getSource()).isEqualTo(ErpSource.PROBUS);
+        org.mockito.Mockito.verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void rejectsAnEmptyErpOrderBeforeReplacingLocalItems() {
+        var empty = createErpOrder(10); empty.getItems().clear();
+        when(foccoOrderClient.findProductionOrderByNumber(14064)).thenReturn(empty);
+        assertThatThrownBy(() -> service.findOrderForReprocessing(14064, ErpSource.FOCCO)).isInstanceOf(UnprocessableEntityException.class);
+    }
+
     private ErpOrderDto createErpOrder(int quantity) {
         ErpOrderDto order = new ErpOrderDto(
                 14064,

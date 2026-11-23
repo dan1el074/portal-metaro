@@ -1,7 +1,7 @@
 <c-modal modalBackNavigation [visible]="visible" backdrop="static" alignment="center" (visibleChange)="!$event && onClose()">
   <c-modal-header>
     <h5 cModalTitle>{{ volume ? 'Editar volume' : 'Adicionar volume' }}</h5>
-    <button cButtonClose type="button" (click)="onClose()"></button>
+    <button cButtonClose [disabled]="saving" type="button" (click)="onClose()"></button>
   </c-modal-header>
 
   <c-modal-body>
@@ -9,7 +9,7 @@
       <div class="volume-field">
         <label cLabel for="volumeLength">Comprimento</label>
         <div class="input-group">
-          <input cFormControl id="volumeLength" formControlName="length" type="number" min="0" step="0.01" inputmode="decimal" />
+          <input [readOnly]="saving" cFormControl id="volumeLength" formControlName="length" type="number" min="0" step="0.01" inputmode="decimal" />
           <span class="input-group-text">m</span>
         </div>
       </div>
@@ -17,7 +17,7 @@
       <div class="volume-field">
         <label cLabel for="volumeWidth">Largura</label>
         <div class="input-group">
-          <input cFormControl id="volumeWidth" formControlName="width" type="number" min="0" step="0.01" inputmode="decimal" />
+          <input [readOnly]="saving" cFormControl id="volumeWidth" formControlName="width" type="number" min="0" step="0.01" inputmode="decimal" />
           <span class="input-group-text">m</span>
         </div>
       </div>
@@ -25,7 +25,7 @@
       <div class="volume-field">
         <label cLabel for="volumeHeight">Altura</label>
         <div class="input-group">
-          <input cFormControl id="volumeHeight" formControlName="height" type="number" min="0" step="0.01" inputmode="decimal" />
+          <input [readOnly]="saving" cFormControl id="volumeHeight" formControlName="height" type="number" min="0" step="0.01" inputmode="decimal" />
           <span class="input-group-text">m</span>
         </div>
       </div>
@@ -33,14 +33,14 @@
       <div class="volume-field">
         <label cLabel for="volumeWeight">Peso</label>
         <div class="input-group">
-          <input cFormControl id="volumeWeight" formControlName="weight" type="number" min="0" step="0.01" inputmode="decimal" />
+          <input [readOnly]="saving" cFormControl id="volumeWeight" formControlName="weight" type="number" min="0" step="0.01" inputmode="decimal" />
           <span class="input-group-text">kg</span>
         </div>
       </div>
 
       <div class="volume-field">
         <label cLabel for="volumeQuantity">Quantidade</label>
-        <input cFormControl id="volumeQuantity" formControlName="quantity" type="number" min="1" step="1" inputmode="numeric" />
+        <input [readOnly]="saving" cFormControl id="volumeQuantity" formControlName="quantity" type="number" min="1" step="1" inputmode="numeric" />
       </div>
     </form>
 

@@ -5,7 +5,7 @@ import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/ro
 import { delay, filter, map, tap } from 'rxjs/operators';
 import { ColorModeService } from '@coreui/angular';
 import { IconSetService } from '@coreui/icons-angular';
-import { cilHome, cilChartPie, cilNewspaper, cilCalendar, cilSettings, cilCursor, cilFork, cilCommentBubble, cibFacebook, cibTwitter, cibLinkedin, cibGoogle, cilUserFemale, cilUser } from '@coreui/icons';
+import { cilHome, cilChartPie, cilNewspaper, cilCalendar, cilSettings, cilCursor, cilFork, cilEqualizer, cilCommentBubble, cibFacebook, cibTwitter, cibLinkedin, cibGoogle, cilUserFemale, cilUser } from '@coreui/icons';
 import { NgxSpinnerModule } from 'ngx-spinner';
 
 @Component({
@@ -28,7 +28,7 @@ export class AppComponent implements OnInit {
     // Remove o JWT deixado por versoes anteriores da aplicacao.
     localStorage.removeItem('auth-token');
     this.#titleService.setTitle(this.title);
-    this.#iconSetService.icons = { cilHome, cilChartPie, cilNewspaper, cilCalendar, cilSettings, cilCursor, cilFork, cilCommentBubble, cibFacebook, cibTwitter, cibLinkedin, cibGoogle, cilUserFemale, cilUser };
+    this.#iconSetService.icons = { cilHome, cilChartPie, cilNewspaper, cilCalendar, cilSettings, cilCursor, cilFork, cilEqualizer, cilCommentBubble, cibFacebook, cibTwitter, cibLinkedin, cibGoogle, cilUserFemale, cilUser };
     this.#colorModeService.localStorageItemName.set('theme');
     this.#colorModeService.eventName.set('ColorSchemeChange');
   }

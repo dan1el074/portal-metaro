@@ -1,0 +1,205 @@
+import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, QueryList, ViewChildren } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ButtonDirective, CardBodyComponent, CardComponent, FormCheckInputDirective, FormControlDirective, FormSelectDirective, TooltipDirective } from '@coreui/angular';
+import { Equipment, Field, Template } from '../../../../app/interface/checklist.interface';
+import { emptyChecklistField as emptyField, emptyChecklistQuestion as emptyQuestion, emptyChecklistSection as emptySection } from '../../../../app/shared/checklist-factory';
+import { ChecklistCategoryModelOption, ChecklistTemplateOption } from '../../../../app/services/checklist.service';
+import { ChecklistPreviewService } from '../../../../app/services/checklist-preview.service';
+import { checklistIntegrationLabel } from '../../../../app/shared/checklist-rules';
+import { ChecklistIconComponent } from '../../../icons/checklist-icon/checklist-icon.component';
+import { ToastrService } from '../../../../app/services/toast.service';
+
+@Component({
+  selector: 'app-checklist-model-form',
+  imports: [
+    CommonModule,
+    FormsModule,
+    ButtonDirective,
+    CardComponent,
+    CardBodyComponent,
+    FormCheckInputDirective,
+    FormControlDirective,
+    FormSelectDirective,
+    TooltipDirective,
+    ChecklistIconComponent,
+  ],
+  templateUrl: './checklist-model-form.component.html',
+  styleUrl: './checklist-model-form.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class ChecklistModelFormComponent {
+  @ViewChildren(TooltipDirective) private readonly tooltips!: QueryList<TooltipDirective>;
+  @Input({ required: true }) model!: Template;
+  @Input() categories?: ChecklistCategoryModelOption[];
+  @Input() equipment?: Equipment[];
+  @Input() modelOptions?: ChecklistTemplateOption[];
+  @Output() modelChange = new EventEmitter<Template>();
+  @Output() saveModel = new EventEmitter<void>();
+  @Output() cancel = new EventEmitter<void>();
+
+  protected readonly fieldTrack = (_: number, field: Field) => field.id;
+  protected readonly integrationLabel = checklistIntegrationLabel;
+  protected readonly fieldTypes = [
+    { value: 'text', label: 'Texto curto' },
+    { value: 'textarea', label: 'Texto longo' },
+    { value: 'number', label: 'Número' },
+    { value: 'date', label: 'Data' },
+    { value: 'datetime-local', label: 'Data/hora' },
+    { value: 'select', label: 'Seleção única' },
+  ];
+
+  constructor(protected store: ChecklistPreviewService, private readonly toaster: ToastrService) {}
+
+  protected get categoryOptions(): Array<Omit<ChecklistCategoryModelOption, 'fieldIds'>> {
+    return this.categories ?? this.store.state().categories;
+  }
+
+  protected get equipmentOptions(): Equipment[] {
+    return this.equipment ?? this.store.state().equipment;
+  }
+
+  private get templates(): ChecklistTemplateOption[] {
+    return this.modelOptions ?? this.store.state().templates;
+  }
+
+  protected get category() {
+    return this.categoryOptions.find((item) => item.id === this.model.categoryId);
+  }
+
+  protected get titleVariables(): { key: string; label: string }[] {
+    const variables = [{ key: '%data', label: 'Data/hora de criação' }];
+    if (this.category?.integration === 'production') {
+      variables.push(
+        { key: '%serie', label: 'Número de série do equipamento' },
+        { key: '%pedido', label: 'Número do pedido no ERP' },
+        { key: '%cliente', label: 'Cliente do pedido' },
+        { key: '%item', label: 'Item selecionado no pedido' },
+        { key: '%vendedor', label: 'Vendedor do pedido' },
+      );
+    }
+    this.model.sections.forEach((section, sectionIndex) =>
+      section.questions.forEach((question, questionIndex) => {
+        const field = question.fields[0];
+        if (!field) return;
+        const number = `${sectionIndex + 1}.${questionIndex + 1}`;
+        const questionLabel = question.label || 'Item sem nome';
+        const fieldLabel = field.label || 'Campo adicional sem nome';
+        variables.push({ key: `%${number}`, label: `${questionLabel} — resposta de: ${fieldLabel}.` });
+      }),
+    );
+    return variables;
+  }
+
+  protected get predecessors() {
+    return this.templates.filter((item) => {
+      const predecessorIntegration = this.categoryOptions.find((category) =>
+        category.id === item.categoryId)?.integration;
+      return item.id !== this.model.id
+      && item.categoryId !== this.model.categoryId
+      && item.equipmentId === this.model.equipmentId
+      && this.category?.integration === predecessorIntegration;
+    });
+  }
+
+  protected predecessorLabel(template: ChecklistTemplateOption): string {
+    const category = this.categoryOptions.find((item) => item.id === template.categoryId);
+    return `${category?.name || 'Categoria não encontrada'} - ${template.name}`;
+  }
+
+  protected predecessorChanged(value: string): void {
+    const successor = value && this.templates.find((item) =>
+      item.id !== this.model.id && item.predecessorId === value);
+    if (successor) {
+      this.toaster.error(`Este requisito já tem um sucessor. Bifurcações não são permitidas.\n${this.predecessorLabel(successor)}`);
+      return;
+    }
+    this.model.predecessorId = value;
+    this.model.automatic = !!value;
+    if (!value) {
+      this.model.optionalPredecessor = false;
+    }
+    this.changed();
+  }
+
+  protected changed(): void {
+    this.modelChange.emit(this.model);
+  }
+
+  protected categoryChanged(): void {
+    this.model.equipmentId = '';
+    this.model.predecessorId = '';
+    this.model.automatic = false;
+    this.model.optionalPredecessor = false;
+    const production = this.category?.integration === 'production';
+    if (production) { this.model.name = ''; this.model.signature = true; }
+    this.model.sections.forEach((section) => (section.options = production ? ['OK', 'NOK', 'N/A'] : ['OK', 'N/A']));
+    this.changed();
+  }
+
+  protected equipmentChanged(): void {
+    this.model.predecessorId = '';
+    this.model.automatic = false;
+    this.model.optionalPredecessor = false;
+    const equipment = this.equipmentOptions.find((item) => item.id === this.model.equipmentId);
+    this.model.name = equipment?.abbreviation || '';
+    this.changed();
+  }
+
+  protected options(sectionIndex: number, value: string): void {
+    const options = [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))];
+    if (!options.includes('N/A')) options.push('N/A');
+    if (this.category?.integration === 'production' && !options.includes('NOK')) options.push('NOK');
+    this.model.sections[sectionIndex].options = this.category?.integration === 'production'
+      ? options
+      : options.filter((option) => option !== 'NOK');
+    this.changed();
+  }
+
+  protected addSection(): void {
+    this.model.sections.push(emptySection(this.category?.integration === 'production'));
+    this.changed();
+  }
+
+  protected addQuestion(sectionIndex: number): void {
+    this.model.sections[sectionIndex].questions.push(emptyQuestion());
+    this.changed();
+  }
+
+  protected removeSection(index: number): void {
+    this.model.sections.splice(index, 1);
+    this.changed();
+  }
+
+  protected removeQuestion(sectionIndex: number, questionIndex: number): void {
+    this.model.sections[sectionIndex].questions.splice(questionIndex, 1);
+    this.changed();
+  }
+
+  protected addQuestionField(sectionIndex: number, questionIndex: number): void {
+    this.model.sections[sectionIndex].questions[questionIndex].fields.push(emptyField());
+    this.changed();
+  }
+
+  protected removeQuestionField(sectionIndex: number, questionIndex: number, fieldIndex: number): void {
+    this.model.sections[sectionIndex].questions[questionIndex].fields.splice(fieldIndex, 1);
+    this.changed();
+  }
+
+  protected setFieldOptions(field: Field, value: string): void {
+    field.options = value.split(';').map((item) => item.trim()).filter(Boolean);
+    this.changed();
+  }
+
+  protected move<T>(items: T[], index: number, offset: number): void {
+    this.tooltips.forEach((tooltip) => tooltip.visible.set(false));
+    const target = index + offset;
+    if (target < 0 || target >= items.length) return;
+    [items[index], items[target]] = [items[target], items[index]];
+    this.changed();
+  }
+
+  protected fieldChanged(): void {
+    this.changed();
+  }
+}

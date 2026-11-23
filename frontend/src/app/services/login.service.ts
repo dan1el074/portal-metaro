@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { AuthGuard } from '../config/authGuard';
+import { AuthGuard } from '../config/auth.guard';
 import { NotificationWebSocketService } from './websocket.service';
 import { LoginResponse, RequestAccess } from '../interface/user.interface';
 

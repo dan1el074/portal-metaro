@@ -1,0 +1,42 @@
+<div class="report-preview">
+  <div class="edit-heading">
+    <div>
+      <h2>{{ report.previewTitle }}</h2>
+      @for (item of report.metadata; track $index) {
+        <p>{{ item }}</p>
+      }
+    </div>
+    <span class="report-count">{{ report.rows.length }} {{ report.itemLabel }}</span>
+  </div>
+  @if (warnings.length) {
+    <div class="alert alert-warning">
+      <strong>{{ warningTitle }}</strong>
+      <ul>
+        @for (message of warnings; track message) {
+          <li>{{ message }}</li>
+        }
+      </ul>
+    </div>
+  }
+  <div class="report-table-container">
+    <table class="report-table">
+      <thead>
+        <tr>
+          @for (column of report.columns; track $index) {
+            <th>{{ column }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (values of report.rows; track $index) {
+          <tr>
+            @for (value of values; track $index) {
+              <td>{{ value }}</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <p class="report-instructions">{{ report.instructions }}</p>
+</div>

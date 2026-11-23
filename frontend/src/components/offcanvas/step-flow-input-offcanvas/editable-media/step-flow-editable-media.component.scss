@@ -3,6 +3,10 @@ app-step-flow-editable-media { display: block; }
 .sof-custom-offcanvas {
   .sof-custom-body {
 
+    .editable-media-section {
+      margin-top: 30px;
+    }
+
     .custom-title {
       color: var(--cui-medium-emphasis);
       font-size: 13px;

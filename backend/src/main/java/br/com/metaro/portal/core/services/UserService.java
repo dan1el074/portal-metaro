@@ -93,10 +93,7 @@ public class UserService implements UserDetailsService {
     @Transactional(readOnly = true)
     public MeDto getMe() {
         String username = authenticatedUsername();
-
-        MeProjection me = userRepository.findMeProjectionByUsername(username)
-                .orElseThrow(ResourceNotFoundException::new);
-
+        MeProjection me = userRepository.findMeProjectionByUsername(username).orElseThrow(ResourceNotFoundException::new);
         List<RoleProjection> roles = roleRepository.findRoleProjectionsByUsername(username);
 
         if (roles.stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getAuthority()))) {
@@ -104,9 +101,7 @@ public class UserService implements UserDetailsService {
         }
 
         MeDto dto = new MeDto(me);
-
         roles.forEach(role -> dto.getRoles().add(new RoleDto(role)));
-
         List<NotificationMinProjection> notifications = userRepository.findNotificationsByUsername(username);
 
         List<Long> memorandoIds = notifications.stream()
@@ -124,7 +119,6 @@ public class UserService implements UserDetailsService {
         }
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy").withZone(ZoneId.systemDefault());
-
         Long count = 1L;
 
         for (NotificationMinProjection notification : notifications) {
@@ -138,12 +132,12 @@ public class UserService implements UserDetailsService {
                     .toHours() >= 24 ? "urgent" : "pending";
 
             dto.getPendingIssues().add(
-                    new PendingIssuesDto(
-                            count++,
-                            "Memorando %d/%s".formatted(memorando.getNumber(),formatter.format(memorando.getCreateAt())),
-                            "Falta sua assinatura!",
-                            urgency
-                    )
+                new PendingIssuesDto(
+                    count++,
+                    "Memorando %d/%s".formatted(memorando.getNumber(),formatter.format(memorando.getCreateAt())),
+                    "Falta sua assinatura!",
+                    urgency
+                )
             );
         }
 
@@ -317,10 +311,7 @@ public class UserService implements UserDetailsService {
         List<Long> rolesList = new ArrayList<>();
         if (dto.getRoles() != null && !dto.getRoles().isBlank()) {
             rolesList.addAll(
-                    Arrays.stream(dto.getRoles().split(","))
-                        .map(String::trim)
-                        .map(Long::valueOf)
-                        .toList()
+                    Arrays.stream(dto.getRoles().split(",")).map(String::trim).map(Long::valueOf).toList()
             );
         }
         rolesList.add(1L);
@@ -335,8 +326,7 @@ public class UserService implements UserDetailsService {
     private void validateRoleIsActivated(Role role) {
         if (!role.isActivated()) {
             throw new UnprocessableEntityException(
-                    "A permissÃ£o %s estÃ¡ desativada e nÃ£o pode ser atribuÃ­da a um usuÃ¡rio!"
-                            .formatted(role.getAuthority())
+                    "A permissão %s está desativada e não pode ser atribuída a um usuário!".formatted(role.getAuthority())
             );
         }
     }
@@ -373,12 +363,12 @@ public class UserService implements UserDetailsService {
 
         for (UserDetailsProjection projection : projections) {
             user.addRole(new Role(
-                    projection.getRoleId(),
-                    projection.getAuthority(),
-                    projection.getTitle(),
-                    projection.getTitleUrl(),
-                    projection.getParent(),
-                    projection.getParentUrl()
+                projection.getRoleId(),
+                projection.getAuthority(),
+                projection.getTitle(),
+                projection.getTitleUrl(),
+                projection.getParent(),
+                projection.getParentUrl()
             ));
         }
 

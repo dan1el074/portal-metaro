@@ -1,0 +1,547 @@
+package br.com.metaro.portal.modules.pcp.serialplates.service;
+
+import br.com.metaro.portal.util.erp.ErpItemCode;
+import br.com.metaro.portal.core.entities.Param;
+import br.com.metaro.portal.core.entities.User;
+import br.com.metaro.portal.core.repositories.ParamRepository;
+import br.com.metaro.portal.core.services.UserService;
+import br.com.metaro.portal.core.services.exceptions.ResourceNotFoundException;
+import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityException;
+import br.com.metaro.portal.modules.pcp.serialplates.dto.*;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistSerialPlateService;
+import br.com.metaro.portal.modules.pcp.serialplates.entity.*;
+import br.com.metaro.portal.modules.pcp.serialplates.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.support.PageableExecutionUtils;
+import org.springframework.http.HttpStatus;
+import org.hibernate.query.criteria.JpaExpression;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import java.math.BigDecimal;
+import java.time.*;
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+public class SerialPlateService {
+    private static final List<String> STATUSES = List.of("Criado", "Programado", "Recebido", "Devolvido", "Finalizado");
+    private static final Map<String, String> LABELS = labels();
+    private static final Set<String> SORTS = Set.of("serial", "of", "order", "client", "description", "provider", "status", "updated");
+    private static final List<String> REPORT_COLUMNS = List.of("serial", "description", "manufactured", "voltage", "crea", "weight");
+    private final SerialPlateRepository repository;
+    private final SerialPlateLogRepository logs;
+    private final ParamRepository params;
+    private final UserService users;
+    private final SerialPlateErpService erp;
+    private final ObjectMapper mapper;
+    private final EntityManager entityManager;
+    private final ChecklistSerialPlateService checklistSerialPlateService;
+
+    @Transactional(readOnly = true)
+    public List<SerialPlateRelocationDto> previewRelocation(SerialPlateMutationDto request) {
+        if (!request.getFields().contains("order") && !request.getFields().contains("readyStock")) return List.of();
+        List<SerialPlateRelocationDto> impacts = new ArrayList<>();
+        for (Long serial : serials(request.getVersions().keySet())) {
+            SerialPlate plate = repository.findById(serial).orElseThrow(ResourceNotFoundException::new);
+            String order = request.getFields().contains("order") ? text(request.getPatch().getOrder()) : plate.getOrder();
+            boolean readyStock = request.getFields().contains("readyStock")
+                    ? Boolean.TRUE.equals(request.getPatch().getReadyStock()) : plate.getReadyStock();
+            if (readyStock) order = "";
+            checklistSerialPlateService.relocationImpact(serial, order).ifPresent(impacts::add);
+        }
+        return impacts;
+    }
+
+
+    @Transactional(readOnly = true)
+    public Page<SerialPlateListRowDto> listPlates(Pageable requested, String search, String status) {
+        Pageable page = pageable(requested);
+        Specification<SerialPlate> specification = filter(search, status);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<SerialPlateListRowDto> query = cb.createQuery(SerialPlateListRowDto.class);
+        Root<SerialPlate> root = query.from(SerialPlate.class);
+        query.select(cb.construct(SerialPlateListRowDto.class, root.get("serial"), root.get("of"), root.get("order"),
+                root.get("readyStock"), root.get("client"), root.get("description"), root.get("provider"),
+                root.get("status"), root.get("notes"), root.get("updated")));
+        query.where(specification.toPredicate(root, query, cb)).orderBy(jpaOrders(page.getSort(), root, cb));
+
+        List<SerialPlateListRowDto> rows = entityManager.createQuery(query)
+                .setFirstResult(Math.toIntExact(page.getOffset()))
+                .setMaxResults(page.getPageSize())
+                .getResultList();
+        return PageableExecutionUtils.getPage(rows, page, () -> repository.count(specification));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> getSummary() {
+        Map<String, Long> result = new LinkedHashMap<>();
+        STATUSES.forEach(status -> result.put(status, 0L));
+        repository.countByStatus().forEach(row -> result.put((String) row[0], ((Number) row[1]).longValue()));
+        result.put("total", result.values().stream().mapToLong(Long::longValue).sum());
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public SerialPlateDto getPlate(Long serial) {
+        return dto(repository.findById(serial).orElseThrow(ResourceNotFoundException::new));
+    }
+
+    @Transactional(readOnly = true)
+    public List<SerialPlateHistoryDto> getHistory(Long serial) {
+        if (!repository.existsById(serial)) throw new ResourceNotFoundException();
+
+        List<SerialPlateLog> events = new ArrayList<>(logs.findBySerialOrderByAtDescIdDesc(serial));
+        Collections.reverse(events);
+        List<SerialPlateHistoryDto> history = new ArrayList<>();
+        Map<String, String> state = new HashMap<>();
+        Map<String, String> itemModels = new HashMap<>();
+
+        for (SerialPlateLog event : events) {
+            List<SerialPlateChangeDto> changes = readChanges(event);
+            String beforeModel = state.getOrDefault(LABELS.get("description"), "");
+            String afterModel = changes.stream().filter(change -> change.getField().equals(LABELS.get("description")))
+                    .map(SerialPlateChangeDto::getAfter).findFirst().orElse(beforeModel);
+            List<SerialPlateChangeDto> displayed = new ArrayList<>();
+
+            for (SerialPlateChangeDto change : changes) {
+                if (change.getField().equals(LABELS.get("orderItemCode"))) {
+                    String previousItemModel = itemModels.getOrDefault(change.getBefore(), beforeModel);
+                    String nextItemModel = itemModels.getOrDefault(change.getAfter(), afterModel);
+                    displayed.add(new SerialPlateChangeDto(change.getField(),
+                            orderItemHistoryDescription(change.getBefore(), change.getBeforeLabel(), previousItemModel),
+                            orderItemHistoryDescription(change.getAfter(), change.getAfterLabel(), nextItemModel)));
+                    if (!text(change.getAfter()).isEmpty()) itemModels.put(change.getAfter(), nextItemModel);
+                } else {
+                    displayed.add(new SerialPlateChangeDto(change.getField(), change.getBefore(), change.getAfter()));
+                }
+                state.put(change.getField(), change.getAfter());
+            }
+            history.add(new SerialPlateHistoryDto(event.getAt(), event.getAuthor(), displayed));
+        }
+        Collections.reverse(history);
+        return history;
+    }
+
+    private List<SerialPlateChangeDto> readChanges(SerialPlateLog event) {
+        try {
+            return mapper.readValue(
+                event.getChangesJson(),
+                mapper.getTypeFactory().constructCollectionType(List.class, SerialPlateChangeDto.class));
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Histórico de plaquetas inválido.", exception);
+        }
+    }
+
+    private String itemHistoryLabel(String reference, String label, String model) {
+        if (text(reference).isEmpty()) return "";
+        if (!text(label).isEmpty()) return label;
+        return text(model).isEmpty() ? "Item não identificado" : model;
+    }
+
+    @Transactional
+    public int createPlates(SerialPlateCreateDto request) {
+        int quantity = request.getQuantity().intValueExact();
+        User user = users.authenticate();
+        if (text(request.getOf()).isEmpty() && !user.hasRole("ROLE_ADMIN")) {
+            throw invalid("Informe a ordem de fabricação. Somente ROLE_ADMIN pode criar registros sem OF.");
+        }
+
+        if (!text(request.getOrder()).isEmpty() && text(request.getOrderItemCode()).isEmpty()) {
+            throw invalid("Selecione um item do pedido ou limpe o campo Nº Pedido para continuar.");
+        }
+
+        // Resolve upstream data before taking the global sequence lock.
+        SerialPlateOrderDto order = text(request.getOrder()).isEmpty() ? null : erp.findOrder(request.getOrder());
+        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, request.getOrderItemCode());
+        Param sequence = params.findLockedByName("serialPlatesCount").orElseThrow(ResourceNotFoundException::new);
+        long last;
+
+        try {
+            last = Long.parseLong(sequence.getContent());
+            if (last < 0 || last > Long.MAX_VALUE - quantity) throw new NumberFormatException();
+        } catch (NumberFormatException exception) {
+            throw invalid("O parâmetro serialPlatesCount deve conter o último número de série emitido válido.");
+        }
+
+        Long maximum = repository.findMaximumSerial();
+        if (maximum != null && last < maximum) throw invalid("A sequência está abaixo do maior número de série existente. Corrija serialPlatesCount.");
+
+        for (int index = 0; index < quantity; index++) {
+            SerialPlate plate = new SerialPlate();
+            plate.setSerial(++last);
+            plate.setOf(text(request.getOf()));
+            plate.setManufactured(YearMonth.now(ZoneId.of("America/Sao_Paulo")).toString());
+            if (order != null) applyOrder(plate, request.getOrder(), order, item);
+            validate(plate, null, text(request.getOf()).isEmpty());
+            plate.setUpdated(Instant.now());
+            repository.save(plate);
+            audit(plate.getSerial(), user, plate.getUpdated(), List.of(new SerialPlateChangeDto("Registro", "", "Registro criado")), snapshot(plate), Map.of(), item == null ? null : item.getLabel());
+        }
+
+        sequence.setContent(Long.toString(last));
+        repository.flush();
+
+        return quantity;
+    }
+
+    @Transactional
+    public List<SerialPlateDto> updatePlates(SerialPlateMutationDto request) {
+        if (!LABELS.keySet().containsAll(request.getFields())) throw invalid("Campo de atualização inválido.");
+        if (request.getFields().contains("orderItemCode") && !request.getFields().contains("order")) throw invalid("Informe o pedido ao alterar seu item.");
+
+        SerialPlatePatchDto patch = request.getPatch();
+        boolean importing = request.getFields().contains("order") && !text(patch.getOrder()).isEmpty() && !(request.getFields().contains("readyStock") && Boolean.TRUE.equals(patch.getReadyStock()));
+
+        if (importing && text(patch.getOrderItemCode()).isEmpty()) throw invalid("Selecione um item do pedido.");
+
+        List<Long> requestedSerials = serials(request.getVersions().keySet());
+        SerialPlateOrderDto order = importing ? erp.findOrder(patch.getOrder()) : null;
+        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, patch.getOrderItemCode());
+        User user = users.authenticate();
+        List<SerialPlate> updated = new ArrayList<>();
+
+        for (Long serial : requestedSerials) {
+            SerialPlate plate = repository.findLockedBySerial(serial).orElseThrow(ResourceNotFoundException::new);
+
+            if (!Objects.equals(plate.getVersion(), request.getVersions().get(serial.toString()))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "O registro #" + serial + " foi alterado por outro usuário. Reabra o registro.");
+            }
+
+            Map<String, String> before = snapshot(plate);
+            boolean changedOrder = order != null;
+
+            if (changedOrder) applyOrder(plate, patch.getOrder(), order, item);
+
+            BeanWrapper source = new BeanWrapperImpl(patch);
+            BeanWrapper target = new BeanWrapperImpl(plate);
+
+            for (String field : request.getFields()) {
+                Object value = source.getPropertyValue(field);
+                if (value == null && !Set.of("capacity", "weight").contains(field)) throw invalid("Valor inválido para " + LABELS.get(field) + ".");
+                target.setPropertyValue(field, value);
+            }
+
+            if (Boolean.TRUE.equals(patch.getReadyStock()) && request.getFields().contains("readyStock")) {
+                plate.setOrder("");
+            } else if (request.getFields().contains("order") && !text(patch.getOrder()).isEmpty()) {
+                plate.setReadyStock(false);
+            }
+
+            if (plate.getReadyStock()) {
+                plate.setOrder(""); plate.setOrderItemCode(""); plate.setClient("");
+            } else if (text(plate.getOrder()).isEmpty()) {
+                plate.setOrderItemCode("");
+            }
+
+            if (!text(plate.getProvider()).isEmpty() && before.get(LABELS.get("provider")).isEmpty() && plate.getStatus().equals("Criado")) plate.setStatus("Programado");
+            validate(plate, before.get(LABELS.get("status")), before.get(LABELS.get("of")).isBlank());
+            Map<String, String> after = snapshot(plate);
+
+            if (!before.equals(after)) {
+                plate.setUpdated(Instant.now());
+                checklistSerialPlateService.synchronizePlate(plate, changedOrder ? item.getLabel() : null, user, request.isConfirmRelocation());
+                audit(serial, user, plate.getUpdated(), List.of(), after, before, changedOrder ? item.getLabel() : null);
+            }
+            updated.add(plate);
+        }
+
+        repository.flush();
+        return updated.stream().map(this::dto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SerialPlateBatchRowDto> getSelection(Collection<String> selection) {
+        var ids = serials(selection);
+        var rows = repository.batchRows(ids);
+        requireAllSelected(ids, rows);
+        return rows;
+    }
+
+    private void requireAllSelected(List<Long> ids, List<?> rows) {
+        if (ids.size() != rows.size()) throw invalid("Um ou mais números de série não foram encontrados.");
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<String> getRange(String anchor, String target, Pageable requested, String search, String status) {
+        long first = parseSerial(anchor);
+        long last = parseSerial(target);
+        Sort sort = pageable(requested).getSort();
+        Specification<SerialPlate> specification = filter(search, status);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        var bounds = cb.createTupleQuery();
+        var plate = bounds.from(SerialPlate.class);
+        var fields = sort.stream().map(Sort.Order::getProperty).distinct().toList();
+        bounds.select(cb.tuple(fields.stream().map(field -> plate.get(field).alias(field)).toArray(Selection<?>[]::new)));
+        bounds.where(plate.get("serial").in(first, last), specification.toPredicate(plate, bounds, cb));
+        bounds.orderBy(jpaOrders(sort, plate, cb));
+        var endpoints = entityManager.createQuery(bounds).getResultList();
+        if (endpoints.size() < 2) {
+            if (!repository.existsById(last)) throw invalid("Um ou mais números de série não foram encontrados.");
+            return List.of(Long.toString(last));
+        }
+
+        var query = cb.createQuery(Long.class);
+        var root = query.from(SerialPlate.class);
+        query.select(root.get("serial")).where(specification.toPredicate(root, query, cb),
+                rangeBound(root, cb, sort, endpoints.getFirst(), true),
+                rangeBound(root, cb, sort, endpoints.getLast(), false));
+        query.orderBy(jpaOrders(sort, root, cb));
+        var ids = entityManager.createQuery(query).setMaxResults(10001).getResultList();
+        if (ids.size() > 10000) throw invalid("Selecione no máximo 10000 registros por operação.");
+        return ids.stream().map(Object::toString).toList();
+    }
+
+    // All allowed sort keys are non-null. The final serial key makes each boundary unique.
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Predicate rangeBound(Root<SerialPlate> root, CriteriaBuilder cb, Sort sort,
+                                 jakarta.persistence.Tuple endpoint, boolean lower) {
+        Predicate samePrefix = cb.conjunction();
+        Predicate inside = cb.disjunction();
+        for (Sort.Order order : sort) {
+            Path<Comparable> field = root.get(order.getProperty());
+            Comparable value = (Comparable) endpoint.get(order.getProperty());
+            Predicate beyond = lower == order.isAscending() ? cb.greaterThan(field, value) : cb.lessThan(field, value);
+            inside = cb.or(inside, cb.and(samePrefix, beyond));
+            samePrefix = cb.and(samePrefix, cb.equal(field, value));
+        }
+        return cb.or(inside, samePrefix);
+    }
+
+    @Transactional(readOnly = true)
+    public SerialPlateSettingsDto getSettings() {
+        SerialPlateSettingsDto dto = new SerialPlateSettingsDto();
+        dto.setCrea(param("serialPlates.crea"));
+        dto.setInstructions(param("serialPlates.instructions"));
+        dto.setProviders(param("serialPlates.providers"));
+        dto.setReportColumns(params.findByName("serialPlates.reportColumns")
+                .map(value -> Arrays.asList(value.getContent().split(","))).orElse(REPORT_COLUMNS));
+
+        return dto;
+    }
+
+    @Transactional
+    public SerialPlateSettingsDto updateSettings(SerialPlateSettingsDto dto) {
+        if (dto.getReportColumns() == null || dto.getReportColumns().isEmpty()
+                || !REPORT_COLUMNS.containsAll(dto.getReportColumns())
+                || new HashSet<>(dto.getReportColumns()).size() != dto.getReportColumns().size()) {
+            throw invalid("Selecione pelo menos uma coluna válida do relatório, sem repetições.");
+        }
+        List<String> columns = REPORT_COLUMNS.stream().filter(dto.getReportColumns()::contains).toList();
+        List.of("serialPlates.crea", "serialPlates.instructions", "serialPlates.providers", "serialPlates.reportColumns").forEach(key -> params.findLockedByName(key).orElseThrow(ResourceNotFoundException::new));
+        User user = users.authenticate();
+        Map<String, String> changes = Map.of("CREA", dto.getCrea().trim(), "Orientações", dto.getInstructions().trim(), "Prestadores", dto.getProviders().trim(), "Colunas do relatório", String.join(",", columns));
+        SerialPlateSettingsDto before = getSettings();
+        audit(null, user, Instant.now(), List.of(), changes, Map.of("CREA", before.getCrea(), "Orientações", before.getInstructions(), "Prestadores", before.getProviders(), "Colunas do relatório", String.join(",", before.getReportColumns())), null);
+        saveParam("serialPlates.crea", dto.getCrea().trim());
+        saveParam("serialPlates.instructions", dto.getInstructions().trim());
+        saveParam("serialPlates.providers", dto.getProviders().trim());
+        saveParam("serialPlates.reportColumns", String.join(",", columns));
+
+        return getSettings();
+    }
+
+    @Transactional(readOnly = true)
+    public SerialPlateReportDto previewReport(SerialPlateSelectionDto selection) {
+        var ids = serials(selection.getSerials());
+        var rows = repository.reportRows(ids);
+        requireAllSelected(ids, rows);
+        return new SerialPlateReportDto(rows, getSettings());
+    }
+
+    @Transactional(readOnly = true)
+    public SerialPlateReportDto prepareReport(SerialPlateSelectionDto selection) {
+        var report = previewReport(selection);
+        var settings = report.getSettings();
+        List<String> columns = settings.getReportColumns();
+        if (columns.isEmpty()) throw invalid("Selecione pelo menos uma coluna do relatório nas configurações.");
+        if (columns.contains("crea") && settings.getCrea().isBlank()) throw invalid("Informe o CREA nas configurações.");
+
+        for (var row : report.getRecords()) {
+            List<String> missing = new ArrayList<>();
+            if (columns.contains("description") && row.getDescription().isBlank()) missing.add("modelo");
+            if (columns.contains("voltage") && row.getVoltage().isBlank()) missing.add("tensão");
+            if (columns.contains("weight") && (row.getWeight() == null || row.getWeight().signum() <= 0)) missing.add("peso");
+            if (columns.contains("manufactured") && !text(row.getManufactured()).matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) missing.add("data de fabricação");
+            if (!missing.isEmpty()) throw invalid("Complete " + String.join(", ", missing) + " do registro #" + row.getSerial() + ".");
+        }
+
+        return report;
+    }
+
+    private Specification<SerialPlate> filter(String search, String status) {
+        if (status != null && !status.isBlank() && !STATUSES.contains(status)) throw invalid("Status inválido.");
+
+        return (root, query, cb) -> {
+            List<Predicate> conditions = new ArrayList<>();
+
+            if (status != null && !status.isBlank()) conditions.add(cb.equal(root.get("status"), status));
+
+            if (search != null && !search.isBlank()) {
+                String term = search.trim().toLowerCase(Locale.ROOT);
+                String pattern = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+                List<Predicate> matches = new ArrayList<>();
+                for (String field : LABELS.keySet()) {
+                    if (!field.equals("readyStock")) matches.add(cb.like(cb.lower(((JpaExpression<?>) root.get(field)).cast(String.class)), pattern, '!'));
+                }
+                matches.add(cb.like(((JpaExpression<?>) root.get("serial")).cast(String.class), pattern, '!'));
+                if ("pe pronta entrega".contains(term)) matches.add(cb.isTrue(root.get("readyStock")));
+                conditions.add(cb.or(matches.toArray(Predicate[]::new)));
+            }
+
+            return cb.and(conditions.toArray(Predicate[]::new));
+        };
+    }
+
+    private List<Order> jpaOrders(Sort sort, Root<SerialPlate> root, CriteriaBuilder cb) {
+        return sort.stream()
+                .map(order -> order.isAscending() ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty())))
+                .toList();
+    }
+
+    private Pageable pageable(Pageable requested) {
+        List<Sort.Order> orders = new ArrayList<>(requested.getSort().stream().filter(order -> SORTS.contains(order.getProperty())).toList());
+        if (orders.isEmpty()) orders.add(Sort.Order.desc("serial"));
+        if (orders.stream().noneMatch(order -> order.getProperty().equals("serial"))) orders.add(Sort.Order.desc("serial"));
+        return PageRequest.of(Math.max(0, requested.getPageNumber()), Math.max(1, Math.min(200, requested.getPageSize())), Sort.by(orders));
+    }
+
+    private SerialPlateOrderItemDto orderItemCode(SerialPlateOrderDto order, String id) {
+        if (id == null || id.isBlank()) throw invalid("Selecione um item do pedido.");
+        String code = ErpItemCode.normalize(id);
+        return order.getItems().stream().filter(item -> item.getItemCode().equals(code)).findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
+    }
+
+    private void applyOrder(SerialPlate plate, String number, SerialPlateOrderDto order, SerialPlateOrderItemDto item) {
+        plate.setOrder(Long.valueOf(number.trim()).toString()); plate.setReadyStock(false);
+        plate.setOrderItemCode(text(item.getItemCode()));
+        plate.setClient(order.getClient()); plate.setDescription(item.getDescription()); plate.setVoltage(item.getVoltage());
+        plate.setCapacity(item.getCapacity()); plate.setWeight(item.getWeight());
+    }
+
+    private void validate(SerialPlate plate, String previousStatus, boolean allowMissingOf) {
+        plate.setOf(text(plate.getOf()));
+        if ((!allowMissingOf && plate.getOf().isBlank()) || plate.getOf().length() > 80) throw invalid("Informe a ordem de fabricação (até 80 caracteres).");
+        if (!plate.getOrder().matches("[0-9]{0,15}")) throw invalid("Número do pedido inválido.");
+        if (!plate.getManufactured().matches("[1-9][0-9]{3}-(0[1-9]|1[0-2])")) throw invalid("Informe mês e ano de fabricação válidos.");
+        // Retired status may be preserved on existing records, but never assigned again.
+        boolean preservingLegacyStatus = "Terceiro".equals(previousStatus) && "Terceiro".equals(plate.getStatus());
+        if (!STATUSES.contains(plate.getStatus()) && !preservingLegacyStatus) throw invalid("Status inválido.");
+        if (!plate.getStatus().equals("Criado") && text(plate.getProvider()).isEmpty()) throw invalid("Informe o prestador de serviço para esse status.");
+
+        for (BigDecimal value : Arrays.asList(plate.getCapacity(), plate.getWeight())) {
+            if (value != null && (value.signum() <= 0 || value.scale() > 6 || value.precision() - value.scale() > 12)) throw invalid("Capacidade e peso devem ser positivos, com até seis casas decimais.");
+        }
+
+        if (plate.getOrderItemCode().length() > 64 || plate.getClient().length() > 500 || plate.getDescription().length() > 1000 || plate.getVoltage().length() > 120 || plate.getProvider().length() > 255 || plate.getNotes().length() > 10000) throw invalid("Um dos campos ultrapassa o tamanho permitido.");
+    }
+
+    private SerialPlateDto dto(SerialPlate entity) {
+        SerialPlateDto dto = new SerialPlateDto();
+        BeanUtils.copyProperties(entity, dto, "serial");
+        dto.setSerial(entity.getSerial().toString());
+        return dto;
+    }
+
+    private String display(Object value) {
+        return value instanceof BigDecimal decimal ? decimal.stripTrailingZeros().toPlainString() : Objects.toString(value, "");
+    }
+
+    private Map<String, String> snapshot(SerialPlate plate) {
+        BeanWrapper bean = new BeanWrapperImpl(plate);
+        Map<String, String> values = new LinkedHashMap<>();
+        LABELS.forEach((field, label) -> values.put(label, display(bean.getPropertyValue(field))));
+        return values;
+    }
+
+    private void audit(Long serial, User user, Instant at, List<SerialPlateChangeDto> initial, Map<String, String> after, Map<String, String> before, String itemLabel) {
+        List<SerialPlateChangeDto> changes = new ArrayList<>(initial);
+        after.forEach((field, value) -> {
+            if (!value.equals(before.getOrDefault(field, ""))) changes.add(new SerialPlateChangeDto(field, before.getOrDefault(field, ""), value));
+        });
+
+        if (changes.isEmpty()) return;
+
+        for (SerialPlateChangeDto change : changes) {
+            if (!change.getField().equals(LABELS.get("orderItemCode"))) continue;
+            String previousLabel = previousItemLabel(serial, change.getBefore(), before.getOrDefault(LABELS.get("description"), ""));
+            change.setBeforeLabel(previousLabel);
+            change.setAfterLabel(itemHistoryLabel(change.getAfter(), itemLabel, after.getOrDefault(LABELS.get("description"), "")));
+        }
+
+        SerialPlateLog log = new SerialPlateLog();
+        log.setSerial(serial); log.setUserId(user.getId()); log.setAuthor(user.getName()); log.setAt(at);
+
+        try {
+            log.setChangesJson(mapper.writeValueAsString(changes));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException(exception);
+        }
+
+        logs.save(log);
+    }
+
+    private String orderItemHistoryDescription(String reference, String label, String model) {
+        String description = itemHistoryLabel(reference, label, model);
+        if (!text(model).isEmpty()) {
+            for (String separator : List.of(" - ", " — ", " – ")) {
+                String suffix = separator + model;
+                if (description.endsWith(suffix)) return description.substring(0, description.length() - suffix.length());
+            }
+        }
+        return description;
+    }
+
+    private String previousItemLabel(Long serial, String reference, String model) {
+        if (text(reference).isEmpty()) return "";
+
+        for (SerialPlateLog event : logs.findBySerialOrderByAtDescIdDesc(serial)) {
+            for (SerialPlateChangeDto change : readChanges(event)) {
+                if (change.getField().equals(LABELS.get("orderItemCode")) && reference.equals(change.getAfter()) && !text(change.getAfterLabel()).isEmpty()) {
+                    return change.getAfterLabel();
+                }
+            }
+        }
+
+        return itemHistoryLabel(reference, null, model);
+    }
+
+    private List<Long> serials(Collection<String> values) {
+        if (values == null || values.isEmpty() || values.size() > 10000) throw invalid("Seleção inválida.");
+        return values.stream().map(this::parseSerial).distinct().sorted().toList();
+    }
+
+    private Long parseSerial(String value) {
+        try {
+            if (value == null || !value.matches("[1-9][0-9]{0,18}")) throw new NumberFormatException();
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) { throw invalid("Número de série inválido."); }
+    }
+
+    private String param(String key) { return params.findByName(key).map(Param::getContent).orElse(""); }
+    private void saveParam(String key, String value) {
+        Param param = params.findLockedByName(key).orElseThrow(ResourceNotFoundException::new);
+        param.setContent(value);
+    }
+
+    private String text(String value) { return value == null ? "" : value.trim(); }
+    private UnprocessableEntityException invalid(String message) { return new UnprocessableEntityException(message); }
+    private static Map<String, String> labels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        labels.put("of", "Ordem de fabricação"); labels.put("order", "Nº Pedido"); labels.put("orderItemCode", "Item do pedido");
+        labels.put("readyStock", "Pronta Entrega"); labels.put("client", "Cliente"); labels.put("description", "Modelo");
+        labels.put("capacity", "Capacidade"); labels.put("voltage", "Voltagem"); labels.put("weight", "Peso");
+        labels.put("provider", "Prestador de serviço"); labels.put("status", "Status"); labels.put("notes", "Observações");
+        labels.put("manufactured", "Data de fabricação");
+        return Collections.unmodifiableMap(labels);
+    }
+}

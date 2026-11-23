@@ -1,0 +1,298 @@
+// Only active during an explicit checklist PDF export; other portal printouts are unchanged.
+@media print {
+  @page checklist-document {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body.printing-quality-checklist {
+    page: checklist-document;
+    background: white !important;
+
+    * {
+      visibility: hidden !important;
+    }
+
+    .checklist-print-area,
+    .checklist-print-area * {
+      visibility: visible !important;
+    }
+
+    c-sidebar,
+    c-header,
+    c-footer,
+    app-default-header,
+    app-default-footer,
+    .sidebar,
+    .header,
+    .footer,
+    c-breadcrumb-router,
+    .app-toast-container {
+      display: none !important;
+    }
+
+    .wrapper,
+    .body,
+    .container-fluid {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-height: 0 !important;
+    }
+
+    app-checklist {
+      display: block;
+    }
+
+    .no-print,
+    .checklist-preview-toolbar,
+    app-checklist-flow,
+    app-checklist-client-history,
+    app-checklist-action-modal {
+      display: none !important;
+    }
+
+    .inspection-page,
+    .inspection-page .detail-content,
+    .inspection-page .document-card,
+    .inspection-page .document-card c-card-body {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .inspection-page .checklist-print-area {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      color: #252a36 !important;
+      background: #fff !important;
+    }
+
+    .inspection-page .document-header {
+      display: grid !important;
+      width: 100% !important;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.8fr) minmax(0, .9fr) !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .inspection-page .quality-brand {
+      border-right: 1px solid #d8dbe0 !important;
+      border-bottom: 0 !important;
+    }
+
+    .inspection-page .quality-reference {
+      border-bottom: 0 !important;
+      border-left: 1px solid #d8dbe0 !important;
+    }
+
+    .inspection-page .document-identification {
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+    }
+
+    .inspection-page .quality-brand,
+    .inspection-page .document-identification,
+    .inspection-page .quality-reference {
+      min-width: 0 !important;
+      padding: 12px 14px !important;
+    }
+
+    .inspection-page .metadata-grid {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      justify-content: space-between !important;
+      gap: 10px 18px !important;
+      padding: 14px 16px !important;
+    }
+
+    .inspection-page .metadata-grid > div {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      flex: 0 0 auto !important;
+    }
+
+    .inspection-page .metadata-grid > .metadata-client {
+      min-width: 25mm !important;
+      flex: 0 100 auto !important;
+    }
+
+    .inspection-page .metadata-grid > .metadata-item {
+      min-width: 25mm !important;
+      flex: 0 1 auto !important;
+    }
+
+    .inspection-page .metadata-grid strong {
+      font-size: 13px !important;
+    }
+
+    .inspection-page .metadata-grid .document-label {
+      font-size: 12px !important;
+    }
+
+    .inspection-page .metadata-client strong,
+    .inspection-page .metadata-item strong {
+      display: block !important;
+      overflow: hidden !important;
+      white-space: nowrap !important;
+      text-overflow: ellipsis !important;
+    }
+
+    .inspection-page .document-section {
+      display: block !important;
+      padding: 14px 0 !important;
+    }
+
+    // Let the questionnaire span pages without changing the footer cards' grouping.
+    .inspection-page .detail-content {
+      display: block !important;
+    }
+
+    .inspection-page .document-card,
+    .inspection-page .document-section,
+    .inspection-page .detail-table-container,
+    .inspection-page .detail-table,
+    .inspection-page .detail-table tbody {
+      page-break-inside: auto !important;
+      break-inside: auto !important;
+    }
+
+    .inspection-page .document-card {
+      overflow: visible !important;
+    }
+
+    .inspection-page .detail-table-container {
+      // The wrapper would extend to the page edge after the last printable row.
+      // The table cells and repeated footer draw the printed frame instead.
+      display: contents;
+      border: 0;
+      border-radius: 0;
+    }
+
+    .inspection-page .detail-table-container + .detail-table-container > .detail-table {
+      margin-top: 16px;
+    }
+
+    .inspection-page .detail-table {
+      width: 100% !important;
+      min-width: 0 !important;
+      border: 0;
+      border-collapse: separate !important;
+      border-spacing: 0;
+      border-radius: 0;
+      overflow: visible;
+      -webkit-box-decoration-break: slice;
+      box-decoration-break: slice;
+    }
+
+    .inspection-page .detail-table thead {
+      display: table-header-group;
+    }
+
+    .inspection-page .detail-table thead th:first-child {
+      border-top-left-radius: 8px;
+    }
+
+    .inspection-page .detail-table thead th:last-child {
+      border-top-right-radius: 8px;
+    }
+
+    .inspection-page .detail-table tbody td:first-child {
+      border-left: 1px solid #d8dbe0;
+    }
+
+    .inspection-page .detail-table tbody td:last-child {
+      border-right: 1px solid #d8dbe0;
+    }
+
+    .inspection-page .detail-table tfoot.checklist-table-footer {
+      display: table-footer-group !important;
+    }
+
+    .inspection-page .detail-table tfoot.checklist-table-footer td {
+      height: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+    }
+
+    .inspection-page .checklist-table-edge {
+      position: relative;
+      height: 0;
+      margin: 0 8px;
+      border-bottom: 1px solid #d8dbe0;
+    }
+
+    .inspection-page .checklist-table-edge::before,
+    .inspection-page .checklist-table-edge::after {
+      position: absolute;
+      bottom: -1px;
+      width: 8px;
+      height: 8px;
+      content: '';
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .inspection-page .checklist-table-edge::before {
+      left: -8px;
+      background: radial-gradient(circle at right top, transparent 7px, #d8dbe0 7px, #d8dbe0 8px, #fff 8px);
+    }
+
+    .inspection-page .checklist-table-edge::after {
+      right: -8px;
+      background: radial-gradient(circle at left top, transparent 7px, #d8dbe0 7px, #d8dbe0 8px, #fff 8px);
+    }
+
+    .inspection-page .detail-table col.number-column,
+    .inspection-page .detail-table tbody td.number {
+      width: 40px !important;
+    }
+
+    .inspection-page .detail-table tbody td.number {
+      padding-right: 3px !important;
+      padding-left: 3px !important;
+      white-space: nowrap !important;
+      overflow-wrap: normal !important;
+      word-break: normal !important;
+    }
+
+    .inspection-page .detail-table tbody tr:nth-child(even) td:not(.mark) {
+      background: #f5f6f8 !important;
+    }
+
+    .inspection-page .detail-table tbody td.mark {
+      background: #e5e7eb !important;
+    }
+
+    .inspection-page .detail-table tbody td {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .inspection-page .print-history {
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 8mm 0 0 !important;
+    }
+
+    .inspection-page table {
+      page-break-inside: auto;
+    }
+
+    .inspection-page tr {
+      page-break-inside: avoid;
+    }
+  }
+}

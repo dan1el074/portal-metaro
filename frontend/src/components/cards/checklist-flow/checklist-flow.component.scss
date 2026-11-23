@@ -1,0 +1,91 @@
+.inspection-flow {
+  margin: 0;
+}
+
+.flow-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 0.5rem 1rem;
+}
+
+.flow-step {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  min-width: 150px;
+  border: 0;
+  background: none;
+  color: var(--cui-body-color);
+}
+
+.paper {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 98px;
+  border: 1px solid var(--cui-border-color);
+  border-radius: 0.65rem;
+  color: inherit;
+  font-size: 4.35rem;
+}
+
+.flow-step.current {
+  color: var(--cui-primary);
+}
+
+.flow-step.current .paper {
+  background: rgba(var(--cui-primary-rgb), 0.1);
+}
+
+.flow-step.future {
+  color: var(--cui-secondary-color);
+}
+
+.flow-step.future .paper {
+  background: rgba(var(--cui-secondary-rgb), 0.1);
+}
+
+.flow-step strong {
+  font-size: 0.78rem;
+}
+
+.flow-step small {
+  color: inherit;
+  font-size: 0.68rem;
+}
+
+.skip-reason {
+  max-width: 140px;
+  color: var(--cui-secondary-color);
+  font-size: 0.66rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.connector {
+  color: var(--cui-secondary-color);
+  margin: 0 0.35rem;
+}
+
+.flow-step:not(:disabled) {
+  cursor: pointer;
+}
+
+@media (max-width: 767.98px) {
+  .flow-list {
+    justify-content: flex-start;
+  }
+
+  .flow-step {
+    min-width: 130px;
+  }
+
+  .paper {
+    width: 74px;
+    height: 84px;
+    font-size: 3.7rem;
+  }
+}

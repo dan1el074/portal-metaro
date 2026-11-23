@@ -41,7 +41,7 @@ export class CancelStepFlowModalComponent {
     this.close.emit();
   }
 
-  protected handleLiveDemoChange(event: any) {
+  protected handleVisibilityChange(event: boolean): void {
     if (!event) this.onClose();
   }
 

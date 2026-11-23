@@ -29,13 +29,15 @@ public class RawMaterialStockAlertScheduler {
             String subject = "Estoque abaixo do mínimo: %s - %s".formatted(item.getCode(), item.getName());
             String html = RawMaterialLowStockEmailTemplate.render(item);
 
-            for (User recipient : recipients) {
-                try {
-                    emailService.sendHtmlEmail(recipient.getEmail(), subject, html, "Matérias-primas");
-                } catch (Exception exception) {
-                    log.error("Falha ao enviar alerta de estoque do item {} para {}", rawMaterialId,
-                            recipient.getEmail(), exception);
-                }
+            try {
+                emailService.sendHtmlEmailBcc(
+                        recipients.stream().map(User::getEmail).toList(),
+                        subject,
+                        html,
+                        "Matérias-primas"
+                );
+            } catch (Exception exception) {
+                log.error("Falha ao enviar alerta de estoque do item {}", rawMaterialId, exception);
             }
         } catch (Exception exception) {
             log.error("Falha ao executar alerta de estoque do item {}", rawMaterialId, exception);

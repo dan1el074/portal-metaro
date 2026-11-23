@@ -44,12 +44,14 @@ public class RawMaterialInputDto {
     private Long categoryId;
     @NotNull
     private Boolean active;
+    @Size(max = 500, message = "A justificativa deve ter no máximo 500 caracteres")
+    private String deactivationReason;
 
     public RawMaterialInputDto(String code, String name, String description, BigDecimal currentStorage,
                                BigDecimal minStorage, BigDecimal maxStorage, BigDecimal length, BigDecimal width,
                                BigDecimal thickness, BigDecimal weightPerSquareMeter, Long categoryId,
                                Boolean active) {
         this(code, name, description, currentStorage, minStorage, maxStorage, length, width, thickness,
-                BigDecimal.ZERO, weightPerSquareMeter, BigDecimal.ZERO, BigDecimal.ZERO, categoryId, active);
+                BigDecimal.ZERO, weightPerSquareMeter, BigDecimal.ZERO, BigDecimal.ZERO, categoryId, active, null);
     }
 }

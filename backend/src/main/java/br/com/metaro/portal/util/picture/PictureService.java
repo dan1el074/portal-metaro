@@ -131,6 +131,32 @@ public class PictureService {
         return pictureRepository.saveAll(archives);
     }
 
+    @Transactional
+    public List<Picture> saveChecklistImages(List<MultipartFile> files) throws IOException {
+        List<Picture> pictures = new ArrayList<>();
+        PictureType type = PictureType.CHECKLIST;
+
+        for (MultipartFile file : files) {
+            String name = buildPictureName("EVIDENCIA", file);
+            Path filePath = reserveUniqueServerPath(type);
+
+            try {
+                saveCompressedImage(file, filePath);
+            } catch (IOException | RuntimeException exception) {
+                Files.deleteIfExists(filePath);
+                throw exception;
+            }
+
+            Picture picture = new Picture();
+            picture.setName(name);
+            picture.setPath(filePath.toString());
+            picture.setType(type);
+            pictures.add(picture);
+        }
+
+        return pictureRepository.saveAll(pictures);
+    }
+
     private String buildPictureName(String prefix, MultipartFile file) {
         String originalName = StringUtils.getFilename(
                 StringUtils.cleanPath(StringUtils.hasText(file.getOriginalFilename())

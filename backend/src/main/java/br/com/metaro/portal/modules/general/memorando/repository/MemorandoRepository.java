@@ -16,6 +16,17 @@ import java.util.Optional;
 @Repository
 public interface MemorandoRepository extends JpaRepository<Memorando, Long> {
     @Query("""
+        SELECT m FROM Memorando m
+        WHERE m.request = :request
+            AND (:admin = true
+                OR m.status <> br.com.metaro.portal.modules.general.memorando.entity.MemorandoStatus.CREATED
+                OR m.createdBy.id = :userId)
+        ORDER BY m.createAt DESC, m.id DESC
+    """)
+    List<Memorando> findAccessibleByRequest(@Param("request") Long request,
+            @Param("admin") boolean admin, @Param("userId") Long userId);
+
+    @Query("""
         SELECT m
         FROM Memorando m
         WHERE (:admin = true
@@ -75,6 +86,7 @@ public interface MemorandoRepository extends JpaRepository<Memorando, Long> {
             m.number,
             m.request,
             m.client,
+            m.erp_source,
             m.items,
             m.title,
             m.description,

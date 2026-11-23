@@ -1,6 +1,9 @@
 package br.com.metaro.portal.modules.general.stepFlow.controller;
 
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderDto;
+import br.com.metaro.portal.modules.general.stepFlow.dto.OrderItemDto;
+import br.com.metaro.portal.modules.general.stepFlow.dto.OrderItemQuantityInputDto;
+import jakarta.validation.Valid;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderMinDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderVolumeDto;
@@ -24,6 +27,25 @@ import java.util.List;
 public class StepFlowController {
     @Autowired
     private StepFlowService stepFlowService;
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @PutMapping("/{orderId}/items/{itemId}/quantity")
+    public ResponseEntity<OrderItemDto> updateItemQuantity(@PathVariable Long orderId, @PathVariable Long itemId,
+            @Valid @RequestBody OrderItemQuantityInputDto dto) {
+        return ResponseEntity.ok(stepFlowService.updateItemQuantity(orderId, itemId, dto));
+    }
+
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
+    @PutMapping("/{id}/reprocess")
+    public ResponseEntity<OrderDto> reprocess(@PathVariable Long id) throws IOException {
+        return ResponseEntity.ok(stepFlowService.reprocess(id));
+    }
+
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PutMapping("/{id}/reopen")
+    public ResponseEntity<OrderDto> reopen(@PathVariable Long id) {
+        return ResponseEntity.ok(stepFlowService.reopen(id));
+    }
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW')")
     @GetMapping
@@ -60,8 +82,9 @@ public class StepFlowController {
 
     @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_STEP_FLOW_OPERATOR')")
     @PostMapping
-    public ResponseEntity<Void> create (@RequestBody ErpOrderDto erpOrderDto) {
-        stepFlowService.create(erpOrderDto);
+    public ResponseEntity<Void> create(@RequestBody ErpOrderDto erpOrderDto,
+                                       @RequestParam(defaultValue = "false") boolean legacy) {
+        stepFlowService.create(erpOrderDto, legacy);
         return ResponseEntity.noContent().build();
     }
 
@@ -71,10 +94,12 @@ public class StepFlowController {
             @PathVariable Long id,
             @ModelAttribute OrderInputDto dto,
             @RequestParam(value = "itemsJson", required = false) String itemsJson,
+            @RequestParam(value = "checklistFlowIdsJson", required = false) String checklistFlowIdsJson,
             @RequestParam(value = "setStage", required = false) String stepId
     ) throws IOException {
         if (stepId != null) dto.setNewStepId(Integer.parseInt(stepId));
         dto.setItems(stepFlowService.parseItems(itemsJson));
+        dto.setChecklistFlowIds(stepFlowService.parseChecklistFlowIds(checklistFlowIdsJson));
         OrderDto newDto = stepFlowService.update(id, dto);
         return ResponseEntity.ok(newDto);
     }

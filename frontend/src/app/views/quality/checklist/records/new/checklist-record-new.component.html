@@ -1,0 +1,6 @@
+<c-container class="h-auto px-4 administration-page record-editor-page" fluid>
+  <nav class="detail-navigation" aria-label="Navegação do preenchimento"><div class="detail-breadcrumb"><button type="button" class="back-link" (click)="cancel()"><app-checklist-icon name="arrow-left" /> Voltar à lista</button><span class="breadcrumb-separator">/</span><strong>Preencher checklist</strong></div></nav>
+  @if(record && flow){<main class="editor-content"><header class="editor-heading"><h1>Preencher checklist</h1><p>{{ snapshot.category.name }} · {{ snapshot.template.name }}</p></header><app-checklist-record-form [record]="record" [flow]="flow" (changed)="changed()" (saveRecord)="save($event)" (cancel)="cancel()" /></main>}
+</c-container>
+<app-checklist-action-modal />
+<app-checklist-upload-modal />

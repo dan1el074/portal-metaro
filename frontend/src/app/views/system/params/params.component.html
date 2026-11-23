@@ -139,6 +139,32 @@
     <c-card-body class="tools-body">
       <div class="tool-row">
         <div class="tool-copy">
+          <h3>Solicitações de acesso</h3>
+          <p>Caixa de e-mail que recebe as solicitações de novos usuários.</p>
+        </div>
+        <div class="request-mail-control">
+          <input
+            cFormControl
+            type="email"
+            autocomplete="email"
+            aria-label="E-mail destinatário das solicitações de acesso"
+            placeholder="exemplo@teste.com"
+            [disabled]="requestMailConfigLoading || requestMailConfigSaving"
+            [(ngModel)]="requestMailTo"
+          >
+          <button
+            class="params-action primary"
+            type="button"
+            [disabled]="requestMailConfigLoading || requestMailConfigSaving"
+            (click)="saveRequestMailConfig()"
+          >
+            {{ requestMailConfigSaving ? 'Salvando...' : (requestMailConfigLoading ? 'Carregando...' : 'Salvar') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="tool-row">
+        <div class="tool-copy">
           <h3>Histórico de matérias-primas</h3>
           <p>Quantidade máxima de movimentações mantidas por item.</p>
         </div>

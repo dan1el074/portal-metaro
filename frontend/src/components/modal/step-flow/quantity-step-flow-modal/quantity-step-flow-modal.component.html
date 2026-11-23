@@ -3,7 +3,7 @@
     <c-modal-header>
       <svg [cIcon]="icons.cilPencil" class="modal-title-icon" size="lg"></svg>
       <h5 cModalTitle>Editar quantidade - {{ item.code }}</h5>
-      <button cButtonClose type="button" (click)="onClose()"></button>
+      <button cButtonClose type="button" [disabled]="saving" (click)="onClose()"></button>
     </c-modal-header>
 
     <c-modal-body>
@@ -22,7 +22,7 @@
               type="button"
               tabindex="-1"
               (mousedown)="$event.preventDefault()"
-              (click)="decrement()"
+              [disabled]="saving" (click)="decrement()"
               aria-label="Diminuir"
               variant="outline"
             >-</button>
@@ -33,6 +33,7 @@
                 type="number"
                 id="inputQuantity"
                 [formControl]="quantityControl"
+                [readOnly]="saving"
                 [min]="0"
                 [max]="item.quantity"
                 step="1"
@@ -53,7 +54,7 @@
               type="button"
               tabindex="-1"
               (mousedown)="$event.preventDefault()"
-              (click)="increment()"
+              [disabled]="saving" (click)="increment()"
               aria-label="Aumentar"
               variant="outline"
             >+</button>
@@ -73,8 +74,8 @@
     </c-modal-body>
 
     <c-modal-footer>
-      <button cButton color="secondary" type="button" (click)="onClose()">Cancelar</button>
-      <button cButton color="primary" type="button" (click)="onSave()">Salvar</button>
+      <button cButton color="secondary" type="button" [disabled]="saving" (click)="onClose()">Cancelar</button>
+      <button cButton color="primary" type="button" [disabled]="saving" [attr.aria-busy]="saving" (click)="onSave()">{{ saving ? 'Salvando...' : 'Salvar' }}</button>
     </c-modal-footer>
   }
 </c-modal>

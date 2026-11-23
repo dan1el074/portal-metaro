@@ -18,7 +18,7 @@ public class PositionController {
     @Autowired
     private PositionService positionService;
 
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_POSITION_PANEL')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN','ROLE_POSITION_PANEL','ROLE_CHECKLIST')")
     @GetMapping
     public ResponseEntity<List<PositionDto>> listPositions() {
         List<PositionDto> dtos = positionService.listPositions();

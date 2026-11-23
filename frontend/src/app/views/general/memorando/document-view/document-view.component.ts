@@ -5,7 +5,7 @@ import { ButtonDirective, ColComponent, ContainerComponent, FormCheckComponent, 
 import { distinctUntilChanged, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastrService } from '../../../../services/toast.service';
-import { AuthGuard } from '../../../../config/authGuard';
+import { AuthGuard } from '../../../../config/auth.guard';
 import { MemorandoService } from './../../../../services/memorando.service';
 import { NotificationWebSocketService } from '../../../../services/websocket.service';
 import { ErrorService } from '../../../../services/error.service';

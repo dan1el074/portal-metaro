@@ -71,7 +71,7 @@ body {
 
 .sidebar {
   --cui-sidebar-width: 17rem;
-  background-image: linear-gradient(45deg, var(--cui-dark-start) 0%, var(--cui-dark-stop) 100%);
+  background-image: linear-gradient(45deg,var(--cui-dark-start) 0%,var(--cui-dark-stop) 100%)
 }
 
 .header > .container-fluid,
@@ -219,7 +219,7 @@ c-modal.img-modal c-modal-content.modal-content {
           transition: .1s;
 
           &:hover {
-            transform: scale(1.01);
+            transform: scale(1.005);
           }
 
           .text {
@@ -274,6 +274,42 @@ c-modal.img-modal c-modal-content.modal-content {
       padding: 0 16px 0 26px;
       font-weight: 600 !important;
       font-size: 14px;
+    }
+  }
+}
+
+.layout-custom-alert.checklist-memorandos-alert .modal-dialog {
+  .modal-header {
+    background-color: var(--cui-warning) !important;
+    color: #332100;
+
+    .header-title { color: inherit; }
+  }
+
+  .modal-body .warning-text {
+    display: block;
+    padding: 0 26px;
+  }
+
+  .modal-body .cards-container .card {
+    gap: 12px;
+    color: var(--cui-body-color);
+    text-decoration: none;
+    transition: none;
+
+    &:hover {
+      transform: none;
+      background: rgba(var(--cui-emphasis-color-rgb), 0.025);
+    }
+
+    .text {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .label span.approved {
+      background-color: var(--cui-success-bg-subtle);
+      color: var(--cui-success-text-emphasis);
     }
   }
 }
@@ -556,8 +592,6 @@ table {
 
 // step flow table
 .step-flow-table {
-  padding: 4px 4px 0 4px;
-
   table {
     margin-bottom: 0;
   }

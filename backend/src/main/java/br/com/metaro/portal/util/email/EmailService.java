@@ -10,6 +10,9 @@ import org.springframework.util.StringUtils;
 
 import lombok.RequiredArgsConstructor;
 
+import java.util.Collection;
+import java.util.Objects;
+
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -35,6 +38,35 @@ public class EmailService {
             throw exception;
         }
         emailLogService.record(para, assunto, module, EmailStatus.SENT, null);
+    }
+
+    public void sendHtmlEmailBcc(Collection<String> bcc, String subject, String html, String module) throws Exception {
+        String[] recipients = bcc == null ? new String[0] : bcc.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toArray(String[]::new);
+
+        if (recipients.length == 0) return;
+
+        String recipientLog = String.join(", ", recipients);
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+            helper.setTo(mailFrom);
+            helper.setBcc(recipients);
+            helper.setSubject(subject);
+            helper.setText(EmailCssInliner.inline(html), true);
+            helper.setFrom(new InternetAddress(mailFrom, "Portal Metaro"));
+
+            mailSender.send(message);
+        } catch (Exception exception) {
+            emailLogService.record(recipientLog, subject, module, EmailStatus.ERROR, exception);
+            throw exception;
+        }
+        emailLogService.record(recipientLog, subject, module, EmailStatus.SENT, null);
     }
 
     public void sendPlainTextEmail(String to, String cc, String subject, String text, String module) throws Exception {

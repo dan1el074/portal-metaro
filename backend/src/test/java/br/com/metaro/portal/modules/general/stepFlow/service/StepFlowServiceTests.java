@@ -4,6 +4,8 @@ import br.com.metaro.portal.modules.general.stepFlow.dto.OrderDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderInputDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderMinDto;
 import br.com.metaro.portal.modules.general.stepFlow.dto.OrderVolumeInputDto;
+import br.com.metaro.portal.core.entities.Position;
+import br.com.metaro.portal.core.services.exceptions.ForbiddenException;
 import br.com.metaro.portal.core.entities.Role;
 import br.com.metaro.portal.core.entities.User;
 import br.com.metaro.portal.core.services.UserService;
@@ -11,6 +13,7 @@ import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityExceptio
 import br.com.metaro.portal.modules.general.stepFlow.entities.*;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepository;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistStepFlowService;
 import br.com.metaro.portal.util.picture.Picture;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -31,15 +34,63 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class StepFlowServiceTests {
+
+    @Test
+    void displaysPendingWhileWaitingForChecklistEvenWhenOverdue() {
+        Order order = finalAssemblyOrder();
+        order.setNumber(900);
+        order.setItems(new ArrayList<>());
+        order.setDueDate(java.time.LocalDate.now().minusDays(1));
+        order.getSteps().getFirst().setChecklistPending(true);
+        assertThat(new OrderMinDto(order).getStatus()).isEqualTo("Pendente");
+        assertThat(new OrderDto(order).getStatus()).isEqualTo("Pendente");
+        order.getSteps().getFirst().setChecklistPending(false);
+        assertThat(new OrderMinDto(order).getStatus()).isEqualTo("Atrasado");
+    }
+
+    @Test
+    void reopensClosedFlowsInTheirCurrentStage() {
+        for (OrderStatus status : List.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
+            Order order = finalAssemblyOrder();
+            order.setNumber(900);
+            order.setItems(new ArrayList<>());
+            order.setStatus(status);
+            OrderRepository repository = mock(OrderRepository.class);
+            UserService users = mock(UserService.class);
+            User admin = new User();
+            Role role = new Role(); role.setAuthority("ROLE_ADMIN"); admin.addRole(role);
+            when(users.authenticate()).thenReturn(admin);
+            ChecklistStepFlowService checklists = mock(ChecklistStepFlowService.class);
+            when(checklists.lockForReopening(1L)).thenReturn(order);
+            when(repository.save(order)).thenReturn(order);
+            StepFlowService service = serviceWith(repository, users);
+            ReflectionTestUtils.setField(service, "checklistStepFlowService", checklists);
+            service.reopen(1L);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.IN_PROGRESS);
+            assertThat(order.getCurrentStep()).isEqualTo(StepType.FINAL_ASSEMBLY);
+            assertThat(order.getSteps().getFirst().getStatus()).isEqualTo(StepStatus.ACTIVE);
+            assertThat(order.getSteps().getFirst().getMessages()).hasSize(1);
+        }
+    }
+
+    @Test
+    void preventsOperatorsFromReopeningFlows() {
+        UserService users = mock(UserService.class);
+        when(users.authenticate()).thenReturn(operatorFrom("PCP"));
+        StepFlowService service = serviceWith(mock(OrderRepository.class), users);
+        assertThatThrownBy(() -> service.reopen(1L)).isInstanceOf(ForbiddenException.class);
+    }
 
     @Test
     void addsOccurrenceSuffixFromSecondRegistrationOnwards() {
         OrderRepository orderRepository = mock(OrderRepository.class);
         StepFlowService service = new StepFlowService();
         ReflectionTestUtils.setField(service, "orderRepository", orderRepository);
+        ReflectionTestUtils.setField(service, "checklistStepFlowService", mock(ChecklistStepFlowService.class));
         when(orderRepository.countByNumber(14064)).thenReturn(1L);
 
         service.create(erpOrder(14064));
@@ -59,6 +110,7 @@ class StepFlowServiceTests {
         OrderRepository orderRepository = mock(OrderRepository.class);
         StepFlowService service = new StepFlowService();
         ReflectionTestUtils.setField(service, "orderRepository", orderRepository);
+        ReflectionTestUtils.setField(service, "checklistStepFlowService", mock(ChecklistStepFlowService.class));
         when(orderRepository.countByNumber(14064)).thenReturn(0L);
 
         service.create(erpOrder(14064));
@@ -147,8 +199,8 @@ class StepFlowServiceTests {
         StepFlowService service = serviceWith(orderRepository, userService);
         Order order = finalAssemblyOrder();
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(userService.authenticate()).thenReturn(new User());
+        when(orderRepository.findLockedById(1L)).thenReturn(Optional.of(order));
+        when(userService.authenticate()).thenReturn(operatorFrom("Montagem Final"));
 
         assertThatThrownBy(() -> service.goToNextStep(1L))
                 .isInstanceOf(UnprocessableEntityException.class)
@@ -166,13 +218,34 @@ class StepFlowServiceTests {
         adminRole.setAuthority("ROLE_ADMIN");
         administrator.addRole(adminRole);
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.findLockedById(1L)).thenReturn(Optional.of(order));
         when(userService.authenticate()).thenReturn(administrator);
 
         service.goToNextStep(1L);
 
         assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void checksTheCurrentStageDepartmentOnEveryAdvance() {
+        OrderRepository repository = mock(OrderRepository.class);
+        UserService users = mock(UserService.class);
+        StepFlowService service = serviceWith(repository, users);
+        Order order = finalAssemblyOrder();
+        order.getVolumes().add(new OrderVolume());
+        User actor = operatorFrom("Qualidade");
+
+        when(repository.findLockedById(1L)).thenReturn(Optional.of(order));
+        when(users.authenticate()).thenReturn(actor);
+
+        service.goToNextStep(1L);
+        assertThatThrownBy(() -> service.goToNextStep(1L)).isInstanceOf(ForbiddenException.class);
+
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+        assertThat(order.getSteps().getFirst().getFinishedBy()).isSameAs(actor);
+        assertThat(order.getSteps().getLast().getStatus()).isEqualTo(StepStatus.ACTIVE);
+        verify(repository).save(order);
     }
 
     @Test
@@ -245,10 +318,142 @@ class StepFlowServiceTests {
         assertThat(order.getSteps().get(4).getStatus()).isEqualTo(StepStatus.WAITING);
     }
 
+    @Test
+    void pcpOperatorCanReturnToFinalAssemblyWithAuditAndPreservedOrderData() {
+        UserService userService = mock(UserService.class);
+        StepFlowService service = serviceWith(mock(OrderRepository.class), userService);
+        User operator = operatorFrom("PCP");
+        when(userService.authenticate()).thenReturn(operator);
+        Order order = orderWithAllSteps(Instant.parse("2026-10-14T10:00:00Z"));
+        order.setCurrentStep(StepType.PCP);
+        OrderStep assembly = order.getSteps().getFirst();
+        assembly.setStatus(StepStatus.DONE);
+        assembly.setFinishedAt(Instant.parse("2026-10-14T11:00:00Z"));
+        assembly.setFinishedBy(operator);
+        OrderStep pcp = order.getSteps().get(1);
+        pcp.setStatus(StepStatus.ACTIVE);
+        pcp.getMessages().add(new StepMessage("Histórico anterior", pcp, operator));
+        OrderInputDto input = new OrderInputDto();
+        input.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+        input.setComment("Ajustar montagem");
+
+        ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order);
+
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.FINAL_ASSEMBLY);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.IN_PROGRESS);
+        assertThat(assembly.getStatus()).isEqualTo(StepStatus.ACTIVE);
+        assertThat(assembly.getFinishedAt()).isNull();
+        assertThat(assembly.getFinishedBy()).isNull();
+        assertThat(assembly.getStartedAt()).isAfter(Instant.parse("2026-10-14T11:00:00Z"));
+        assertThat(pcp.getStatus()).isEqualTo(StepStatus.WAITING);
+        assertThat(pcp.getMessages()).hasSize(3);
+        assertThat(pcp.getMessages().getLast().getMessage()).contains("PCP -> Montagem Final");
+        assertThat(pcp.getMessages().getLast().getCreatedBy()).isSameAs(operator);
+        assertThat(order.getSteps().subList(2, 5)).allMatch(step -> step.getStatus() == StepStatus.WAITING);
+    }
+
+    @Test
+    void operatorsCannotManuallyChangeAnyOtherStageTransition() {
+        for (StepType source : StepType.values()) {
+            for (StepType target : StepType.values()) {
+                if (source == target || (source == StepType.PCP && target == StepType.FINAL_ASSEMBLY)) continue;
+                UserService userService = mock(UserService.class);
+                StepFlowService service = serviceWith(mock(OrderRepository.class), userService);
+                String department = switch (source) {
+                    case FINAL_ASSEMBLY -> "Montagem Final";
+                    case PCP -> "PCP";
+                    case FREIGHT -> "Comercial";
+                    case BILLING -> "Financeiro";
+                    case SHIPPING -> "Almoxarifado";
+                };
+                when(userService.authenticate()).thenReturn(operatorFrom(department));
+                Order order = orderWithAllSteps(Instant.now());
+                order.setCurrentStep(source);
+                OrderInputDto input = new OrderInputDto();
+                input.setNewStepId(target.ordinal());
+
+                assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order))
+                        .isInstanceOf(ForbiddenException.class);
+                assertThat(order.getCurrentStep()).isEqualTo(source);
+            }
+        }
+    }
+
+    @Test
+    void returnFromPcpStillRequiresTheResponsibleDepartmentAndAnOpenOrder() {
+        UserService userService = mock(UserService.class);
+        StepFlowService service = serviceWith(mock(OrderRepository.class), userService);
+        Order order = orderWithAllSteps(Instant.now());
+        order.setCurrentStep(StepType.PCP);
+        OrderInputDto input = new OrderInputDto();
+        input.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+        when(userService.authenticate()).thenReturn(operatorFrom("Montagem Final"));
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order))
+                .isInstanceOf(ForbiddenException.class);
+        when(userService.authenticate()).thenReturn(operatorFrom("PCP"));
+        for (OrderStatus status : List.of(OrderStatus.CANCELLED, OrderStatus.COMPLETED)) {
+            order.setStatus(status);
+            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order))
+                    .isInstanceOf(UnprocessableEntityException.class);
+        }
+        assertThat(order.getCurrentStep()).isEqualTo(StepType.PCP);
+    }
+
+    @Test
+    void qualityOperatorsCanEditFinalAssemblyButCannotEditPcp() throws Exception {
+        UserService users = mock(UserService.class);
+        when(users.authenticate()).thenReturn(operatorFrom("Qualidade"));
+        StepFlowService service = serviceWith(mock(OrderRepository.class), users);
+        Order order = orderWithAllSteps(Instant.now());
+        OrderInputDto input = new OrderInputDto(); input.setComment("Conferido pela Qualidade.");
+        ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order);
+        assertThat(order.getSteps().getFirst().getMessages()).hasSize(1);
+        order.setCurrentStep(StepType.PCP);
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "rulesForUpdate", input, order)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void reprocessingRequiresPcpDepartmentAndAnOpenPcpStage() {
+        UserService users = mock(UserService.class);
+        OrderRepository repository = mock(OrderRepository.class);
+        StepFlowService service = serviceWith(repository, users);
+        StepFlowErpOrderService erp = mock(StepFlowErpOrderService.class);
+        ReflectionTestUtils.setField(service, "erpOrders", erp);
+        Order order = orderWithAllSteps(Instant.now());
+        order.setCurrentStep(StepType.PCP);
+        when(repository.findLockedById(1L)).thenReturn(Optional.of(order));
+        when(users.authenticate()).thenReturn(operatorFrom("Qualidade"));
+        assertThatThrownBy(() -> service.reprocess(1L)).isInstanceOf(ForbiddenException.class);
+        when(users.authenticate()).thenReturn(operatorFrom("PCP"));
+        for (OrderStatus status : List.of(OrderStatus.CANCELLED, OrderStatus.COMPLETED)) {
+            order.setStatus(status);
+            assertThatThrownBy(() -> service.reprocess(1L)).isInstanceOf(UnprocessableEntityException.class);
+        }
+        order.setStatus(OrderStatus.IN_PROGRESS); order.setCurrentStep(StepType.FINAL_ASSEMBLY);
+        User admin = new User(); Role role = new Role(); role.setAuthority("ROLE_ADMIN"); admin.addRole(role);
+        when(users.authenticate()).thenReturn(admin);
+        assertThatThrownBy(() -> service.reprocess(1L)).isInstanceOf(UnprocessableEntityException.class);
+        verifyNoInteractions(erp);
+    }
+
+    private User operatorFrom(String department) {
+        User operator = new User();
+        Position position = new Position();
+        position.setName(department);
+        operator.setPosition(position);
+        Role role = new Role();
+        role.setAuthority("ROLE_STEP_FLOW_OPERATOR");
+        operator.addRole(role);
+        return operator;
+    }
+
     private StepFlowService serviceWith(OrderRepository orderRepository, UserService userService) {
         StepFlowService service = new StepFlowService();
+        ChecklistStepFlowService checklistStepFlowService = mock(ChecklistStepFlowService.class);
+        when(checklistStepFlowService.isStepRequirementSatisfied(1L, StepType.FINAL_ASSEMBLY)).thenReturn(true);
         ReflectionTestUtils.setField(service, "orderRepository", orderRepository);
         ReflectionTestUtils.setField(service, "userService", userService);
+        ReflectionTestUtils.setField(service, "checklistStepFlowService", checklistStepFlowService);
         return service;
     }
 

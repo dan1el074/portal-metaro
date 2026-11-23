@@ -1,0 +1,24 @@
+<c-modal modalBackNavigation [visible]="visible" (visibleChange)="visible = $event" alignment="center" backdrop="static">
+  <c-modal-header>
+    <h5 cModalTitle>Delegar checklist</h5>
+    <button cButtonClose type="button" aria-label="Fechar" cTooltip="Fechar" cTooltipPlacement="bottom" (click)="close()"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <p class="description">Selecione um operador ativo e autorizado para esta categoria.</p>
+    @if (loading) { <p class="state">Carregando operadores...</p> }
+    @if (error) { <div class="warning">{{ error }}</div> }
+    @if (!loading) {
+      <label>Operador
+        <select cSelect [(ngModel)]="userId">
+          <option [ngValue]="null">Selecione</option>
+          @for (operator of operators; track operator.id) { <option [ngValue]="operator.id">{{ operator.name }}</option> }
+        </select>
+      </label>
+      @if (!operators.length) { <p class="state">Nenhum operador ativo possui acesso a esta categoria.</p> }
+    }
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton type="button" color="secondary" variant="outline" [disabled]="saving" (click)="close()">Cancelar</button>
+    <button cButton type="button" color="primary" [disabled]="userId === null || saving" (click)="save()">{{ saving ? 'Delegando...' : 'Delegar' }}</button>
+  </c-modal-footer>
+</c-modal>

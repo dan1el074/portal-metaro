@@ -6,7 +6,7 @@
       <div class="sfo-info">
         <div class="sfo-status">
           <span class="sof-order">#{{ order.number }}</span>
-          <span class="badge sof-badge" [class.late]="order.status == 'Atrasado'" [class.cancel]="order.status == 'Cancelado'" [class.complete]="order.status == 'Concluído'">
+          <span class="badge sof-badge" [class.pending]="order.status === 'Pendente'" [class.late]="order.status == 'Atrasado'" [class.cancel]="order.status == 'Cancelado'" [class.complete]="order.status == 'Concluído'">
             <span class="bullet"></span>
             {{ order.status }}
           </span>
@@ -38,17 +38,21 @@
     </div>
 
     <div class="sof-custom-body">
-      <div class="sofd-box client-info">
-        <div class="sofd-box-info">
-          <span class="sofd-box-info-label">Cliente</span>
-          <span>{{ order.client }}</span>
-        </div>
-        <div class="sofd-box-info">
-          <span class="sofd-box-info-label">CNPJ</span>
-          <span>{{ order.cnpj }}</span>
-        </div>
-      </div>
       <app-step-flow-history [order]="order" />
+      @if(linkedChecklistEquipment.length){
+        <div class="sofd-box linked-checklist-box">
+          <div class="sofd-box-info"><span class="sofd-box-info-label">Fluxos de checklist vinculados</span><span>{{ linkedChecklistEquipment.length }} fluxo(s)</span></div>
+          <div class="linked-checklist-list">
+            @for(equipment of linkedChecklistEquipment;track equipment.flowId){
+              @if (equipment.recordId) {
+                <a class="linked-checklist-item" [routerLink]="['/qualidade/checklist', equipment.recordId]"><strong>Fluxo #{{ equipment.flowId }} · {{ equipment.serial || '-' }}</strong><small>{{ equipment.item }}</small><em>Acessar checklist</em></a>
+              } @else {
+                <div class="linked-checklist-item"><strong>Fluxo #{{ equipment.flowId }} · {{ equipment.serial || '-' }}</strong><small>{{ equipment.item }}</small></div>
+              }
+            }
+          </div>
+        </div>
+      }
       <app-step-flow-editable-media
         #filesSection
         [order]="order"
@@ -86,14 +90,18 @@
                   </div>
 
                   <div class="volume-actions">
-                    <button type="button" class="volume-action edit" (click)="openEditVolumeModal(volume, i)" [disabled]="volumeMutationLoading" aria-label="Editar volume">
+                    <button type="button" class="volume-action edit" (click)="openEditVolumeModal(volume, i)" [disabled]="volumeMutationLoading || quantityMutationLoading || saveLoading || nextStepLoading" aria-label="Editar volume">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>
                       </svg>
                     </button>
-                    <button type="button" class="volume-action delete" (click)="deleteVolume(i)" [disabled]="volumeMutationLoading" aria-label="Excluir volume">
+                    <button type="button" class="volume-action delete" (click)="deleteVolume(i)" [disabled]="volumeMutationLoading || quantityMutationLoading || saveLoading || nextStepLoading" aria-label="Excluir volume">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/>
+                        <path d="M10 11v6"/>
+                          <path d="M14 11v6"/>
+                          <path d="M3 6h18"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                       </svg>
                     </button>
                   </div>
@@ -103,7 +111,7 @@
               }
             </div>
 
-            <button cButton color="primary" type="button" class="add-volume-button" (click)="openAddVolumeModal()" [disabled]="volumeMutationLoading">
+            <button cButton color="primary" type="button" class="add-volume-button" (click)="openAddVolumeModal()" [disabled]="volumeMutationLoading || quantityMutationLoading || saveLoading || nextStepLoading">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -120,7 +128,7 @@
 
             <div class="sof-file-container">
               @for (itemGroup of itemsFormControls; track itemGroup.get('id')?.value; let i = $index) {
-                <div class="sof-file-item" [formGroup]="itemGroup">
+                <div class="sof-file-item production-item-row" [formGroup]="itemGroup">
                   <div class="produced-item-box">
                     <span class="produced-item-description">
                       <strong>{{ itemGroup.get('code')?.value }}</strong> - {{ itemGroup.get('description')?.value }}
@@ -134,6 +142,7 @@
                     class="sof-file-edit-icon"
                     type="button"
                     (click)="onOpenEditQuantityModal(itemGroup)"
+                      [disabled]="quantityMutationLoading || volumeMutationLoading || saveLoading || nextStepLoading"
                     [attr.aria-label]="'Editar quantidade de ' + itemGroup.get('code')?.value"
                   >
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -149,6 +158,38 @@
           </div>
         }
 
+        @if (order.currentStep == "Montagem Final") {
+        <div class="mb-3 checklist-equipment-box">
+          <label class="custom-label">Checklists vinculados</label>
+          <div class="checklist-count" aria-live="polite" [class.text-danger]="selectedChecklistEquipmentCount > checklistEquipmentLimit">
+            {{ selectedChecklistEquipmentCount }} de {{ checklistEquipmentLimit }} equipamento(s) vinculado(s)
+          </div>
+          <div class="sof-file-container">
+            @for (equipment of checklistEquipment; track equipment.flowId) {
+              <label class="sof-file-item integrated-checklist-item">
+                <span class="produced-item-box">
+                  <input type="checkbox" [checked]="equipment.selected"
+                    [disabled]="checklistEquipmentLoading || saveLoading || (!equipment.selected && selectedChecklistEquipmentCount >= checklistEquipmentLimit)"
+                    (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
+                  <span class="produced-item-description">
+                    <strong>{{ equipment.item }}</strong>
+                    <small>Número de série: {{ equipment.serial || '-' }}</small>
+                  </span>
+                </span>
+              </label>
+            } @empty {
+              <i class="custom-error">{{ checklistEquipmentLoading ? 'Carregando checklists...' : 'Nenhum checklist disponível para vincular.' }}</i>
+            }
+          </div>
+          @if (selectedChecklistEquipmentCount > checklistEquipmentLimit) {
+            <small class="text-danger">Remova vínculos ou ajuste a quantidade de itens a produzir antes de salvar.</small>
+          }
+          @if (checklistEquipmentError) {
+            <small class="text-danger">Não foi possível carregar os checklists.</small>
+            <button cButton type="button" color="secondary" variant="outline" (click)="loadChecklistEquipment()">Tentar novamente</button>
+          }
+        </div>
+        }
         @if (order.currentStep == "Frete") {
           <div class="mb-3">
             <label cLabel for="carrier" class="custom-label">Transportadora</label>
@@ -215,7 +256,27 @@
 
         <div class="buttons-container">
           @if (order.currentStep == "PCP") {
-            <button cButton color="danger" class="sofd-action-btn danger" (click)="toggleCancelModel(true)">
+            <button cButton color="secondary" variant="outline" type="button" class="sofd-action-btn return-to-assembly"
+              (click)="onReturnToFinalAssembly()"
+              [disabled]="quantityMutationLoading || reprocessLoading || saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: rotate(180deg)">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 12h8"></path>
+                <path d="m12 16 4-4-4-4"></path>
+              </svg>
+              Voltar Etapa
+            </button>
+            <button cButton color="secondary" variant="outline" type="button" class="sofd-action-btn"
+              (click)="openReprocessModal()" [disabled]="quantityMutationLoading || reprocessLoading || saveLoading || nextStepLoading || volumeMutationLoading">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+                <path d="M16 16h5v5"></path>
+              </svg>
+              Reprocessar
+            </button>
+            <button cButton color="danger" type="button" class="sofd-action-btn danger" [disabled]="reprocessLoading" (click)="toggleCancelModel(true)">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18"/>
                 <path d="m6 6 12 12"/>
@@ -224,7 +285,7 @@
             </button>
           }
 
-          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="saveLoading || volumeMutationLoading">
+          <button cButton color="primary" type="submit" class="sofd-action-btn" [disabled]="quantityMutationLoading || reprocessLoading || saveLoading || volumeMutationLoading || checklistEquipmentLoading || selectedChecklistEquipmentCount > checklistEquipmentLimit">
             @if (!saveLoading) {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="save-icon">
                 <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
@@ -265,9 +326,10 @@
       <button
         cButton
         color="primary"
+        type="button"
         class="sofd-action-btn"
         (click)="onNextStep()"
-        [disabled]="nextStepLoading || volumeMutationLoading"
+        [disabled]="nextStepDisabled"
         [attr.aria-busy]="nextStepLoading"
       >
         @if (nextStepLoading) {
@@ -294,8 +356,9 @@
 </div>
 
 <app-cancel-step-flow-modal [visible]="showCancelModal" [orderNumber]="order ? order.number : 0 " (close)="toggleCancelModel(false)" (cancelTask)="onCancel($event)"></app-cancel-step-flow-modal>
+<app-reprocess-step-flow-modal [visible]="showReprocessModal" [processing]="reprocessLoading" [orderNumber]="order?.number || ''" (close)="closeReprocessModal()" (confirm)="reprocessOrder()" />
 <app-video-modal [visible]="showVideoModal" [video]="selectedVideo" (close)="onCloseVideoModal()"></app-video-modal>
-<app-quantity-step-flow-modal [visible]="showEditQuantityModal" [item]="editingItem" (close)="onCloseEditQuantityModal()" (save)="onSaveEditQuantity($event)"></app-quantity-step-flow-modal>
+<app-quantity-step-flow-modal [visible]="showEditQuantityModal" [item]="editingItem" [saving]="quantityMutationLoading" (close)="onCloseEditQuantityModal()" (save)="onSaveEditQuantity($event)"></app-quantity-step-flow-modal>
 <app-volume-step-flow-modal
   [visible]="showVolumeModal"
   [volume]="editingVolume"

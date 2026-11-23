@@ -1,6 +1,5 @@
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { StepFlowVideo } from '../../../../app/interface/step-flow.interface';
 import { SafeResourceUrl } from '@angular/platform-browser';
 import { BackNavigationService } from '../../../../app/services/back-navigation.service';
 
@@ -15,7 +14,7 @@ import { BackNavigationService } from '../../../../app/services/back-navigation.
 })
 export class VideoModalComponent implements OnChanges, OnDestroy {
   @Input() visible = false;
-  @Input() video: (StepFlowVideo & { safeUrl: SafeResourceUrl }) | null = null;
+  @Input() video: { name: string; safeUrl: SafeResourceUrl } | null = null;
   @Output() close = new EventEmitter<void>();
   private historyRegistered = false;
 

@@ -10,6 +10,8 @@ import br.com.metaro.portal.modules.general.stepFlow.entities.*;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.OrderRepository;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.projections.StatusCountsProjection;
 import br.com.metaro.portal.modules.general.stepFlow.repositories.projections.StepCountProjection;
+import br.com.metaro.portal.modules.quality.checklist.service.ChecklistStepFlowService;
+import br.com.metaro.portal.modules.quality.checklist.dto.ChecklistStepBindingDto;
 import br.com.metaro.portal.util.erp.dto.ErpOrderDto;
 import br.com.metaro.portal.util.erp.dto.ErpOrderItemDto;
 import br.com.metaro.portal.util.others.StringUtils;
@@ -44,6 +46,39 @@ public class StepFlowService {
     private UserService userService;
     @Autowired
     private PictureService pictureService;
+    @Autowired
+    private ChecklistStepFlowService checklistStepFlowService;
+    @Autowired
+    private StepFlowErpOrderService erpOrders;
+
+    @Transactional
+    public OrderDto reprocess(Long id) throws IOException {
+        User actor = userService.authenticate();
+        Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
+        if (!canInteract(order, actor)) throw new ForbiddenException("Usuário não corresponde ao setor competente!");
+        if (order.getCurrentStep() != StepType.PCP || order.getStatus() != OrderStatus.IN_PROGRESS) {
+            throw new UnprocessableEntityException("Somente pedidos abertos na etapa PCP podem ser reprocessados.");
+        }
+        ErpOrderDto fresh = erpOrders.findOrderForReprocessing(order.getNumber(), order.getErpSource());
+        snapshotErpInfo(order, fresh);
+        order.getItems().forEach(item -> item.setProducedQuantity(0));
+        OrderInputDto transition = new OrderInputDto();
+        transition.setNewStepId(StepType.FINAL_ASSEMBLY.ordinal());
+        rulesForUpdate(transition, order);
+        for (OrderStep step : order.getSteps()) {
+            step.setChecklistPending(false);
+            if (step.getStep() != StepType.FINAL_ASSEMBLY) {
+                step.setStartedAt(null);
+                step.setFinishedAt(null);
+                step.setFinishedBy(null);
+            }
+            if (step.getStep() == StepType.PCP) {
+                step.getMessages().add(new StepMessage("Pedido reprocessado a partir do ERP. Informações da integração atualizadas e quantidades a produzir zeradas. Pedido retornado à Montagem Final para reconfiguração.", step, actor));
+            }
+        }
+        order.setUpdatedAt(Instant.now());
+        return new OrderDto(orderRepository.saveAndFlush(order));
+    }
 
     @Transactional(readOnly = true)
     public OrderDto findById(Long id) {
@@ -164,7 +199,19 @@ public class StepFlowService {
 
     @Transactional
     public void create(ErpOrderDto erpOrder) {
+        create(erpOrder, false);
+    }
+
+    @Transactional
+    public void create(ErpOrderDto erpOrder, boolean legacy) {
+        if (legacy) {
+            User user = userService.authenticate();
+            if (!user.hasRole("ROLE_ADMIN")) {
+                throw new ForbiddenException("Somente administradores podem criar um Fluxo de etapas na versão legado.");
+            }
+        }
         Order entity = new Order();
+        entity.setChecklistIntegration(!legacy);
         snapshotErpInfo(entity, erpOrder);
         setOrderOccurrence(entity);
         addAllSteps(entity);
@@ -175,6 +222,9 @@ public class StepFlowService {
         entity.setVolumes(new ArrayList<>());
 
         this.orderRepository.save(entity);
+        if (!legacy) {
+            checklistStepFlowService.createBindings(entity, erpOrder.getChecklistFlowIds());
+        }
     }
 
     private void setOrderOccurrence(Order order) {
@@ -184,33 +234,91 @@ public class StepFlowService {
 
     @Transactional
     public OrderDto update(Long id, OrderInputDto dto) throws IOException {
-        Order order = orderRepository.getReferenceById(id);
-        rulesForUpdate(dto, order);
+        if (dto.getChecklistFlowIds() != null) checklistStepFlowService.lockFlows(dto.getChecklistFlowIds());
+        Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
+        if (dto.getChecklistFlowIds() != null) checklistStepFlowService.assertBindingManagementAllowed(order);
+        Integer newStepId = dto.getNewStepId();
+        // Save production data and bindings while still at Final Assembly, then change stage.
+        if (dto.getChecklistFlowIds() != null) dto.setNewStepId(null);
+        try {
+            rulesForUpdate(dto, order);
+        } finally {
+            dto.setNewStepId(newStepId);
+        }
+        if (dto.getChecklistFlowIds() != null) {
+            ChecklistStepBindingDto bindings = new ChecklistStepBindingDto();
+            bindings.setFlowIds(dto.getChecklistFlowIds());
+            checklistStepFlowService.replaceBindings(id, bindings);
+            if (newStepId != null) {
+                OrderInputDto stageUpdate = new OrderInputDto();
+                stageUpdate.setNewStepId(newStepId);
+                rulesForUpdate(stageUpdate, order);
+            }
+        } else if (dto.getItems() != null && !dto.getItems().isEmpty()) {
+            checklistStepFlowService.assertEquipmentCapacity(order);
+        }
         return new OrderDto(order);
     }
 
     @Transactional
-    public void goToNextStep(Long id) {
-        Order order = this.orderRepository.findById(id).orElseThrow(ResourceNotFoundException::new);
+    public OrderDto reopen(Long id) {
+        User me = userService.authenticate();
+        if (me.getAuthorities().stream().noneMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"))) {
+            throw new ForbiddenException("Apenas administradores podem reabrir fluxos de etapas!");
+        }
+        Order order = checklistStepFlowService.lockForReopening(id);
+        if (order.getStatus() != OrderStatus.COMPLETED && order.getStatus() != OrderStatus.CANCELLED) {
+            throw new UnprocessableEntityException("Somente fluxos finalizados ou cancelados podem ser reabertos!");
+        }
+        OrderStep current = order.getSteps().stream().filter(step -> step.getStep() == order.getCurrentStep())
+                .findFirst().orElseThrow(ResourceNotFoundException::new);
+        current.getMessages().add(new StepMessage("Fluxo de etapas reaberto pelo administrador. Status anterior: "
+                + order.getStatus() + ".", current, me));
+        current.setStatus(StepStatus.ACTIVE);
+        current.setChecklistPending(false);
+        current.setFinishedAt(null);
+        current.setFinishedBy(null);
+        order.setStatus(OrderStatus.IN_PROGRESS);
+        return new OrderDto(orderRepository.save(order));
+    }
 
+    @Transactional
+    public void goToNextStep(Long id) {
+        User actor = userService.authenticate();
+        Order order = orderRepository.findLockedById(id).orElseThrow(ResourceNotFoundException::new);
+
+        if (!canInteract(order, actor)) {
+            throw new ForbiddenException("Usuário não corresponde ao setor competente!");
+        }
         if (order.getStatus().equals(OrderStatus.CANCELLED)) {
             throw new UnprocessableEntityException("Não é possível editar um pedido cancelado!");
+        }
+        if (order.getStatus().equals(OrderStatus.COMPLETED)) {
+            throw new UnprocessableEntityException("Não é possível editar um pedido concluído!");
         }
 
         StepType type = order.getCurrentStep();
         OrderStep currentStep = order.getSteps().stream().filter(step -> step.getStep().equals(type))
                 .findFirst().orElseThrow(ResourceNotFoundException::new);
 
-        currentStep.setStatus(StepStatus.DONE);
-        currentStep.setFinishedAt(Instant.now());
-        currentStep.setFinishedBy(userService.authenticate());
-
         if (type.equals(StepType.FINAL_ASSEMBLY) || type.equals(StepType.SHIPPING)) {
             checkIfHavePictures(order);
         }
 
+        if (order.isChecklistIntegration() && !checklistStepFlowService.isStepRequirementSatisfied(order.getId(), type)) {
+            currentStep.setChecklistPending(true);
+            orderRepository.save(order);
+            return;
+        }
+
+        if (!order.isChecklistIntegration()) checklistStepFlowService.assertStepCanFinish(order.getId(), type);
+
+        currentStep.setStatus(StepStatus.DONE);
+        currentStep.setFinishedAt(Instant.now());
+        currentStep.setFinishedBy(actor);
+
         if (type.equals(StepType.FINAL_ASSEMBLY)) {
-            checkVolumes(order);
+            checkVolumes(order, actor);
         }
 
         if (type.equals(StepType.SHIPPING)) {
@@ -237,6 +345,7 @@ public class StepFlowService {
         if (
             !me.getPosition().getName().equals("Montagem Final")
             && !me.getPosition().getName().equals("Almoxarifado")
+            && !me.getPosition().getName().equals("Qualidade")
             && me.getAuthorities().stream().noneMatch(x ->
                     x.getAuthority().equals("ROLE_ADMIN"))
         ) {
@@ -258,9 +367,13 @@ public class StepFlowService {
         entity.setDiscount(order.getDiscount());
         entity.setTotal(order.getTotal());
         entity.setErpSource(order.getSource());
-        entity.setItems(new ArrayList<>());
+        entity.setPhone(order.getPhone());
 
-        if (order.getPhone() != null) entity.setPhone(order.getPhone());
+        if (entity.getItems() == null) {
+            entity.setItems(new ArrayList<>());
+        } else {
+            entity.getItems().clear();
+        }
 
         for (ErpOrderItemDto dto : order.getItems()) {
             OrderItem item = new OrderItem();
@@ -330,7 +443,8 @@ public class StepFlowService {
                 boolean isAdmin = me.getAuthorities().stream().anyMatch(a -> a
                         .getAuthority().equals("ROLE_ADMIN"));
 
-                if (!isAdmin) {
+                boolean isPcpReturn = order.getCurrentStep() == StepType.PCP && newStep == StepType.FINAL_ASSEMBLY;
+                if (!isAdmin && !isPcpReturn) {
                     throw new ForbiddenException("Apenas administradores podem alterar etapas!");
                 }
 
@@ -355,7 +469,7 @@ public class StepFlowService {
                     }
                     if (step.getStep().ordinal() == dto.getNewStepId()) {
                         step.setStatus(StepStatus.ACTIVE);
-                        if (movingForward) {
+                        if (movingForward || isPcpReturn) {
                             step.setStartedAt(transitionAt);
                             step.setFinishedAt(null);
                             step.setFinishedBy(null);
@@ -444,9 +558,8 @@ public class StepFlowService {
         }
     }
 
-    private void checkVolumes(Order order) {
-        User me = userService.authenticate();
-        boolean isAdmin = me.getAuthorities().stream()
+    private void checkVolumes(Order order, User actor) {
+        boolean isAdmin = actor.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
 
         if (!isAdmin && order.getVolumes().isEmpty()) {
@@ -464,14 +577,23 @@ public class StepFlowService {
         if (user.getAuthorities().stream()
             .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) return true;
 
+        String department = user.getPosition() == null ? null : user.getPosition().getName();
         return switch (order.getCurrentStep()) {
-            case FINAL_ASSEMBLY -> user.getPosition().getName().equals("Montagem Final")
-                                || user.getPosition().getName().equals("Almoxarifado");
-            case PCP ->  user.getPosition().getName().equals("PCP");
-            case FREIGHT -> user.getPosition().getName().equals("Comercial");
-            case BILLING -> user.getPosition().getName().equals("Financeiro");
-            case SHIPPING -> user.getPosition().getName().equals("Almoxarifado");
+            case FINAL_ASSEMBLY -> "Montagem Final".equals(department)
+                                || "Almoxarifado".equals(department)
+                                || "Qualidade".equals(department);
+            case PCP -> "PCP".equals(department);
+            case FREIGHT -> "Comercial".equals(department);
+            case BILLING -> "Financeiro".equals(department);
+            case SHIPPING -> "Almoxarifado".equals(department);
         };
+    }
+
+    public List<Long> parseChecklistFlowIds(String value) throws IOException {
+        if (value == null) return null;
+        List<Long> ids = objectMapper.readValue(value, new TypeReference<>() {});
+        if (ids == null || ids.contains(null)) throw new UnprocessableEntityException("Informe uma lista válida de checklists.");
+        return ids;
     }
 
     public List<OrderItemInputDto> parseItems(String itemsJson) throws IOException {
@@ -486,8 +608,8 @@ public class StepFlowService {
         volume.setOrder(order);
         applyVolumeInput(volume, dto);
         order.addVolume(volume);
-        orderRepository.saveAndFlush(order);
-        return new OrderVolumeDto(volume);
+        Order persistedOrder = orderRepository.saveAndFlush(order);
+        return new OrderVolumeDto(persistedOrder.getVolumes().getLast());
     }
 
     @Transactional
@@ -511,20 +633,44 @@ public class StepFlowService {
         orderRepository.save(order);
     }
 
+    @Transactional
+    public OrderItemDto updateItemQuantity(Long orderId, Long itemId, OrderItemQuantityInputDto input) {
+        Order order = orderRepository.findLockedById(orderId).orElseThrow(ResourceNotFoundException::new);
+        assertFinalAssemblyChangeAllowed(order);
+        OrderItem item = order.getItems().stream().filter(current -> current.getId().equals(itemId))
+                .findFirst().orElseThrow(ResourceNotFoundException::new);
+        Integer quantity = input.getProducedQuantity();
+        if (quantity == null || quantity < 0 || quantity > item.getQuantity()) {
+            throw new UnprocessableEntityException("Informe uma quantidade inteira entre zero e a quantidade do item.");
+        }
+        OrderInputDto update = new OrderInputDto();
+        update.setItems(order.getItems().stream().map(current -> new OrderItemInputDto(current.getId(),
+                current.getId().equals(itemId) ? quantity : current.getProducedQuantity(), null)).toList());
+        checkQuantity(update, order);
+        checklistStepFlowService.assertEquipmentCapacity(order);
+        order.setUpdatedAt(Instant.now());
+        orderRepository.saveAndFlush(order);
+        return new OrderItemDto(item);
+    }
+
     private Order getOrderForVolumeChange(Long orderId) {
         Order order = orderRepository.findById(orderId).orElseThrow(ResourceNotFoundException::new);
+        assertFinalAssemblyChangeAllowed(order);
+        return order;
+    }
+
+    private void assertFinalAssemblyChangeAllowed(Order order) {
         User me = userService.authenticate();
 
         if (!canInteract(order, me)) {
             throw new ForbiddenException("Usuário não corresponde ao setor competente!");
         }
         if (!order.getCurrentStep().equals(StepType.FINAL_ASSEMBLY)) {
-            throw new UnprocessableEntityException("Volumes só podem ser alterados durante a Montagem Final!");
+            throw new UnprocessableEntityException("Volumes e quantidades só podem ser alterados durante a Montagem Final!");
         }
         if (!order.getStatus().equals(OrderStatus.IN_PROGRESS)) {
-            throw new UnprocessableEntityException("Não é possível alterar volumes deste pedido!");
+            throw new UnprocessableEntityException("Não é possível alterar volumes ou quantidades deste pedido!");
         }
-        return order;
     }
 
     private void applyVolumeInput(OrderVolume volume, OrderVolumeInputDto input) {

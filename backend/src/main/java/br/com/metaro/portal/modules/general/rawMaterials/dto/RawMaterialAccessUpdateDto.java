@@ -13,13 +13,4 @@ public class RawMaterialAccessUpdateDto {
     @NotNull
     @Valid
     private List<UserCategoriesDto> users;
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class UserCategoriesDto {
-        @NotNull private Long id;
-        @NotNull private List<Long> categoryIds;
-    }
 }

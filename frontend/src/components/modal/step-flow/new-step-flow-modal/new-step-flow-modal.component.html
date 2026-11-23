@@ -1,7 +1,7 @@
 <c-modal modalBackNavigation
   alignment="center"
   [visible]="visible && !duplicateWarningVisible"
-  (visibleChange)="handleLiveDemoChange($event)"
+  (visibleChange)="handleVisibilityChange($event)"
   class="new-step-modal"
   id="newStepFlowModal"
 >
@@ -15,18 +15,6 @@
 
   <c-modal-body class="m-body">
     <form [formGroup]="newOrderForm" (ngSubmit)="onSearch()" autocomplete="off">
-      <fieldset class="erp-selector">
-        <legend>Origem dos dados</legend>
-        <label class="erp-option" [class.selected]="newOrderForm.get('source')?.value === 'FOCCO'">
-          <input type="radio" formControlName="source" value="FOCCO">
-          <span><strong>FoccoERP</strong><small>Novo ERP</small></span>
-        </label>
-        <label class="erp-option" [class.selected]="newOrderForm.get('source')?.value === 'PROBUS'">
-          <input type="radio" formControlName="source" value="PROBUS">
-          <span><strong>Probus</strong><small>ERP antigo</small></span>
-        </label>
-      </fieldset>
-
       <label cLabel for="number">Número do pedido</label>
 
       <div class="search-container">
@@ -63,11 +51,25 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
           </svg>
-          A busca será realizada no {{ newOrderForm.get('source')?.value === 'FOCCO' ? 'FoccoERP' : 'Probus' }}.
+          A busca será realizada no FoccoERP.
         </small>
       }
       @if (valid == false && newOrderForm.get('number')?.errors != null) {
         <span class="text-danger">Escreva um número de pedido válido!</span>
+      }
+
+      @if (isAdmin) {
+        <label class="checklist-integration-option">
+          <input type="checkbox" formControlName="checklistIntegration">
+          <span>
+            <strong>Integrar com a ferramenta de checklist</strong>
+            <small>
+              {{ useChecklistIntegration
+                ? 'Os checklists selecionados serão vinculados sem alterar as quantidades informadas.'
+                : 'O registro continuará na versão legado, sem integração com checklists.' }}
+            </small>
+          </span>
+        </label>
       }
     </form>
 
@@ -77,7 +79,7 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
           </svg>
-          Dados importados do {{ searchResult.source === 'FOCCO' ? 'FoccoERP' : 'Probus' }}
+          Dados importados do FoccoERP
         </div>
 
         <div class="search-box-grid">
@@ -103,13 +105,13 @@
         </div>
       </div>
 
-      <span class="sub-title">Itens</span>
+      <span class="sub-title">Itens do pedido<span class="text-danger">*</span></span>
 
       <div class="items-container">
-        @for (itemGroup of itemsFormControls; track itemGroup.get('code')?.value; let i = $index) {
+        @for (itemGroup of itemsFormControls; track itemGroup.get('code')?.value) {
           <div class="search-item" [formGroup]="itemGroup">
             <span class="search-item-code">{{ itemGroup.get('code')?.value }}</span>
-            <span class="search-item-description">{{ $safeNavigationMigration(itemGroup.get('description')?.value) | truncate: 70 }}</span>
+            <span class="search-item-description">{{ itemGroup.get('description')?.value }}</span>
 
             <div class="search-item-quantity">
               <input
@@ -117,8 +119,8 @@
                 type="number"
                 formControlName="producedQuantity"
                 [min]="0"
-                [max]="$safeNavigationMigration(itemGroup.get('maxQuantity')?.value)"
-                [class.invalid]="itemGroup.get('producedQuantity')?.invalid ? true : false"
+                [max]="itemGroup.get('maxQuantity')?.value"
+                [class.invalid]="itemGroup.get('producedQuantity')?.invalid"
                 class="custom-form"
               />
               <span class="quantity-limit">/ {{ itemGroup.get('quantity')?.value }}</span>
@@ -138,6 +140,26 @@
           <i class="custom-error">Erro ao carregar itens do pedido</i>
         }
       </div>
+      @if (useChecklistIntegration) {
+        <section class="checklist-section">
+          <span class="sub-title">Checklists vinculados</span>
+
+          <div class="items-container">
+            @for (equipment of checklistEquipment; track equipment.flowId) {
+              <label class="search-item checklist-item">
+                <input type="checkbox" [checked]="equipment.selected" (change)="toggleChecklistEquipment(equipment.flowId, $any($event.target).checked)" />
+                <span class="produced-item-description">
+                  <strong>{{ equipment.item }}</strong>
+                  <small>Número de série: {{ equipment.serial || '-' }}</small>
+                </span>
+              </label>
+            } @empty {
+              <i class="custom-error">Nenhum checklist finalizado disponível para este pedido.</i>
+            }
+          </div>
+          <div class="work-items-summary">{{ selectedChecklistEquipmentCount }} checklist(s) selecionado(s)</div>
+        </section>
+      }
     }
   </c-modal-body>
   <c-modal-footer class="m-footer">
@@ -159,7 +181,8 @@
   </c-modal-header>
 
   <c-modal-body>
-    Já existe um registro com o pedido nº <strong>{{ pendingOrder?.number }}</strong>, isso vai criar um novo lote.
+    Já existe um registro com o pedido nº <strong>{{ pendingOrder?.number }}</strong>, isso vai criar um novo lote
+    {{ pendingLegacy ? 'na versão legado' : 'com integração ao checklist' }}.
     Continuar mesmo assim?
   </c-modal-body>
 

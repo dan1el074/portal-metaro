@@ -33,6 +33,8 @@ public class Order {
     private OrderStatus status; // LATE -> apenas quando a dueDate passar (apenas DTO)
     private Double shipment;
     private String carrier;
+    @Column(nullable = false)
+    private boolean checklistIntegration = true;
 
     // ERP
     private String client;
@@ -80,6 +82,16 @@ public class Order {
     public void addVolume(OrderVolume volume) {
         volumes.add(volume);
         volume.setOrder(this);
+    }
+
+    @Transient
+    public String getDisplayStatus() {
+        if (status == OrderStatus.IN_PROGRESS) {
+            if (checklistIntegration && steps != null && steps.stream()
+                    .anyMatch(step -> step.getStep() == currentStep && step.isChecklistPending())) return "Pendente";
+            if (dueDate != null && dueDate.isBefore(LocalDate.now())) return OrderStatus.LATE.toString();
+        }
+        return status.toString();
     }
 
     @Transient

@@ -27,6 +27,18 @@ public class StepFlowErpOrderService {
     private final FoccoOrderClient foccoOrderClient;
 
     @Transactional(readOnly = true)
+    public ErpOrderDto findOrderForReprocessing(int number, ErpSource source) {
+        ErpOrderDto order = source == ErpSource.FOCCO
+                ? foccoOrderClient.findProductionOrderByNumber(number)
+                : erpOrderQueryService.findProductionOrderByNumberWithoutRules(number).orElseThrow(ResourceNotFoundException::new);
+        order.setSource(source);
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            throw new UnprocessableEntityException("O pedido retornado pelo ERP não possui itens para reprocessar.");
+        }
+        return order;
+    }
+
+    @Transactional(readOnly = true)
     public ErpOrderDto findAvailableOrderByNumber(int orderNumber, ErpSource source) {
         User me = userService.authenticate();
         boolean isAdmin = me.getAuthorities().stream().anyMatch(a -> a

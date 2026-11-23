@@ -24,6 +24,7 @@ import { ErrorService } from '../../../services/error.service';
 import { FoccoService } from '../../../services/focco.service';
 import { HomeService } from '../../../services/home.service';
 import { RawMaterialsService } from '../../../services/raw-materials.service';
+import { RequestMailService } from '../../../services/request-mail.service';
 import { ToastrService } from '../../../services/toast.service';
 import { UserService } from '../../../services/user.service';
 
@@ -77,6 +78,9 @@ export class ParamsComponent implements OnInit {
   protected bunnyApiKeyConfigured = false;
   protected bunnyConfigLoading = false;
   protected bunnyConfigSaving = false;
+  protected requestMailTo = '';
+  protected requestMailConfigLoading = false;
+  protected requestMailConfigSaving = false;
   private readonly emailLogsPageSize = 15;
 
   constructor(
@@ -86,6 +90,7 @@ export class ParamsComponent implements OnInit {
     private emailLogService: EmailLogService,
     private foccoService: FoccoService,
     private bunnyService: BunnyService,
+    private requestMailService: RequestMailService,
     private toasterService: ToastrService,
     private errorService: ErrorService,
     private cdr: ChangeDetectorRef
@@ -94,6 +99,7 @@ export class ParamsComponent implements OnInit {
   public ngOnInit(): void {
     this.loadFoccoConfig();
     this.loadBunnyConfig();
+    this.loadRequestMailConfig();
     this.loadHistoryRetention();
   }
 
@@ -161,6 +167,28 @@ export class ParamsComponent implements OnInit {
     });
   }
 
+  protected saveRequestMailConfig(): void {
+    const to = this.requestMailTo.trim();
+    if (!to) {
+      this.toasterService.error('Informe o e-mail destinatário das solicitações de acesso.');
+      return;
+    }
+
+    this.requestMailConfigSaving = true;
+    this.requestMailService.updateConfig({ to }).subscribe({
+      next: config => {
+        this.requestMailTo = config.to;
+        this.requestMailConfigSaving = false;
+        this.toasterService.success('Destinatário das solicitações de acesso atualizado.');
+        this.cdr.detectChanges();
+      },
+      error: error => {
+        this.requestMailConfigSaving = false;
+        this.errorService.showError(error);
+        this.cdr.detectChanges();
+      }
+    });
+  }
 
   protected clearCache(): void {
     this.homeService.clearAllCache().subscribe({
@@ -290,6 +318,25 @@ export class ParamsComponent implements OnInit {
       },
       error: error => {
         this.bunnyConfigLoading = false;
+        this.errorService.showError(error);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  private loadRequestMailConfig(): void {
+    this.requestMailConfigLoading = true;
+    this.requestMailService.getConfig().subscribe({
+      next: config => {
+        this.requestMailTo = config.to;
+        this.requestMailConfigLoading = false;
+        if (!this.requestMailTo.trim()) {
+          this.toasterService.error('Configure o e-mail destinatário das solicitações de acesso.');
+        }
+        this.cdr.detectChanges();
+      },
+      error: error => {
+        this.requestMailConfigLoading = false;
         this.errorService.showError(error);
         this.cdr.detectChanges();
       }

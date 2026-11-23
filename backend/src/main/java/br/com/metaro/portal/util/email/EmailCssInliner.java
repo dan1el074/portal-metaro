@@ -1,5 +1,9 @@
 package br.com.metaro.portal.util.email;
 
+import br.com.metaro.portal.util.email.dto.CssBlockDto;
+import br.com.metaro.portal.util.email.dto.ParsedCssDeclarationDto;
+import br.com.metaro.portal.util.email.dto.CssDeclarationDto;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -38,7 +42,7 @@ final class EmailCssInliner {
             return html;
         }
 
-        Map<Element, LinkedHashMap<String, Declaration>> declarationsByElement = new LinkedHashMap<>();
+        Map<Element, LinkedHashMap<String, CssDeclarationDto>> declarationsByElement = new LinkedHashMap<>();
         StringBuilder retainedCss = new StringBuilder();
         int sourceOrder = 0;
 
@@ -50,19 +54,19 @@ final class EmailCssInliner {
             }
             css = importMatcher.replaceAll("");
 
-            for (CssBlock block : parseTopLevelBlocks(css)) {
-                if (block.selector().startsWith("@")) {
-                    appendRetainedCss(retainedCss, block.selector() + "{" + block.content() + "}");
+            for (CssBlockDto block : parseTopLevelBlocks(css)) {
+                if (block.getSelector().startsWith("@")) {
+                    appendRetainedCss(retainedCss, block.getSelector() + "{" + block.getContent() + "}");
                     continue;
                 }
 
-                List<ParsedDeclaration> ruleDeclarations = parseDeclarations(block.content());
+                List<ParsedCssDeclarationDto> ruleDeclarations = parseDeclarations(block.getContent());
                 if (ruleDeclarations.isEmpty()) {
                     continue;
                 }
 
                 sourceOrder++;
-                for (String selector : splitTopLevel(block.selector(), ',')) {
+                for (String selector : splitTopLevel(block.getSelector(), ',')) {
                     String normalizedSelector = selector.trim();
                     if (normalizedSelector.isEmpty()) {
                         continue;
@@ -75,7 +79,7 @@ final class EmailCssInliner {
                             sourceOrder
                     );
                     if (!applied) {
-                        appendRetainedCss(retainedCss, normalizedSelector + "{" + block.content() + "}");
+                        appendRetainedCss(retainedCss, normalizedSelector + "{" + block.getContent() + "}");
                     }
                 }
             }
@@ -93,17 +97,17 @@ final class EmailCssInliner {
 
     private static boolean applyRule(
             Document document,
-            Map<Element, LinkedHashMap<String, Declaration>> declarationsByElement,
+            Map<Element, LinkedHashMap<String, CssDeclarationDto>> declarationsByElement,
             String selector,
-            List<ParsedDeclaration> declarations,
+            List<ParsedCssDeclarationDto> declarations,
             int sourceOrder
     ) {
         int specificity = specificity(selector);
         try {
             for (Element element : document.select(selector)) {
-                LinkedHashMap<String, Declaration> elementDeclarations = declarationsByElement
+                LinkedHashMap<String, CssDeclarationDto> elementDeclarations = declarationsByElement
                         .computeIfAbsent(element, ignored -> new LinkedHashMap<>());
-                for (ParsedDeclaration declaration : declarations) {
+                for (ParsedCssDeclarationDto declaration : declarations) {
                     merge(elementDeclarations, declaration, specificity, sourceOrder);
                 }
             }
@@ -115,39 +119,39 @@ final class EmailCssInliner {
 
     private static void applyExistingInlineStyles(
             Document document,
-            Map<Element, LinkedHashMap<String, Declaration>> declarationsByElement
+            Map<Element, LinkedHashMap<String, CssDeclarationDto>> declarationsByElement
     ) {
         for (Element element : document.select("[style]")) {
-            LinkedHashMap<String, Declaration> elementDeclarations = declarationsByElement
+            LinkedHashMap<String, CssDeclarationDto> elementDeclarations = declarationsByElement
                     .computeIfAbsent(element, ignored -> new LinkedHashMap<>());
-            for (ParsedDeclaration declaration : parseDeclarations(element.attr("style"))) {
+            for (ParsedCssDeclarationDto declaration : parseDeclarations(element.attr("style"))) {
                 merge(elementDeclarations, declaration, 1_000, Integer.MAX_VALUE);
             }
         }
     }
 
     private static void merge(
-            LinkedHashMap<String, Declaration> declarations,
-            ParsedDeclaration candidate,
+            LinkedHashMap<String, CssDeclarationDto> declarations,
+            ParsedCssDeclarationDto candidate,
             int specificity,
             int sourceOrder
     ) {
-        Declaration current = declarations.get(candidate.property());
-        Declaration replacement = new Declaration(candidate.value(), candidate.important(), specificity, sourceOrder);
-        if (current == null || replacement.hasPriorityOver(current)) {
-            declarations.put(candidate.property(), replacement);
+        CssDeclarationDto current = declarations.get(candidate.getProperty());
+        CssDeclarationDto replacement = new CssDeclarationDto(candidate.getValue(), candidate.isImportant(), specificity, sourceOrder);
+        if (current == null || hasPriorityOver(replacement, current)) {
+            declarations.put(candidate.getProperty(), replacement);
         }
     }
 
-    private static void writeInlineStyles(Map<Element, LinkedHashMap<String, Declaration>> declarationsByElement) {
+    private static void writeInlineStyles(Map<Element, LinkedHashMap<String, CssDeclarationDto>> declarationsByElement) {
         declarationsByElement.forEach((element, declarations) -> {
             StringBuilder style = new StringBuilder();
             declarations.forEach((property, declaration) -> {
                 if (!style.isEmpty()) {
                     style.append(';');
                 }
-                style.append(property).append(':').append(declaration.value());
-                if (declaration.important()) {
+                style.append(property).append(':').append(declaration.getValue());
+                if (declaration.isImportant()) {
                     style.append(" !important");
                 }
             });
@@ -155,8 +159,8 @@ final class EmailCssInliner {
         });
     }
 
-    private static List<CssBlock> parseTopLevelBlocks(String css) {
-        List<CssBlock> blocks = new ArrayList<>();
+    private static List<CssBlockDto> parseTopLevelBlocks(String css) {
+        List<CssBlockDto> blocks = new ArrayList<>();
         int cursor = 0;
         while (cursor < css.length()) {
             int openBrace = css.indexOf('{', cursor);
@@ -169,7 +173,7 @@ final class EmailCssInliner {
                 break;
             }
             if (!selector.isEmpty()) {
-                blocks.add(new CssBlock(selector, css.substring(openBrace + 1, closeBrace)));
+                blocks.add(new CssBlockDto(selector, css.substring(openBrace + 1, closeBrace)));
             }
             cursor = closeBrace + 1;
         }
@@ -198,8 +202,8 @@ final class EmailCssInliner {
         return -1;
     }
 
-    private static List<ParsedDeclaration> parseDeclarations(String css) {
-        List<ParsedDeclaration> declarations = new ArrayList<>();
+    private static List<ParsedCssDeclarationDto> parseDeclarations(String css) {
+        List<ParsedCssDeclarationDto> declarations = new ArrayList<>();
         for (String declaration : splitTopLevel(css, ';')) {
             int colon = declaration.indexOf(':');
             if (colon <= 0) {
@@ -215,7 +219,7 @@ final class EmailCssInliner {
             if (important) {
                 value = value.substring(0, importantMatcher.start()).trim();
             }
-            declarations.add(new ParsedDeclaration(property, value, important));
+            declarations.add(new ParsedCssDeclarationDto(property, value, important));
         }
         return declarations;
     }
@@ -280,21 +284,13 @@ final class EmailCssInliner {
         retainedCss.append(css.trim());
     }
 
-    private record CssBlock(String selector, String content) {
-    }
-
-    private record ParsedDeclaration(String property, String value, boolean important) {
-    }
-
-    private record Declaration(String value, boolean important, int specificity, int sourceOrder) {
-        boolean hasPriorityOver(Declaration other) {
-            if (important != other.important) {
-                return important;
-            }
-            if (specificity != other.specificity) {
-                return specificity > other.specificity;
-            }
-            return sourceOrder >= other.sourceOrder;
+    private static boolean hasPriorityOver(CssDeclarationDto candidate, CssDeclarationDto current) {
+        if (candidate.isImportant() != current.isImportant()) {
+            return candidate.isImportant();
         }
+        if (candidate.getSpecificity() != current.getSpecificity()) {
+            return candidate.getSpecificity() > current.getSpecificity();
+        }
+        return candidate.getSourceOrder() >= current.getSourceOrder();
     }
 }

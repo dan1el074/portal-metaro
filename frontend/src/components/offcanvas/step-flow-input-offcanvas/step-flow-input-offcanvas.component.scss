@@ -10,6 +10,7 @@
 }
 
 .sof-custom-offcanvas {
+  --production-row-min-height: 48px;
   position: fixed;
   top: 0;
   right: -620px;
@@ -165,6 +166,12 @@
         background-color: rgba(var(--cui-emphasis-color-rgb), 0.04);
       }
 
+      &.linked-checklist-box {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
       .sofd-box-info {
         display: flex;
         flex-direction: column;
@@ -183,36 +190,54 @@
       }
     }
 
+    .linked-checklist-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .linked-checklist-item {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      padding: 9px 11px;
+      border: 1px solid var(--cui-border-color);
+      border-radius: 8px;
+      background: var(--cui-tertiary-bg);
+      color: inherit;
+      font-size: 12px;
+      text-decoration: none;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    a.linked-checklist-item:hover {
+      border-color: var(--cui-primary);
+      background: rgba(var(--cui-primary-rgb), 0.08);
+    }
+
+    .linked-checklist-item strong,
+    .linked-checklist-item small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .linked-checklist-item small {
+      color: var(--cui-secondary-color);
+    }
+
+    .linked-checklist-item em {
+      margin-top: 4px;
+      color: var(--cui-primary);
+      font-style: normal;
+      font-weight: 600;
+    }
+
     .sofd-title {
       margin: 20px 0 8px;
       font-weight: 600;
       font-size: 13px;
       text-transform: uppercase;
       color: var(--cui-medium-emphasis);
-    }
-
-    .custom-hr {
-      padding: 0 16px;
-    }
-
-    .sofd-title-custom-container {
-      position: relative;
-      width: 100%;
-      margin-top: 30px;
-
-      .sofd-title-custom {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 0 12px;
-        background-color: var(--cui-body-bg);
-        font-weight: 600;
-        font-size: 13px;
-        text-align: center;
-        text-transform: uppercase;
-        color: var(--cui-medium-emphasis);
-      }
     }
 
     .custom-label {
@@ -343,15 +368,40 @@
       svg { width: 15px; height: 15px; }
     }
 
+    .sof-file-container > .sof-file-item.production-item-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: stretch;
+
+      .produced-item-box {
+        min-height: var(--production-row-min-height);
+        padding: 6px 16px;
+        line-height: 16px;
+      }
+
+      > .sof-file-edit-icon {
+        display: grid;
+        place-items: center;
+        width: auto;
+        height: 100%;
+        min-width: 0;
+        aspect-ratio: 1;
+        padding: 0;
+
+        svg { width: 17px; height: 17px; padding-bottom: 0; }
+      }
+    }
+
     .volume-list {
       display: flex;
       flex-direction: column;
       gap: 6px;
 
       .volume-card {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+        gap: 6px;
 
         .volume-summary {
           display: flex;
@@ -359,7 +409,8 @@
           min-width: 0;
           align-items: center;
           gap: 12px;
-          padding: 11px 14px;
+          min-height: var(--production-row-min-height);
+          padding: 6px 16px;
           border: 1px solid var(--cui-border-color);
           border-radius: var(--cui-border-radius);
           font-size: 13px;
@@ -378,7 +429,7 @@
           column-gap: 5px;
           row-gap: 2px;
           color: var(--cui-body-color);
-          line-height: 1.2;
+          line-height: 16px;
 
           .volume-label {
             color: var(--cui-medium-emphasis);
@@ -387,16 +438,19 @@
 
         .volume-actions {
           display: flex;
-          align-items: center;
+          align-items: stretch;
+          height: 100%;
         }
 
         .volume-action {
           display: grid;
-          width: 34px;
-          height: 34px;
+          width: auto;
+          height: 100%;
+          min-width: 0;
+          aspect-ratio: 1;
           padding: 0;
           border: 0;
-          border-radius: 9px;
+          border-radius: 10px;
           background: transparent;
           color: var(--cui-medium-emphasis);
           place-items: center;
@@ -488,6 +542,7 @@
 
     .buttons-container {
       display: flex;
+      flex-wrap: wrap;
       justify-content: end;
       align-items: center;
       gap: 8px;
@@ -603,4 +658,41 @@
       grid-template-columns: 1fr;
     }
   }
+}
+.produced-item-description small {
+  display: block;
+  margin-top: .2rem;
+  color: var(--cui-secondary-color);
+  font-weight: 400;
+}
+
+.integrated-checklist-item {
+  cursor: pointer;
+}
+
+.integrated-checklist-item .produced-item-box > input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  accent-color: var(--cui-primary);
+}
+
+.work-items-summary {
+  margin-top: 6px;
+  color: var(--cui-secondary-color);
+  font-size: 11px;
+  text-align: right;
+}
+
+.checklist-count {
+  margin-bottom: 8px;
+  color: var(--cui-secondary-color);
+  font-size: 12px;
+}
+
+.sof-badge.pending {
+  color: #8a6400 !important;
+  background-color: rgba(255, 193, 7, .18) !important;
+  .bullet { background-color: #d49b00; }
 }

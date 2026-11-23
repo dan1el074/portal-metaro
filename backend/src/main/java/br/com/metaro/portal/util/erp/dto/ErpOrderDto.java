@@ -21,6 +21,7 @@ public class ErpOrderDto {
     private final Double discount;
     private final Double total;
     private final List<ErpOrderItemDto> items;
+    private List<Long> checklistFlowIds = new ArrayList<>();
     private ErpSource source = ErpSource.PROBUS;
 
     public ErpOrderDto(
