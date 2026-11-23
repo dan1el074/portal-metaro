@@ -15,7 +15,7 @@ describe('SerialPlatesComponent API integration', () => {
   let roles: string[];
   const settings = { crea: 'RS 169445', instructions: '', providers: 'Interno' };
   const row: SerialPlate = {
-    serial: '18918', version: 0, of: '8301', order: '', orderItemCode: '', readyStock: false,
+    serial: '18918', version: 0, lot: '', of: '8301', order: '', orderItemCode: '', readyStock: false,
     client: '', description: '', capacity: null, voltage: '', weight: null, provider: '',
     status: 'Criado', notes: '', manufactured: '2026-10', updated: '2026-10-23T12:00:00Z', history: []
   };
@@ -122,6 +122,33 @@ describe('SerialPlatesComponent API integration', () => {
     await open; await fixture.whenStable();
     const status = Array.from(fixture.nativeElement.querySelectorAll('label')).find((label: any) => label.textContent?.startsWith('Status')) as HTMLLabelElement;
     expect(Array.from(status.querySelectorAll('option')).map(option => option.textContent?.trim())).toEqual(['Criado', 'Programado', 'Recebido', 'Devolvido', 'Finalizado']);
+  });
+
+  it('displays migrated status without offering it and normalizes the optional lot before the full-width client', async () => {
+    initialize(); fixture.detectChanges(); await fixture.whenStable();
+    component.records = [{ ...listRow, status: 'Migrado' }];
+    const open = component.openEdit(row.serial);
+    http.expectOne(request => request.url.endsWith('/18918')).flush({ ...row, status: 'Migrado' });
+    await open; fixture.detectChanges(); await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.status-badge.migrated')?.textContent).toContain('Migrado');
+    const labels = Array.from(fixture.nativeElement.querySelectorAll('#serialPlateModal label')) as HTMLLabelElement[];
+    const status = labels.find(label => label.textContent?.startsWith('Status'))!.querySelector('select')!;
+    expect(status.value).toBe('Migrado');
+    const migrated = status.querySelector('option[value="Migrado"]') as HTMLOptionElement;
+    expect(migrated.hidden).toBeTrue(); expect(migrated.disabled).toBeTrue();
+    expect(Array.from(status.options).filter(option => !option.hidden && !option.disabled).map(option => option.value)).not.toContain('Migrado');
+    const lotLabel = labels.find(label => label.textContent?.startsWith('Lote'))!;
+    expect(lotLabel.nextElementSibling?.textContent).toContain('Cliente');
+    expect(lotLabel.nextElementSibling?.classList.contains('span-all')).toBeTrue();
+    const lot = lotLabel.querySelector('input')!;
+    for (const [input, expected] of [['2', '02'], ['6', '06'], ['12', '12'], ['', '']]) {
+      lot.value = input; lot.dispatchEvent(new Event('input')); lot.dispatchEvent(new Event('blur'));
+      fixture.detectChanges(); await fixture.whenStable();
+      expect(component.edit?.lot).toBe(expected);
+    }
+    status.value = 'Criado'; status.dispatchEvent(new Event('change'));
+    fixture.detectChanges(); await fixture.whenStable();
+    expect(status.querySelector('option[value="Migrado"]')).toBeNull();
   });
 
   it('shows only the order item description while preserving the selected model data', async () => {

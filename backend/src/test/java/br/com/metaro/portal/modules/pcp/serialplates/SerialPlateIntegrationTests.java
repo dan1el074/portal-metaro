@@ -141,6 +141,59 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void normalizesOptionalLotAndAuditsItWithoutConsultingErp() {
+        var rows = createAndRead(draft(1));
+        var patch = new SerialPlatePatchDto();
+        for (String value : List.of("2", "6", "12", "0002", "0")) {
+            patch.setLot(value);
+            rows = service.updatePlates(mutation(rows, patch, "lot"));
+            assertThat(rows.getFirst().getLot()).isEqualTo(switch (value) {
+                case "6" -> "06";
+                case "12" -> "12";
+                case "0" -> "00";
+                default -> "02";
+            });
+            assertThat(service.getPlate(18918L).getLot()).isEqualTo(rows.getFirst().getLot());
+        }
+        assertThat(service.getHistory(18918L).getFirst().getChanges())
+                .anySatisfy(change -> {
+                    assertThat(change.getField()).isEqualTo("Lote");
+                    assertThat(change.getAfter()).isEqualTo("00");
+                });
+        patch.setLot("2.5");
+        var current = rows;
+        assertThatThrownBy(() -> service.updatePlates(mutation(current, patch, "lot"))).hasMessageContaining("Lote");
+        patch.setLot("-1");
+        assertThatThrownBy(() -> service.updatePlates(mutation(current, patch, "lot"))).hasMessageContaining("Lote");
+        patch.setLot("");
+        assertThat(service.updatePlates(mutation(rows, patch, "lot")).getFirst().getLot()).isEmpty();
+        verifyNoInteractions(focco);
+    }
+
+    @Test
+    void preservesIncompleteMigratedRecordsButNeverAllowsAssigningMigratedStatus() {
+        var rows = createAndRead(draft(2));
+        var migrated = repository.findById(18918L).orElseThrow();
+        migrated.setStatus("Migrado"); migrated.setOf(""); migrated.setManufactured("");
+        repository.saveAndFlush(migrated);
+        rows = List.of(service.getPlate(18918L));
+        var patch = new SerialPlatePatchDto(); patch.setLot("6"); patch.setStatus("Migrado");
+        rows = service.updatePlates(mutation(rows, patch, "lot", "status"));
+        assertThat(rows.getFirst().getStatus()).isEqualTo("Migrado");
+        assertThat(rows.getFirst().getLot()).isEqualTo("06");
+        assertThat(service.listPlates(PageRequest.of(0, 10), "Migrado", "").getTotalElements()).isEqualTo(1);
+        assertThat(service.getSummary()).containsEntry("Migrado", 1L).containsEntry("total", 2L);
+        assertThatThrownBy(() -> service.updatePlates(mutation(List.of(service.getPlate(18919L)), patch, "status")))
+                .hasMessageContaining("Status");
+        patch.setStatus("Criado"); patch.setManufactured("2026-11");
+        rows = service.updatePlates(mutation(rows, patch, "status", "manufactured"));
+        assertThat(rows.getFirst().getStatus()).isEqualTo("Criado");
+        patch.setStatus("Migrado");
+        var current = rows;
+        assertThatThrownBy(() -> service.updatePlates(mutation(current, patch, "status"))).hasMessageContaining("Status");
+    }
+
+    @Test
     void returnedStatusIsPersistedAuditedAndIncludedInFiltersAndSummary() {
         List<SerialPlateDto> rows = createAndRead(draft(2));
         SerialPlatePatchDto patch = new SerialPlatePatchDto();

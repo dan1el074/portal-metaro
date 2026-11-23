@@ -6,6 +6,7 @@ CREATE TABLE tb_serial_plate (
     order_number VARCHAR(15) NOT NULL DEFAULT '',
     order_item_code VARCHAR(64) NOT NULL DEFAULT '',
     ready_stock BOOLEAN NOT NULL DEFAULT FALSE,
+    lot VARCHAR(80) NOT NULL DEFAULT '',
     client VARCHAR(500) NOT NULL DEFAULT '',
     description VARCHAR(1000) NOT NULL DEFAULT '',
     capacity NUMERIC(18,6),
@@ -19,7 +20,8 @@ CREATE TABLE tb_serial_plate (
     CONSTRAINT ck_serial_plate_positive CHECK (serial > 0),
     CONSTRAINT ck_serial_plate_capacity CHECK (capacity IS NULL OR capacity > 0),
     CONSTRAINT ck_serial_plate_weight CHECK (weight IS NULL OR weight > 0),
-    CONSTRAINT ck_serial_plate_status CHECK (status IN ('Criado','Programado','Recebido','Devolvido','Finalizado','Terceiro')),
+    CONSTRAINT ck_serial_plate_lot CHECK (lot = '' OR lot ~ '^[0-9]{2,80}$'),
+    CONSTRAINT ck_serial_plate_status CHECK (status IN ('Criado','Programado','Recebido','Devolvido','Finalizado','Terceiro','Migrado')),
     CONSTRAINT ck_serial_plate_pe CHECK (NOT ready_stock OR (order_number = '' AND client = '' AND order_item_code = ''))
 );
 CREATE INDEX idx_serial_plate_order_item_code ON tb_serial_plate(order_number, order_item_code);
