@@ -45,6 +45,7 @@ export class SerialPlatesDomainService {
     const patch: PlatePatch = Object.fromEntries(Object.keys(FIELD_LABELS).map(key => [key, edit[key as keyof SerialPlate]]));
     patch.order = patch.readyStock ? '' : patch.order?.trim();
     patch.of = patch.of?.trim();
+    if (patch.order && edit.orderItemKey) patch.orderItemKey = edit.orderItemKey;
 
     if (!patch.order) patch.orderItemCode = '';
     if (patch.readyStock) patch.client = '';
@@ -60,6 +61,7 @@ export class SerialPlatesDomainService {
     }
 
     if (fields.order) patch.orderItemCode = batch.orderItemCode ?? '';
+    if (fields.order && batch.orderItemKey) patch.orderItemKey = batch.orderItemKey;
 
     if (patch.readyStock === true) {
       patch.order = '';

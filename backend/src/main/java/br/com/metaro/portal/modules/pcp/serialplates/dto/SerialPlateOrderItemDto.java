@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class SerialPlateOrderItemDto {
+    private String selectionKey;
     private String itemCode;
     private String label;
     private String orderDescription;

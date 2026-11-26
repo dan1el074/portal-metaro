@@ -248,6 +248,30 @@ describe('SerialPlatesComponent API integration', () => {
     expect(fixture.nativeElement.querySelector('#serialPlateModal').textContent).toContain('Modelo ERP');
   });
 
+  it('keeps configurations with the same item code selectable and submits the selected configuration', async () => {
+    initialize(); component.open('new');
+    component.createDraft.order = '900'; component.createDraft.of = '8301';
+    const pending = component.loadCreateOrder();
+    http.expectOne(request => request.url.endsWith('/erp/orders/900')).flush({ client: 'Cliente', items: [
+      { itemCode: '60289', selectionKey: 'config-a', description: 'Modelo A', label: 'Modelo A - 220V' },
+      { itemCode: '60289', selectionKey: 'config-b', description: 'Modelo B', label: 'Modelo B - 380V' }
+    ] });
+    await pending; fixture.detectChanges(); await fixture.whenStable();
+    const select = fixture.nativeElement.querySelector('#serialPlateModal select') as HTMLSelectElement;
+    expect(select.options.length).toBe(3);
+    select.value = 'config-b'; select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(component.createDraft.orderItemCode).toBe('60289');
+    expect(component.createDraft.orderItemKey).toBe('config-b');
+    const saving = component.create();
+    const request = http.expectOne(request => request.method === 'POST' && request.url.endsWith('/serial-plates'));
+    expect(request.request.body.orderItemCode).toBe('60289');
+    expect(request.request.body.orderItemKey).toBe('config-b');
+    request.flush(1); await saving;
+    http.expectOne(request => request.url.endsWith('/serial-plates')).flush({ content: [listRow], totalElements: 1, totalPages: 1 });
+    http.expectOne(request => request.url.endsWith('/summary')).flush({ total: 1 });
+  });
+
   it('only searches the creation order when the search button is clicked, without searching on blur', async () => {
     initialize(); component.open('new'); fixture.detectChanges(); await fixture.whenStable();
     const input = fixture.nativeElement.querySelector('.create-order-search input') as HTMLInputElement;

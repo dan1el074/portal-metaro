@@ -162,7 +162,7 @@ public class SerialPlateService {
 
         // Resolve upstream data before taking the global sequence lock.
         SerialPlateOrderDto order = text(request.getOrder()).isEmpty() ? null : erp.findOrder(request.getOrder());
-        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, request.getOrderItemCode());
+        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, request.getOrderItemCode(), request.getOrderItemKey());
         Param sequence = params.findLockedByName("serialPlatesCount").orElseThrow(ResourceNotFoundException::new);
         long last;
 
@@ -206,7 +206,7 @@ public class SerialPlateService {
 
         List<Long> requestedSerials = serials(request.getVersions().keySet());
         SerialPlateOrderDto order = importing ? erp.findOrder(patch.getOrder()) : null;
-        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, patch.getOrderItemCode());
+        SerialPlateOrderItemDto item = order == null ? null : orderItemCode(order, patch.getOrderItemCode(), patch.getOrderItemKey());
         User user = users.authenticate();
         List<SerialPlate> updated = new ArrayList<>();
 
@@ -415,10 +415,14 @@ public class SerialPlateService {
         return PageRequest.of(Math.max(0, requested.getPageNumber()), Math.max(1, Math.min(200, requested.getPageSize())), Sort.by(orders));
     }
 
-    private SerialPlateOrderItemDto orderItemCode(SerialPlateOrderDto order, String id) {
+    private SerialPlateOrderItemDto orderItemCode(SerialPlateOrderDto order, String id, String key) {
         if (id == null || id.isBlank()) throw invalid("Selecione um item do pedido.");
         String code = ErpItemCode.normalize(id);
-        return order.getItems().stream().filter(item -> item.getItemCode().equals(code)).findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
+        List<SerialPlateOrderItemDto> matches = order.getItems().stream()
+                .filter(item -> item.getItemCode().equals(code))
+                .filter(item -> text(key).isEmpty() || text(key).equals(item.getSelectionKey())).toList();
+        if (matches.size() > 1) throw invalid("Selecione a configuração do item do pedido. Consulte o ERP novamente.");
+        return matches.stream().findFirst().orElseThrow(() -> invalid("O item do pedido foi alterado. Consulte o ERP novamente."));
     }
 
     private void applyOrder(SerialPlate plate, String number, SerialPlateOrderDto order, SerialPlateOrderItemDto item) {

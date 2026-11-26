@@ -71,6 +71,19 @@ export class SerialPlatesModalComponent {
     return this.data.orderItems(orderNumber);
   }
 
+  public selectOrderItem(target: { orderItemCode?: string; orderItemKey?: string }, key: string, items: ErpOrderItem[]): void {
+    const item = items.find(item => (item.selectionKey || item.itemCode) === key);
+    target.orderItemCode = item?.itemCode ?? '';
+    target.orderItemKey = item?.selectionKey;
+  }
+
+  public currentItemKey(row: SerialPlate): string {
+    const items = this.orderItems(row.order).filter(item => item.itemCode === row.orderItemCode);
+    const item = items.length === 1 ? items[0] : items.find(item => item.description === row.description
+      && item.capacity === row.capacity && item.voltage === row.voltage && item.weight === row.weight);
+    return item?.selectionKey || item?.itemCode || '';
+  }
+
   public orderItemDescription(item: ErpOrderItem): string {
     if (item.orderDescription) return item.orderDescription;
     const label = item.label || item.description;

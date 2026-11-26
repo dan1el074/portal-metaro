@@ -36,12 +36,12 @@ export class SerialPlatesService extends SerialPlatesDomainService {
 
   public update(records: SerialPlateVersion[], patch: PlatePatch, batch: boolean, confirmRelocation = false): Observable<SerialPlate | SerialPlate[]> {
     const versions = Object.fromEntries(records.map(row => [row.serial, row.version]));
-    return this.http.put<SerialPlate | SerialPlate[]>(this.api + (batch ? '/batch' : '/' + records[0].serial), { patch, fields: Object.keys(patch), versions, confirmRelocation });
+    return this.http.put<SerialPlate | SerialPlate[]>(this.api + (batch ? '/batch' : '/' + records[0].serial), { patch, fields: Object.keys(patch).filter(key => key !== 'orderItemKey'), versions, confirmRelocation });
   }
 
   public relocationImpact(records: SerialPlateVersion[], patch: PlatePatch): Observable<SerialPlateRelocation[]> {
     return this.http.post<SerialPlateRelocation[]>(this.api + '/relocation-impact', {
-      patch, fields: Object.keys(patch), versions: Object.fromEntries(records.map(row => [row.serial, row.version])),
+      patch, fields: Object.keys(patch).filter(key => key !== 'orderItemKey'), versions: Object.fromEntries(records.map(row => [row.serial, row.version])),
     });
   }
 
