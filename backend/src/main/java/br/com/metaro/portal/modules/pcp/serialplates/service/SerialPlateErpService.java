@@ -9,6 +9,7 @@ import br.com.metaro.portal.core.services.exceptions.UnprocessableEntityExceptio
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
@@ -37,20 +38,27 @@ public class SerialPlateErpService {
             item.setVoltage(text(line.getVoltage()));
             item.setCapacity(decimal(line.getCapacity(), "TON"));
             item.setWeight(decimal(line.getWeight(), "KG"));
-            SerialPlateOrderItemDto previous = items.putIfAbsent(item.getItemCode(), item);
-            if (previous != null && !sameConfiguration(previous, item)) {
-                throw new FoccoIntegrationException("O FoccoERP retornou configurações diferentes para o mesmo código de item: " + item.getItemCode() + ".");
+            item.setSelectionKey(configurationKey(item));
+            items.putIfAbsent(item.getSelectionKey(), item);
+        }
+        for (SerialPlateOrderItemDto item : items.values()) {
+            if (items.values().stream().filter(other -> other.getItemCode().equals(item.getItemCode())).count() > 1) {
+                item.setLabel(item.getLabel() + " | " + (item.getCapacity() == null ? "-" : item.getCapacity().toPlainString() + " t")
+                        + " | " + (item.getVoltage().isEmpty() ? "-" : item.getVoltage())
+                        + " | " + (item.getWeight() == null ? "-" : item.getWeight().toPlainString() + " kg"));
             }
         }
         return new SerialPlateOrderDto(customer, new ArrayList<>(items.values()));
     }
 
-    private boolean sameConfiguration(SerialPlateOrderItemDto first, SerialPlateOrderItemDto second) {
-        return Objects.equals(first.getDescription(), second.getDescription())
-                && Objects.equals(first.getOrderDescription(), second.getOrderDescription())
-                && Objects.equals(first.getVoltage(), second.getVoltage())
-                && Objects.equals(first.getCapacity(), second.getCapacity())
-                && Objects.equals(first.getWeight(), second.getWeight());
+    private String configurationKey(SerialPlateOrderItemDto item) {
+        StringBuilder key = new StringBuilder();
+        for (Object value : Arrays.asList(item.getItemCode(), item.getDescription(), item.getOrderDescription(),
+                item.getVoltage(), item.getCapacity(), item.getWeight())) {
+            String part = Objects.toString(value, "");
+            key.append(part.length()).append(':').append(part);
+        }
+        return UUID.nameUUIDFromBytes(key.toString().getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private BigDecimal decimal(String value, String unit) {

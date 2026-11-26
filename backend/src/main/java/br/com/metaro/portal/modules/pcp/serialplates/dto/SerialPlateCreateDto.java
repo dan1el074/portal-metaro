@@ -16,4 +16,6 @@ public class SerialPlateCreateDto {
     private String order = "";
     @Size(max = 64)
     private String orderItemCode = "";
+    @Size(max = 36)
+    private String orderItemKey;
 }
