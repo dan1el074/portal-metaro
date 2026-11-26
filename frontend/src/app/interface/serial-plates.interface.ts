@@ -22,6 +22,7 @@ export interface SerialPlate {
   of: string;
   order: string;
   orderItemCode: string;
+  orderItemKey?: string;
   readyStock: boolean;
   client: string;
   description: string;
@@ -46,6 +47,7 @@ export interface PlateSettings {
 }
 
 export interface ErpOrderItem {
+  selectionKey?: string;
   itemCode: string;
   orderDescription?: string;
   label?: string;
@@ -61,6 +63,7 @@ export interface ErpOrder {
 }
 
 export interface SerialPlateCreateDraft {
+  orderItemKey?: string;
   quantity: number;
   of: string;
   order: string;

@@ -68,6 +68,40 @@ class SerialPlateIntegrationTests {
     }
 
     @Test
+    void createsAndUpdatesTheSelectedConfigurationOfTheSameItemCode() throws Exception {
+        FoccoPlateLineDto first = mapper.readValue("""
+                {"order_number":900,"client":"Cliente","item_code":"60289","description":"Equipamento",
+                 "model":"Modelo A","capacity":"6 TON","voltage":"220V","weight":"300 KG"}
+                """, FoccoPlateLineDto.class);
+        FoccoPlateLineDto second = mapper.readValue("""
+                {"order_number":900,"client":"Cliente","item_code":"60289","description":"Equipamento",
+                 "model":"Modelo B","capacity":"8 TON","voltage":"380V","weight":"500 KG"}
+                """, FoccoPlateLineDto.class);
+        when(focco.findPlateOrder(900)).thenReturn(List.of(first, second, first));
+        var items = erp.findOrder("900").getItems();
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).getSelectionKey()).isNotEqualTo(items.get(1).getSelectionKey());
+        var input = draft(1); input.setOrder("900"); input.setOrderItemCode("60289");
+        assertThatThrownBy(() -> service.createPlates(input)).hasMessageContaining("Selecione a configuração");
+        input.setOrderItemKey(items.get(1).getSelectionKey());
+        when(focco.findPlateOrder(900)).thenReturn(List.of(second, first));
+        var created = createAndRead(input);
+        assertThat(created.getFirst().getOrderItemCode()).isEqualTo("60289");
+        assertThat(created.getFirst().getDescription()).isEqualTo("Modelo B");
+        assertThat(created.getFirst().getCapacity()).isEqualByComparingTo("8");
+        assertThat(created.getFirst().getVoltage()).isEqualTo("380V");
+        assertThat(created.getFirst().getWeight()).isEqualByComparingTo("500");
+        var patch = new SerialPlatePatchDto(); patch.setOrder("900"); patch.setOrderItemCode("60289");
+        patch.setOrderItemKey(items.getFirst().getSelectionKey());
+        var updated = service.updatePlates(mutation(created, patch, "order", "orderItemCode"));
+        assertThat(updated.getFirst().getDescription()).isEqualTo("Modelo A");
+        assertThat(updated.getFirst().getVoltage()).isEqualTo("220V");
+        patch.setOrderItemKey(UUID.randomUUID().toString());
+        assertThatThrownBy(() -> service.updatePlates(mutation(updated, patch, "order", "orderItemCode")))
+                .hasMessageContaining("Consulte o ERP novamente");
+    }
+
+    @Test
     void consumesThePublishedItemCodeAndPersistsItOnNewSeries() throws Exception {
         FoccoPlateLineDto line = mapper.readValue("""
                 {"order_number":900,"client":"Cliente","item_code":"60289",

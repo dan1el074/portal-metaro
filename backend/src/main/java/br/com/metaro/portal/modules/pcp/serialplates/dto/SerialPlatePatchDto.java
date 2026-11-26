@@ -10,6 +10,7 @@ public class SerialPlatePatchDto {
     private String of;
     private String order;
     private String orderItemCode;
+    private String orderItemKey;
     private Boolean readyStock;
     private String client;
     private String lot;
